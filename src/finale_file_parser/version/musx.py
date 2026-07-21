@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import zipfile
 from pathlib import Path
-from typing import Any
-from xml.etree.ElementTree import Element
+from xml.etree.ElementTree import Element, ParseError
 
+from defusedxml import DefusedXmlException
 from defusedxml.ElementTree import fromstring
 
 from finale_file_parser.version.models import AppVersion, MusxDetail, NotFinaleFileError
@@ -31,16 +31,25 @@ def read(path: Path) -> MusxDetail:
     """Return the version evidence carried by a .musx archive.
 
     Raises:
-        NotFinaleFileError: the archive is unreadable, or is a zip that is not
-            a Finale notation container.
+        NotFinaleFileError: `path` opens but is not a valid zip archive, or is
+            a zip that does not carry the Finale notation mimetype. A path
+            that does not exist raises `FileNotFoundError` instead, unchanged.
 
     Unparseable *metadata* is not an error: it yields a MusxDetail with empty
-    fields, so an unrecognised variant remains inspectable.
+    fields, so an unrecognised variant remains inspectable. This covers a
+    missing metadata member, one over `MAX_METADATA_BYTES`, one that fails to
+    read (e.g. a CRC/decompression error), and one that fails to parse as XML.
     """
     try:
         with zipfile.ZipFile(path) as archive:
             _require_finale_mimetype(archive, path)
-            raw = _read_capped(archive, METADATA_NAME, MAX_METADATA_BYTES)
+            try:
+                raw = _read_capped(archive, METADATA_NAME, MAX_METADATA_BYTES)
+            except zipfile.BadZipFile:
+                # The archive itself is sound (mimetype validation above
+                # already read successfully); only the metadata member is
+                # corrupt. That degrades to an empty detail, not a raise.
+                raw = None
     except zipfile.BadZipFile as exc:
         raise NotFinaleFileError(f"{path} is not a readable archive") from exc
 
@@ -49,10 +58,10 @@ def read(path: Path) -> MusxDetail:
 
     try:
         root = fromstring(raw)
-    except Exception:
-        # defusedxml raises its own DefusedXmlException subclasses for attack
-        # payloads and ParseError for malformed input. Both mean "no usable
-        # metadata", which is a result, not a failure.
+    except (ParseError, DefusedXmlException):
+        # ParseError covers malformed XML; DefusedXmlException covers attack
+        # payloads (entity expansion, external entities, etc). Both mean "no
+        # usable metadata", which is a result, not a failure.
         return MusxDetail(created=None, modified=None, metadata_schema="", platform=None)
 
     modified = _find_block(root, "modified")
@@ -107,7 +116,7 @@ def _int(parent: Element | None, tag: str) -> int | None:
 def _app_version(block: Element | None) -> AppVersion | None:
     if block is None:
         return None
-    found: Any = block.find("m:appVersion", NAMESPACE)
+    found: Element | None = block.find("m:appVersion", NAMESPACE)
     if found is None:
         found = block.find("appVersion")
     if found is None:
