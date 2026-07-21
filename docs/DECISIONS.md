@@ -10,6 +10,19 @@ and resolved ones **DECIDED**.
 
 ---
 
+## 2026-07-21 — DECIDED: version detection precedes record parsing
+
+Version is detected from headers/metadata before any record parsing, and both formats are covered.
+Whether each version needs *distinct record-parsing logic* remains unknown — that question opens
+once record parsing begins.
+
+## 2026-07-21 — DECIDED: defusedxml for all XML parsing
+
+`.musx` metadata is attacker-controlled XML, and stdlib `ElementTree` is vulnerable to
+entity-expansion and external-entity attacks. All XML parsing uses **`defusedxml`** — the project's
+first runtime dependency. Reason: hand-hardening the stdlib parser is easy to get subtly wrong and
+easy to regress.
+
 ## 2026-07-20 — DECIDED: output data model — internal IR, MusicXML as the first exporter
 
 Parsing produces a project-internal **intermediate representation (IR)**; output formats are
@@ -76,8 +89,10 @@ permissive license suits a format-interoperability library that other tools need
   above); how to build and package it is not. Recommended default: keep the parser a standalone
   importable package and add the app as a separate package in the same repo, so the library never
   gains a GUI dependency. Framework unchosen. Owner to confirm.
-- **OPEN — format versioning.** Finale's long release history means `.mus` and `.musx` almost
-  certainly cover several on-disk variants; the PRONOM and Library of Congress records list distinct
-  Enigma Binary signatures, which supports this. Recommended default: detect the writing version
-  before parsing records, and treat version coverage as an explicit dimension of the test corpus.
-  Owner to confirm.
+- **OPEN — does each detected version need distinct record-parsing logic?** Version detection
+  itself is DECIDED (see above) and covers both `.mus` and `.musx`. What remains unknown is whether
+  the record layouts inside a given version differ enough to require separate parsing paths per
+  version, or whether one parser can cover the range. Opens once record parsing begins.
+- **OPEN — `.musx` major-version-to-year mapping.** The `major` field (15/16/17/18) has no
+  established mapping to Finale's marketing years (2009/2011/2012/2014...), and nothing in the
+  corpus bridges the two schemes. See `docs/ARCHITECTURE.md`.

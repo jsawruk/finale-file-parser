@@ -15,7 +15,7 @@ analyse, or archive scores that currently only exist as Finale files.
 ## Tech stack (current decisions)
 
 - **Language / runtime:** Python (>=3.12), managed with **uv**.
-- **Key libraries:** none yet — add each here with a one-line reason as you introduce it.
+- **Key libraries:** `defusedxml` — all XML parsing, because `.musx` metadata is untrusted input.
 - Open questions live in `docs/DECISIONS.md` — don't silently resolve them in code.
 
 ## Conventions
