@@ -5,7 +5,7 @@
 # Override the runner with:  make test PY="python -m"   (if you are not using uv)
 
 PY ?= uv run
-CODE ?= src tests
+CODE ?= src tests scripts
 
 .PHONY: help install test lint fmt typecheck check clean
 

@@ -42,10 +42,14 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
   version labels report the raw major/maint/build instead of a year. Open question.
 - `scripts/build_version_fixtures.py` strips `NotationMetadata.xml` down to only the root
   `version` attribute and the `created`/`modified` subtrees, building the output tree fresh so any
-  field not explicitly listed is absent by construction. This is deliberate: the corpus metadata
-  carries `title`, `subtitle`, `composer`, `arranger`, `lyricist`, `copyright` (including a
-  MakeMusic notice restricting commercial redistribution), and `modifiedBy` — which holds real
-  people's initials in 28 corpus files. Do not loosen this filter to pass through more fields.
+  field not explicitly listed is absent by construction. Every attribute on every element within
+  those subtrees is also stripped (an allowlist of zero attributes — none are read by version
+  detection, so none are kept), and every `<modifiedBy>` is blanked rather than dropped. This is
+  deliberate: the corpus metadata carries `title`, `subtitle`, `composer`, `arranger`, `lyricist`,
+  `copyright` (including a MakeMusic notice restricting commercial redistribution), and
+  `modifiedBy` — which holds real people's initials in 28 corpus files — plus attributes such as
+  `<created author="...">` that could carry the same kind of identifying data. Do not loosen this
+  filter to pass through more fields or attributes.
 
 ## Data flow
 

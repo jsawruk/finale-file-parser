@@ -14,6 +14,7 @@ import shutil
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
+from typing import cast
 
 from defusedxml.ElementTree import fromstring as defused_fromstring
 
@@ -50,6 +51,20 @@ def _blank_modified_by(subtree: ET.Element) -> None:
             element.text = ""
 
 
+def _strip_attributes(subtree: ET.Element) -> None:
+    """Remove every XML attribute from `subtree` and all of its descendants.
+
+    Version detection reads only element text, never attributes, and no
+    attribute on <created>/<modified> is known to be needed, so none are
+    allowlisted. Without this, an attribute such as `<created author="...">`
+    would ride along in a deep-copied subtree unexamined and reach a
+    committed fixture untouched by the child-name allowlist above (which
+    only governs which child *elements* are copied).
+    """
+    for element in subtree.iter():
+        element.attrib.clear()
+
+
 def _scrub_notation_metadata(raw: bytes, source: str) -> bytes:
     """Rebuild NotationMetadata.xml containing only what version detection reads.
 
@@ -57,7 +72,8 @@ def _scrub_notation_metadata(raw: bytes, source: str) -> bytes:
     anything not explicitly named here is absent by construction: a new root
     <metadata> element carrying only the input's namespace and its `version`
     attribute, a <fileInfo> child, and within it only the complete <created>
-    and <modified> subtrees (with every <modifiedBy> blanked). Root-level
+    and <modified> subtrees (with every <modifiedBy> blanked and every
+    attribute, on every element in those subtrees, stripped). Root-level
     siblings of <fileInfo>, other root attributes, title, subtitle, composer,
     arranger, lyricist, copyright, description, and any future field never
     make it into the new tree.
@@ -94,9 +110,16 @@ def _scrub_notation_metadata(raw: bytes, source: str) -> bytes:
             continue
         subtree = copy.deepcopy(child)
         _blank_modified_by(subtree)
+        _strip_attributes(subtree)
         new_file_info.append(subtree)
 
-    return ET.tostring(new_root, encoding="UTF-8", xml_declaration=True)
+    # `encoding="UTF-8"` (any str other than the literal "unicode") makes
+    # ET.tostring return bytes at runtime, but typeshed's overload for a
+    # non-literal `str` encoding can only declare the return type `Any` — it
+    # has no way to further overload on this string's *value*. The cast
+    # documents that guarantee instead of widening this function's own
+    # return type or silencing the checker.
+    return cast(bytes, ET.tostring(new_root, encoding="UTF-8", xml_declaration=True))
 
 
 def _mus_fixtures() -> dict[str, Path]:
