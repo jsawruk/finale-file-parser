@@ -1,0 +1,33 @@
+name: CI
+
+# Continuous Integration: runs the same checks as `make check` on every push and pull request, so
+# "green" can be trusted. If this fails, the code is not ready to merge.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.12"
+      - name: Sync dependencies
+        run: uv sync
+      - name: Lint (ruff)
+        run: uv run ruff check src tests
+      - name: Format check (ruff)
+        run: uv run ruff format --check src tests
+      - name: Type-check (mypy)
+        run: uv run mypy src tests
+      - name: Test (pytest)
+        run: uv run pytest

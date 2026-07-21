@@ -216,3 +216,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Environments & secrets (NEVER commit real secrets) ---
+.env.*
+!.env.example
+
+# --- Claude Code: personal settings stay local; shared settings.json IS committed ---
+/.claude/settings.local.json
+
+# --- Claude Code memory: keep the handoff notes, ignore the noisy logs ---
+/.remember/logs/
+
+# --- OS cruft ---
+.DS_Store
