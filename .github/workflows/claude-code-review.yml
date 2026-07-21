@@ -1,0 +1,29 @@
+name: Claude Code Review
+
+# Posts an automatic AI code review on every pull request (no @claude needed). Requires the Claude
+# GitHub App and an ANTHROPIC_API_KEY repository secret — run `/install-github-app` inside Claude
+# Code to set both up. Until then this workflow will error on PRs, so only add it (bootstrap flag
+# --claude-review) once the app + secret are in place.
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review this pull request. Check correctness, security, and adherence to the rules in
+            CLAUDE.md and docs/. Be concise and concrete — flag real problems, skip nitpicks.
+          claude_args: "--max-turns 15"
