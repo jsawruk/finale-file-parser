@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from finale_file_parser.version import mus, musx
@@ -17,8 +18,11 @@ from finale_file_parser.version.models import (
 UNKNOWN_LABEL = "unknown version"
 
 
-def detect_version(path: Path) -> FileVersion:
+def detect_version(path: str | os.PathLike[str]) -> FileVersion:
     """Identify which Finale version wrote the file at `path`.
+
+    `path` accepts anything `open()` does — a `str` or any `os.PathLike[str]`
+    (including `pathlib.Path`) — and is converted to a `Path` internally.
 
     Reads only the header (and, for .musx, the archive metadata) — never the
     score body.
@@ -27,6 +31,7 @@ def detect_version(path: Path) -> FileVersion:
         FileNotFoundError: no such file.
         NotFinaleFileError: the file is not a Finale file.
     """
+    path = Path(path)
     with open(path, "rb") as handle:
         header = handle.read(HEADER_SIZE)
 
@@ -35,7 +40,7 @@ def detect_version(path: Path) -> FileVersion:
         detail = mus.parse(header)
         return _assemble(Family.MUS, _mus_label(detail), detail.year is not None, detail)
 
-    musx_detail = musx.read(Path(path))
+    musx_detail = musx.read(path)
     known = musx_detail.modified is not None or musx_detail.created is not None
     return _assemble(Family.MUSX, _musx_label(musx_detail), known, musx_detail)
 

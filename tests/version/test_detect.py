@@ -141,3 +141,11 @@ def test_accepts_mus_truncated_after_the_magic(tmp_path: Path) -> None:
 def test_missing_file_raises_file_not_found(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         detect_version(tmp_path / "nope.mus")
+
+
+def test_accepts_a_str_path(write_mus: Callable[..., Path]) -> None:
+    path = write_mus(b"Finale(R) 2011 Copyright (c) 1987-2010 MakeMusic Inc.")
+    result = detect_version(str(path))
+    assert result.family is Family.MUS
+    assert result.label == "Finale 2011"
+    assert result.confidence is Confidence.EXACT

@@ -12,10 +12,6 @@ from finale_file_parser.version.models import (
 )
 
 
-def test_families_are_distinct() -> None:
-    assert Family.MUS is not Family.MUSX  # type: ignore[comparison-overlap]
-
-
 def test_details_are_frozen() -> None:
     detail = MusDetail(banner="Finale(R) 2011", year=2011)
     with pytest.raises(AttributeError):

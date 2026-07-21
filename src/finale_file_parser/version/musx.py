@@ -91,17 +91,26 @@ def _read_capped(archive: zipfile.ZipFile, name: str, cap: int) -> bytes | None:
     return archive.read(name)
 
 
+def _find(parent: Element, tag: str, *, deep: bool = False) -> Element | None:
+    """Find `tag` under `parent`, preferring the `m:` namespace prefix and
+    falling back to a bare (unnamespaced) match if that finds nothing.
+
+    Set `deep=True` to search all descendants (`.//`) instead of only direct
+    children.
+    """
+    prefix = ".//" if deep else ""
+    found = parent.find(f"{prefix}m:{tag}", NAMESPACE)
+    return found if found is not None else parent.find(f"{prefix}{tag}")
+
+
 def _find_block(root: Element, tag: str) -> Element | None:
-    block = root.find(f".//m:{tag}", NAMESPACE)
-    return block if block is not None else root.find(f".//{tag}")
+    return _find(root, tag, deep=True)
 
 
 def _text(parent: Element | None, tag: str) -> str | None:
     if parent is None:
         return None
-    found = parent.find(f"m:{tag}", NAMESPACE)
-    if found is None:
-        found = parent.find(tag)
+    found = _find(parent, tag)
     return found.text if found is not None and found.text else None
 
 
@@ -116,9 +125,7 @@ def _int(parent: Element | None, tag: str) -> int | None:
 def _app_version(block: Element | None) -> AppVersion | None:
     if block is None:
         return None
-    found: Element | None = block.find("m:appVersion", NAMESPACE)
-    if found is None:
-        found = block.find("appVersion")
+    found = _find(block, "appVersion")
     if found is None:
         return None
     major = _int(found, "major")
