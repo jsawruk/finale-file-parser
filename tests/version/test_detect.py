@@ -72,6 +72,42 @@ def test_musx_without_app_version_is_unknown(make_musx: Callable[..., Path]) -> 
     assert result.label == "unknown version"
 
 
+def test_musx_prefers_modified_over_created(make_musx: Callable[..., Path]) -> None:
+    # SAMPLE_METADATA (the default fixture metadata) deliberately encodes
+    # conflicting versions: created = major 16, release, build 2; modified =
+    # major 18, maint 5, dev, build 7098. Real-world corpora skew the same
+    # way (most files are created by one major version and later modified by
+    # a newer one), so `modified` must win whenever both are present.
+    path = make_musx()
+    result = detect_version(path)
+    assert isinstance(result.detail, MusxDetail)
+    assert result.detail.created is not None
+    assert result.detail.modified is not None
+    assert result.label == "18.5 dev (build 7098)"
+    assert result.label != "16 release (build 2)"
+    assert result.confidence is Confidence.EXACT
+
+
+def test_musx_falls_back_to_created_when_modified_absent(
+    make_musx: Callable[..., Path],
+) -> None:
+    metadata = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<metadata version="18.0" xmlns="http://www.makemusic.com/2012/NotationMetadata">'
+        "<fileInfo><created><platform>MAC</platform>"
+        "<appVersion><major>16</major><devStatus>release</devStatus>"
+        "<build>2</build></appVersion></created></fileInfo>"
+        "</metadata>"
+    )
+    path = make_musx(metadata=metadata)
+    result = detect_version(path)
+    assert isinstance(result.detail, MusxDetail)
+    assert result.detail.created is not None
+    assert result.detail.modified is None
+    assert result.label == "16 release (build 2)"
+    assert result.confidence is Confidence.EXACT
+
+
 def test_rejects_non_finale_file(tmp_path: Path) -> None:
     path = tmp_path / "note.txt"
     path.write_bytes(b"just some text, definitely not a score")
