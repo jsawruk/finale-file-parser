@@ -8,11 +8,11 @@ version = "0.0.1"
 description = "A parser for Finale music notation files (.mus/.musx)."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["defusedxml>=0.7.1"]
 
 [dependency-groups]
 # Dev tooling. `uv sync` installs these by default.
-dev = ["pytest>=7.4", "ruff>=0.4", "mypy>=1.8"]
+dev = ["pytest>=7.4", "ruff>=0.4", "mypy>=1.8", "types-defusedxml>=0.7"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -33,4 +33,4 @@ mypy_path = "src"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "scripts"]

@@ -13,6 +13,8 @@ Goal: given a path to a `.musx` file, open it and hand back its internal streams
 input failing cleanly. No musical interpretation yet — this is the foundation everything else reads
 through. Each item is one branch / one PR.
 
+- [x] Version detection for `.mus` and `.musx` (`detect_version`). Landed ahead of the container
+      reader below.
 - [ ] Create a public-domain test fixture: a tiny score we author ourselves, saved as `.musx`.
 - [ ] `open_musx(path)` — validate the file is a readable zip container; raise a typed
       `InvalidFinaleFile` on anything else.
