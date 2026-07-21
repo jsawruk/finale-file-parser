@@ -229,3 +229,6 @@ __marimo__/
 
 # --- OS cruft ---
 .DS_Store
+
+# --- Local score corpus: copyrighted third-party material, NEVER commit ---
+/corpus/
