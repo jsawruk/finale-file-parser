@@ -23,6 +23,11 @@ UNSAFE = [
     "C:/windows/system32",
     "bad\x00name",
     "bad\nname",
+    "bad\x7fname",  # DEL
+    "bad\x85name",  # C1 control (NEL)
+    "bad‮name",  # U+202E right-to-left override (bidi spoofing)
+    "presets/C:foo",  # mid-path colon (not just a drive-letter prefix)
+    "output.txt:hidden:$DATA",  # NTFS alternate-data-stream form
 ]
 
 

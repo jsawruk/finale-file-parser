@@ -7,14 +7,19 @@ inspectable rather than making the whole archive unreadable.
 
 from __future__ import annotations
 
+import unicodedata
+
 _UNSAFE_CHARS = frozenset("\\")
+_UNSAFE_CATEGORIES = frozenset({"Cc", "Cf"})
 
 
 def is_safe_name(name: str) -> bool:
     """Return True if `name` is safe to surface and to look up.
 
     Unsafe means: empty, absolute, containing a `..` path segment, containing a
-    backslash, containing control characters, or carrying a drive-letter prefix.
+    backslash, containing a colon, containing control or format characters
+    (Unicode categories Cc/Cf — including DEL, the C1 range, and bidi overrides
+    such as U+202E), or carrying a drive-letter prefix.
     """
     if not name:
         return False
@@ -22,8 +27,8 @@ def is_safe_name(name: str) -> bool:
         return False
     if any(char in _UNSAFE_CHARS for char in name):
         return False
-    if any(ord(char) < 0x20 for char in name):
+    if any(unicodedata.category(char) in _UNSAFE_CATEGORIES for char in name):
         return False
-    if len(name) > 1 and name[1] == ":":
+    if ":" in name:
         return False
     return ".." not in name.split("/")
