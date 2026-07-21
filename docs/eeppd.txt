@@ -1,0 +1,278 @@
+Enigma Entry Pool
+-----------------
+
+Preliminary documentation
+2/8/96
+
+The following PRELIMINARY documentation of the Enigma File Format is being
+provided by Coda engineering in response to requests from some of our
+customers.
+
+We solicit your input as to the usefulness of what is provided here, and ask
+that you specify in detail the additional documentation of the file format you
+would require.  Coda will use your input to determine the best course of action
+concerning the publication of the Enigma file format.
+
+Please send your responses to the following address:  
+tech_support@codamusic.com
+
+Please title the subject of your message "FILE FORMAT PUBLICATION." 
+
+For best results view this document with a font like Courier; do not use a
+proportional font.  This document should be considered a "draft;" very little
+consideration to layout has been given.
+
+Disclaimer
+------------
+
+By releasing this information, Coda can take no responsibility for how it is
+used. If you choose to use this information to make changes to your files, Coda
+cannot be responsible for mistakes or corruption that may result. Always keep a
+back up of the _unaltered_ version of your file.
+
+The information in this document is correct to the best of our knowledge. We
+will make any reasonable effort to correct any errors that may be found.
+
+This document pertains to Finale for Mac and Windows 3.5. It is subject to
+change without notice in future versions.
+
+Finally, this is a technical document for technical readers. It is not intended
+as a tutorial. A working knowledge of C/C++ syntax is required. We will be
+working with ETF (Enigma Transportable File) files as a convenient means of
+describing the format.
+
+We'll start with the entry pool. This is a good starting point because it is
+relatively self-contained, and is immediately useful.
+
+The Entry Pool
+--------------
+
+In Enigma terminology, an "entry" is either a note, a chord, or a rest. Entries
+are streamed together in a doubly linked list that roughly corresponds to a
+voice on a staff. Certain situations like mirrors and voice 2 create
+complications that will not be dealt with at this time.
+
+Each entry can have up to twelve notes.
+
+Here is a typical entry pool from an ETF, with annotations:
+
+	^entries
+
+	^eE(1) 0 2 1024 0 $C0000800 128 3 			<<== entry
+	    48 $80030000 							<<== note
+	    80 $80020000 							<<== note
+	    112 $80010000 
+	^eE(2) 1 3 1024 0 $C0000800 128 1 
+	    128 $80010000 
+	^eE(3) 2 4 1024 0 $C0000800 128 3 
+	    48 $80010000 
+	    80 $80020000 
+	    112 $80030000 
+	^eE(4) 3 0 1024 0 $C0000800 128 1 
+	    48 $80010000 
+
+Each entry is signified by the tag ^eE with the entry number in parentheses.
+The line containing the ^eE contains information that pertains the entry as a
+whole. Information about individual notes within the entry follows on zero or
+more subsequent lines.
+
+Entry fields
+------------
+
+	tag	   1 2    3 4         5   6 7
+	---------------------------------
+	^eE(1) 0 2 1024 0 $C0000800 128 3
+
+	field 1: link to previous entry (0 if none) (32 bits)
+	field 2: link to next entry (0 if none) (32 bits)
+	field 3: the entry duration in EDUs (Enigma Duration Units, 1024 == quarter note)
+			(unsigned 16 bits)
+	field 4: manual positioning in EVPUs (Enigma Virtual Page Units, 288 per inch)
+			(signed 16 bits)
+	field 5: entry flag (see below)
+	field 6: extended entry flag (see below)
+	field 7: number of note records following
+
+The Entry Flag
+--------------
+
+The entry flag is a 32 bit hexadecimal value consisting of the bit flags and
+fields described below.
+
+All bits not described below are either for internal use only or reserved for
+future expansion. By "internal use", we mean flags that are used at run-time
+but whose state in the file is not meaningful.
+
+There is a direct one-to-one correspondence between these flags and the
+checkboxes in the Frame Dialog in Finale.
+
+Most rests are considered "floating rests: that is, they "float" to the midline
+of the staff. Since they have no pitch content, floating rests have no note
+records.
+
+When rests are manually positioned away from the midline, the FLOATREST bit is
+turned off and a note record is added to indicate vertical position.
+
+Enigma makes extensive use of bit flags that indicate the existence of
+supplementary records. Those records are not documented here. Please
+let us know specifically what you need.
+
+#define SETBIT			0x80000000L // always set (indicates a legal entry)
+#define NOTEBIT			0x40000000L // set for note, off for rest
+#define CNTLRBIT		0x20000000L // set if entry is a controller ("V2 launch")
+#define CNTLBIT			0x10000000L // set for voice 2 notes
+
+#define CHORDBIT		0x04000000L // indicates existence of chord record
+#define FLOATREST		0x01000000L // indicates "floating" rest
+
+#define GRACENOTE		0x00800000L	// set for grace notes */
+#define NOTEDTAIL		0x00400000L // indicates existence of note detail record
+									// (controls note reduction, notehead displacement,
+									// accidental displacement, alternate note head)
+#define IMRKDTAIL		0x00200000L // indicates existence of articulation 
+									// assignment record
+#define TEXTDTAIL		0x00100000L	// indicates existence of lyric assignment record
+#define TUPLSTART		0x00080000L	// tuplet start (indicates existence of tuplet record)
+#define CTUPPARA		0x00040000L	// "controlled tuplet parasite bit" --
+									currently only passively supported; may be 
+									dropped in future revs
+#define PRFMDATA		0x00020000L	// indicates existence of performance record
+									// (MIDI velocity, note duration alterations)
+#define IGNOREBIT		0x00008000L	// set to hide the entry
+#define BMEXTDTAIL		0x00004000L	// mask for beam extension records
+#define FLIPTIE			0x00002000L	// set to freeze ties in stem direction
+#define SPECIALALTS		0x00001000L	// mask for tie and dot alteration records
+#define BEATBIT			0x00000800L /* mask for beatbit, used to determine beaming */
+#define SECBEAMBIT		0x00000400L /* mask for secondary beam breaks record */
+#define CNTLCONTBIT		0x00000200L /* mask to continue controlled beaming.
+									This bit is set on the first controlled
+									entry after a controller to indicate it
+									should be grouped with the previous
+									controlled group. (This is currently
+									only passively supported by Enigma/Finale
+									and will most likely be dropped in future
+									versions). */
+#define FREEZSTEM		0x00000100L	// set to freeze stem direction (see UPSTEMBIT)
+
+#define STEMDTAIL		0x00000080L /* mask for detail stemming (stem length,
+									displacement, custom stems) */
+#define CROSUPBIT		0x00000040L /* mask for cross-stave upward placement */
+#define CROSDWBIT		0x00000020L /* mask for cross-stave downward placement */
+#define REVUPSTEMBIT	0x00000010L /* mask to reverse all upstems in the entry */
+#define REVDWSTEMBIT	0x00000008L /* mask to reverse all downstems in the entry */
+#define DBLSTEMBIT		0x00000004L /* mask for double stemming */
+#define SPLITBIT		0x00000002L /* mask for split stemming */
+#define UPSTEMBIT		0x00000001L /* mask for up or down stem (1 == up); this is
+									recomputed on the fly unless freeze stem is
+									set */
+ 
+The Extended Entry Flag
+-----------------------
+
+The extended entry flag is a 16 bit value. Although it is a bit flag like the
+entry flag, it is represented in the ETF as a decimal rather than hex value.
+There is no particular reason for this, and it does make the decoding somewhat
+trickier, but it has been retained to avoid conversion issues.
+
+#define	STAFFEXPRDETAIL		0x0001	// indicates existence of staff expression
+									// assignment record
+#define	CHECKACCIS			0x0004	// 3/6/92: this bit forces Finale
+										// to recompute the ACCIBITs when the
+										// frame is loaded. 
+#define SMARTSHAPEDETAIL	0x0020	// 04/18/94: for smart shape entry attachment
+#define	NOLEGER 			0x0040	// 2/2/95 RES: if set, don't draw leger lines
+										// for this entry (used for Penderecki-like
+										// "highest note possible" stuff)
+#define	ENTRY_IS_SORTED		0x0080  // 07/15/95 CFC: if set (which it should be most
+                                       // of the time) the notes in the entry are sorted
+                                       // in the normal way, for standard notation. If
+                                       // not set, the notes are in some other ordering,
+                                       // which for now would mean percussion notation.
+
+
+The Note Record
+---------------
+
+		TCD	flag
+		-------------
+	    48 	$80010000 
+
+TCD (Tone Center Displacement)
+------------------------------
+
+This is a 16 bit value divided into two fields that describes the pitch and
+alteration of the note. The alteration is stored in the low order nybble (four
+bits) as a signed quantity. Example: 0 == unaltered ("natural", 1 == "sharp", 
+2 == "double sharp", -1 == "flat", etc.
+
+Note that alteration refers to the note's relationship to the current key, not
+to whether an accidental appears on the note, or what the accidental would be.
+Example: in the key of G major, an F natural would have an alteration of -1,
+being a half step lower than the diatonic F#.
+
+Four bits allows alterations from -8 to +7. Traditional western music rarely if
+ever exceeds double sharp (+2) and double flat (-2). Additional alterations
+could be useful in a microtonal or non-western context.
+
+Historical note: In earlier versions of Finale, the number of bits alloted to
+alterations and pitch was user-definable. This was the infamous "TCD Watershed
+Bit" that confused many users of 2.6.3 and before. So now you know.
+
+The remaining twelve bits of the TCD contain the harmonic value (pitch) for the
+note. Twelve bits gives us a range of -2048...2047. Pitch is always defined
+relative to the current key signature, with middle C as the reference point.
+Each value corresponds to a diatonic pitch in the current key. Thus, middle C
+in the key of C major has a harmonic value of 0. D above middle C has a
+harmonic value of 1, B below middle C has a harmonic value of -1, C an octave
+above middle C has a value of 7, and so on.
+
+The harmonic value 0 will always be the tonic of the current key in the octave
+from middle C to the C above. For example, in G major, 0 is the G above middle
+C. This arrangement makes it easy to change the key in a region of music
+without having to alter any notes within the region.
+
+The Note Flag
+-------------
+
+#define SETBIT		0x80000000L		// legality (must be set)
+#define TSBIT		0x40000000L		/* tie start		*/
+#define TEBIT		0x20000000L		/* tie end			*/
+
+#define CROSSBIT    0x10000000L		/* cross staff		*/
+
+#define UPSECBIT	0x08000000L		/* upstem second	*/
+#define DWSECBIT	0x04000000L		/* downstem second	*/
+
+#define UPSPBIT		0x02000000L		// for split stems, set if the note goes on
+									// the upper stem
+#define ACCIBIT		0x01000000L		// indicates whether to show an accidental
+									// (will be recomputed during editing; to
+									// freeze this bit in place, see FREEZEACCI
+									// below)
+
+#define PARENACCI	0x00800000L 	/* parenthesize accidental */
+
+// Note IDs range from 1 to TGFNN (currently 12). Zero means no id. Note IDs
+// were introduced in Finale 2.x, so older files would have no id (0). We 
+// now enforce the protocol that all entries should have note ids.
+
+#define TGFNID		0x001F0000L	// since entries can now have only 12 notes
+								// (at one time they were designed to have
+								// 24), we don't really need five bits here.
+								// The high bit is reserved for future expansion.
+
+#define	FREEZEACCI		0x00000002L		// if set, freeze the state of ACCIBIT 
+
+
+Where we go from here
+---------------------
+
+This is a preliminary document, intended to elicit feedback. Some of the
+information above is quite sketchy; the biggest piece missing from this
+document is the format of the various supplemental records that are attached to
+entries and notes.  Again, there are quite a few of these. Let us know what you
+need.
+
+----------------
+end of document
+----------------

@@ -30,5 +30,7 @@ proves a truncated/garbage file raises `InvalidFinaleFile` rather than crashing.
 - [ ] Notes, pitches, and rhythms as a Python data model.
 - [ ] Staves, measures, and score structure.
 - [ ] Legacy `.mus` reader behind the same public API (see DECISIONS.md — open).
-- [ ] MusicXML export (see DECISIONS.md — open).
+- [ ] MusicXML exporter over the IR (DECIDED — see DECISIONS.md).
+- [ ] Desktop frontend: hex viewer with decoded structure values (DECIDED — framework still open).
+- [ ] Desktop frontend: notation rendering.
 - [ ] CLI for dumping file structure.

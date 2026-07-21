@@ -7,10 +7,10 @@ material lives in `docs/`; read the relevant doc before working in that area.
 ## What this project is
 
 A library for reading Finale music notation files (`.mus`, `.musx`) and exposing their musical
-content — notes, rhythms, staves, and score structure — as plain Python data. Finale was discontinued
-in 2024 and its format is proprietary and undocumented, so this project works from reverse
-engineering and existing community research. It is aimed at people who need to migrate, analyse, or
-archive scores that currently only exist as Finale files.
+content — notes, rhythms, staves, and score structure — as plain Python data. Finale was
+discontinued in 2024 and its format is proprietary and undocumented, so this project works from
+reverse engineering and existing community research. It is aimed at people who need to migrate,
+analyse, or archive scores that currently only exist as Finale files.
 
 ## Tech stack (current decisions)
 
@@ -51,8 +51,9 @@ make check     # lint + format-check + typecheck + test  <- the pre-push gate
   reference by path + content hash.
 - **Flag, don't decide.** Anything with legal, security, licensing, or irreversible consequences is
   the owner's call — surface it in `docs/DECISIONS.md`, don't assume it.
-- **No copyrighted scores in the repo.** Test fixtures must be original or public-domain music that
-  we created ourselves. Never commit a `.mus`/`.musx` file obtained from a third party.
+- **Every score fixture must be cleared for use.** Test fixtures must be music we authored
+  ourselves, public domain, or properly licensed. Never commit a `.mus`/`.musx` file obtained from a
+  third party without an appropriate license. Record the license and provenance of every fixture.
 - **Untrusted input.** Every input file is hostile until parsed: bounds-check every offset and
   length read from the file, never `eval`/`pickle` file contents, and cap allocations driven by
   file-supplied sizes. Malformed input must raise a clear error, never crash the interpreter or
