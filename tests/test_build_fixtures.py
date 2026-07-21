@@ -31,6 +31,7 @@ SYNTHETIC_METADATA = f"""<?xml version="1.0" encoding="UTF-8"?>
   <lyricist>Synthetic Lyricist</lyricist>
   <copyright>Synthetic Copyright Notice</copyright>
   <fileInfo>
+    <author>Jane Doe</author>
     <created author="Jane Doe">
       <platform>MAC</platform>
       <appVersion><major>16</major><devStatus>release</devStatus><build>2</build></appVersion>
@@ -111,3 +112,13 @@ def test_raises_system_exit_when_file_info_is_missing() -> None:
     document = f'<metadata version="18.0" xmlns="{NS}"><title>x</title></metadata>'
     with pytest.raises(SystemExit):
         _scrub_notation_metadata(document.encode("utf-8"), "synthetic")
+
+
+def test_removes_non_allowlisted_file_info_children() -> None:
+    output = _scrub_notation_metadata(SYNTHETIC_METADATA.encode("utf-8"), "synthetic")
+    root = fromstring(output)
+    file_info = _find(root, "fileInfo")
+    # author is not in ALLOWED_FILE_INFO_CHILDREN and should not appear
+    for element in file_info.iter():
+        local_name = element.tag.rsplit("}", 1)[-1]
+        assert local_name != "author"
