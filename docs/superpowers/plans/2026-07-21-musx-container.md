@@ -1072,9 +1072,11 @@ def test_no_corpus_archive_trips_a_safety_limit() -> None:
     # loosening anything.
     paths = _archives()
     assert paths
+    opened = 0
     for path in paths:
         with open_musx(path):
-            pass
+            opened += 1
+    assert opened == EXPECTED_ARCHIVES
 ```
 
 - [ ] **Step 2: Run with the corpus present**
