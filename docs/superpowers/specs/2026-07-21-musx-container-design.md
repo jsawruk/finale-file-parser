@@ -124,7 +124,7 @@ Every archive is treated as hostile. Nothing is ever extracted to disk.
 
 | Check | Limit | Rationale |
 |---|---|---|
-| Member name validation | must match the observed name pattern | Zip-slip. Names reach callers and the future hex viewer; refuse at the boundary rather than trusting downstream. |
+| Member name validation | reject *unsafe* names only | Zip-slip. Names reach callers and the future hex viewer; refuse dangerous ones at the boundary rather than trusting downstream. |
 | Duplicate member names | rejected | Zip permits them; "which one did you read?" is the ambiguity an attacker wants. |
 | Member count | 64 | Corpus max is 10. |
 | Total declared uncompressed size | 16 MiB | Corpus max is 419,972 bytes per archive (median 100,675). A per-member cap alone does not stop many members each just under it. |
@@ -134,6 +134,17 @@ Every archive is treated as hostile. Nothing is ever extracted to disk.
 Caps sit roughly 6-40× above observed maxima — loose enough not to reject real files, tight enough
 to bound an attack. They are stated as named constants so a future corpus that exceeds one forces a
 deliberate change rather than a silent failure.
+
+**Names: reject unsafe, allow unknown.** The reader raises only on names that are genuinely
+dangerous — absolute paths, `..` segments, backslashes, control characters, empty names. A name
+that is merely *unfamiliar* (a member a future Finale release adds) is allowed through and appears
+in `entries` as data.
+
+This is a deliberate split from the fixture generator, which does enforce a strict allowlist of
+known names. The asymmetry is the point: we control what gets committed, so there the conservative
+rule is free; but rejecting an unrecognised archive would contradict the principle that unknown
+variants stay inspectable, and would make a new Finale member name break version detection outright
+instead of surfacing something to investigate.
 
 ## Fixtures
 
