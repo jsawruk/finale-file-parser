@@ -1,8 +1,25 @@
-"""finale-file-parser — A parser for Finale music notation files (.mus/.musx)."""
+"""A parser for Finale music notation files (.mus/.musx)."""
 
-__version__ = "0.0.1"
+from finale_file_parser.version.detect import detect_version
+from finale_file_parser.version.models import (
+    AppVersion,
+    Confidence,
+    Family,
+    FileVersion,
+    FinaleFileError,
+    MusDetail,
+    MusxDetail,
+    NotFinaleFileError,
+)
 
-
-def greet(name: str) -> str:
-    """Return a friendly greeting (placeholder so the project runs and is tested from day one)."""
-    return f"Hello, {name}! Welcome to finale-file-parser."
+__all__ = [
+    "AppVersion",
+    "Confidence",
+    "Family",
+    "FileVersion",
+    "FinaleFileError",
+    "MusDetail",
+    "MusxDetail",
+    "NotFinaleFileError",
+    "detect_version",
+]

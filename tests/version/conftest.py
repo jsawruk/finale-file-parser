@@ -28,6 +28,18 @@ def mus_header() -> Callable[..., bytes]:
     return build
 
 
+@pytest.fixture
+def write_mus(tmp_path: Path, mus_header: Callable[..., bytes]) -> Callable[..., Path]:
+    """Write a synthetic .mus file (header plus filler body) and return its path."""
+
+    def build(banner: bytes = b"", *, name: str = "sample.mus") -> Path:
+        path = tmp_path / name
+        path.write_bytes(mus_header(banner) + b"\xde\xad\xbe\xef" * 64)
+        return path
+
+    return build
+
+
 MIMETYPE = b"application/vnd.makemusic.notation"
 
 SAMPLE_METADATA = """<?xml version="1.0" encoding="UTF-8"?>
