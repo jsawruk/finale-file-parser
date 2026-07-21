@@ -53,7 +53,9 @@ def test_every_musx_file_detects_exactly() -> None:
 
 
 def test_every_musx_reports_schema_18() -> None:
-    for path in _files(".musx"):
+    paths = _files(".musx")
+    assert len(paths) == EXPECTED_MUSX_COUNT
+    for path in paths:
         detail = detect_version(path).detail
         assert getattr(detail, "metadata_schema", None) == "18.0", path
 
@@ -61,5 +63,5 @@ def test_every_musx_reports_schema_18() -> None:
 def test_directory_names_are_not_trusted_as_version_labels() -> None:
     # holiday_tunes_2013/ holds Finale 2012 files — the banner is the truth.
     mislabelled = [p for p in _files(".mus") if "holiday_tunes_2013" in str(p)]
-    if mislabelled:
-        assert all(detect_version(p).label == "Finale 2012" for p in mislabelled)
+    assert mislabelled, "No files found in holiday_tunes_2013 directory"
+    assert all(detect_version(p).label == "Finale 2012" for p in mislabelled)
