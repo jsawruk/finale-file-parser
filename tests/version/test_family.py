@@ -4,6 +4,7 @@ import pytest
 
 from finale_file_parser.version.family import HEADER_SIZE, classify
 from finale_file_parser.version.models import Family, NotFinaleFileError
+from finale_file_parser.version.mus import BANNER_FIELD_SIZE, BANNER_OFFSET
 
 
 def test_classifies_mus_by_magic(mus_header: Callable[..., bytes]) -> None:
@@ -31,3 +32,15 @@ def test_rejects_truncated_magic() -> None:
 
 def test_header_size_is_96_bytes() -> None:
     assert HEADER_SIZE == 0x60
+
+
+def test_header_size_covers_the_full_banner_field() -> None:
+    # HEADER_SIZE is how many bytes detect_version reads off disk before
+    # handing them to mus.parse, which then slices out the banner field at
+    # [BANNER_OFFSET : BANNER_OFFSET + BANNER_FIELD_SIZE]. Comparing
+    # HEADER_SIZE to a literal (above) only pins family.py's own constant; it
+    # proves nothing about whether that many bytes actually cover mus.py's
+    # banner field. If HEADER_SIZE were ever smaller than this sum, every
+    # read would hand mus.parse a truncated field and silently shorten (or
+    # blank) the parsed banner/year.
+    assert HEADER_SIZE == BANNER_OFFSET + BANNER_FIELD_SIZE

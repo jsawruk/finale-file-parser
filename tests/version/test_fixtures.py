@@ -7,6 +7,7 @@ import pytest
 from defusedxml.ElementTree import fromstring
 
 from finale_file_parser import detect_version
+from finale_file_parser.version.models import MusDetail
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "version"
 MANIFEST = FIXTURES / "MANIFEST.toml"
@@ -106,3 +107,30 @@ def test_all_five_mus_versions_are_represented() -> None:
     labels = {e["expected_label"] for e in _entries()}
     for year in (2001, 2004, 2005, 2011, 2012):
         assert f"Finale {year}" in labels
+
+
+def test_mus_fixture_banner_is_pinned_to_its_full_expected_text() -> None:
+    """Pin a real fixture's *complete* banner text, not just its parsed year.
+
+    HEADER_SIZE governs how many bytes ever reach mus.parse; if it were ever
+    too small, the banner field would come back silently truncated while the
+    year (the first four digits) could still happen to parse correctly and
+    every other test above would keep passing. Hardcoding the vendor
+    copyright string here (Finale's own text, not musical content) is the
+    only thing that would catch that.
+    """
+    result = detect_version(FIXTURES / "mus-2011.bin")
+    assert isinstance(result.detail, MusDetail)
+    assert result.detail.banner == "Finale(R) 2011 Copyright (c) 1987-2010 MakeMusic Inc."
+
+
+def test_musx_fixture_labels_are_pinned_independently_of_the_generator() -> None:
+    """MANIFEST.toml's expected_label for .musx fixtures is computed by
+    build_version_fixtures.py calling detect_version on the fixture it just
+    wrote -- comparing test_fixture_detects_as_manifest_declares against the
+    manifest is therefore comparing the code against a recording of itself.
+    Hardcode the two known-good labels here so a label-formatting regression
+    can't silently regenerate an equally-wrong expectation alongside it.
+    """
+    assert detect_version(FIXTURES / "musx-18-MAC.musx").label == "18 dev (build 3062)"
+    assert detect_version(FIXTURES / "musx-18-WIN.musx").label == "18 dev (build 3163)"
