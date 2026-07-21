@@ -232,3 +232,6 @@ __marimo__/
 
 # --- Local score corpus: copyrighted third-party material, NEVER commit ---
 /corpus/
+
+# --- Superpowers scratch (SDD ledger, briefs, review packages) ---
+/.superpowers/

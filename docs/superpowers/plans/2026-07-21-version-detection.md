@@ -195,12 +195,16 @@ git commit -m "feat: add version detection result types"
 
 **Files:**
 - Create: `src/finale_file_parser/version/family.py`
+- Create: `tests/version/conftest.py`
 - Test: `tests/version/test_family.py`
 
 **Interfaces:**
 - Consumes: `Family`, `NotFinaleFileError` from `models.py`.
 - Produces: `classify(header: bytes) -> Family`, and the constants `MUS_MAGIC: bytes`,
   `ZIP_MAGIC: bytes`, `HEADER_SIZE: int` (value `0x60`). Task 3 and Task 5 use `HEADER_SIZE`.
+- Produces (tests): the `mus_header` pytest fixture in `tests/version/conftest.py`. **Tasks 3 and 5
+  use this fixture and must not define their own header builder.** Tasks 4 and 5 extend the same
+  conftest with archive/file writers.
 
 **Note on scope:** `classify` returns `Family.MUSX` for *any* zip archive. Distinguishing a real
 `.musx` from an unrelated zip requires reading the `mimetype` member, which is Task 4's job. This
@@ -208,24 +212,51 @@ split is deliberate — classification stays pure and byte-only.
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/version/test_family.py`:
+First create `tests/version/conftest.py` — the single shared source of synthetic headers for every
+version test. Tasks 3 and 5 import nothing from each other; they use these fixtures.
 
 ```python
+"""Shared fixtures for version detection tests."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+
+import pytest
+
+MUS_MAGIC = b"ENIGMA BINARY FILE"
+BANNER_OFFSET = 0x20
+HEADER_BYTES = 0x60
+"""Held literal here on purpose: the fixtures must not depend on production
+constants, so a wrong value in `family.py` cannot make these tests agree with it."""
+
+
+@pytest.fixture
+def mus_header() -> Callable[..., bytes]:
+    """Build a synthetic .mus header carrying `banner` at offset 0x20."""
+
+    def build(banner: bytes = b"", *, magic: bytes = MUS_MAGIC) -> bytes:
+        header = bytearray(b"\x00" * HEADER_BYTES)
+        header[0 : len(magic)] = magic
+        header[BANNER_OFFSET : BANNER_OFFSET + len(banner)] = banner
+        return bytes(header)
+
+    return build
+```
+
+Then create `tests/version/test_family.py`:
+
+```python
+from collections.abc import Callable
+
 import pytest
 
 from finale_file_parser.version.family import HEADER_SIZE, classify
 from finale_file_parser.version.models import Family, NotFinaleFileError
 
 
-def _mus_header(banner: bytes = b"Finale(R) 2011") -> bytes:
-    header = bytearray(b"\x00" * HEADER_SIZE)
-    header[0:18] = b"ENIGMA BINARY FILE"
-    header[0x20 : 0x20 + len(banner)] = banner
-    return bytes(header)
-
-
-def test_classifies_mus_by_magic() -> None:
-    assert classify(_mus_header()) is Family.MUS
+def test_classifies_mus_by_magic(mus_header: Callable[..., bytes]) -> None:
+    assert classify(mus_header(b"Finale(R) 2011")) is Family.MUS
 
 
 def test_classifies_any_zip_as_musx() -> None:
@@ -300,7 +331,8 @@ Expected: PASS — 6 passed
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/finale_file_parser/version/family.py tests/version/test_family.py
+git add src/finale_file_parser/version/family.py tests/version/conftest.py \
+        tests/version/test_family.py
 git commit -m "feat: classify Finale container family from header bytes"
 ```
 
@@ -313,7 +345,8 @@ git commit -m "feat: classify Finale container family from header bytes"
 - Test: `tests/version/test_mus.py`
 
 **Interfaces:**
-- Consumes: `MusDetail` from `models.py`; `HEADER_SIZE` from `family.py`.
+- Consumes: `MusDetail` from `models.py`; the `mus_header` fixture from `tests/version/conftest.py`
+  (created in Task 2 — **do not define a local header builder**).
 - Produces: `parse(header: bytes) -> MusDetail`, and constants `BANNER_OFFSET: int` (`0x20`),
   `BANNER_FIELD_SIZE: int` (`0x40`).
 
@@ -327,50 +360,50 @@ Decoding the whole field would append that garbage. Cut at the first NUL.
 Create `tests/version/test_mus.py`:
 
 ```python
-from finale_file_parser.version.family import HEADER_SIZE
-from finale_file_parser.version.mus import BANNER_OFFSET, parse
+from collections.abc import Callable
+
+from finale_file_parser.version.mus import parse
 
 
-def _header_with(field: bytes) -> bytes:
-    header = bytearray(b"\x00" * HEADER_SIZE)
-    header[0:18] = b"ENIGMA BINARY FILE"
-    header[BANNER_OFFSET : BANNER_OFFSET + len(field)] = field
-    return bytes(header)
-
-
-def test_parses_year_from_banner() -> None:
-    detail = parse(_header_with(b"Finale(R) 2011 Copyright (c) 1987-2010 MakeMusic Inc."))
+def test_parses_year_from_banner(mus_header: Callable[..., bytes]) -> None:
+    detail = parse(mus_header(b"Finale(R) 2011 Copyright (c) 1987-2010 MakeMusic Inc."))
     assert detail.year == 2011
     assert detail.banner == "Finale(R) 2011 Copyright (c) 1987-2010 MakeMusic Inc."
 
 
-def test_parses_coda_era_banner() -> None:
-    detail = parse(_header_with(b"Finale(R) 2001 Copyright (c) 1987-2000 Coda Music Technology"))
+def test_parses_coda_era_banner(mus_header: Callable[..., bytes]) -> None:
+    detail = parse(mus_header(b"Finale(R) 2001 Copyright (c) 1987-2000 Coda Music Technology"))
     assert detail.year == 2001
 
 
-def test_parses_makemusic_bang_banner() -> None:
+def test_parses_makemusic_bang_banner(mus_header: Callable[..., bytes]) -> None:
     # Finale 2005 spells the vendor "MakeMusic!" — do not pattern-match vendor names.
-    detail = parse(_header_with(b"Finale(R) 2005 Copyright (c) 1987-2004 MakeMusic! Inc."))
+    detail = parse(mus_header(b"Finale(R) 2005 Copyright (c) 1987-2004 MakeMusic! Inc."))
     assert detail.year == 2005
 
 
-def test_stops_at_first_nul_ignoring_previous_writer_residue() -> None:
+def test_stops_at_first_nul_ignoring_previous_writer_residue(
+    mus_header: Callable[..., bytes],
+) -> None:
     # Real corpus case: shorter 2005 banner overwrote the longer 2004 Coda banner.
     field = b"Finale(R) 2005 Copyright (c) 1987-2004 MakeMusic! Inc.\x00\x00\x00logy"
-    detail = parse(_header_with(field))
+    detail = parse(mus_header(field))
     assert detail.banner.endswith("MakeMusic! Inc.")
     assert "logy" not in detail.banner
 
 
-def test_unparseable_banner_yields_none_year_but_keeps_text() -> None:
-    detail = parse(_header_with(b"Some Future Banner Format"))
+def test_unparseable_banner_yields_none_year_but_keeps_text(
+    mus_header: Callable[..., bytes],
+) -> None:
+    detail = parse(mus_header(b"Some Future Banner Format"))
     assert detail.year is None
     assert detail.banner == "Some Future Banner Format"
 
 
-def test_empty_banner_field_yields_empty_string_and_none_year() -> None:
-    detail = parse(_header_with(b""))
+def test_empty_banner_field_yields_empty_string_and_none_year(
+    mus_header: Callable[..., bytes],
+) -> None:
+    detail = parse(mus_header())
     assert detail.banner == ""
     assert detail.year is None
 
@@ -440,12 +473,15 @@ git commit -m "feat: parse Finale version banner from .mus header"
 - Modify: `pyproject.toml:11` (add `defusedxml` runtime dependency) and `pyproject.toml:15`
   (add `types-defusedxml` to the dev group)
 - Create: `src/finale_file_parser/version/musx.py`
+- Modify: `tests/version/conftest.py` (add the `make_musx` fixture)
 - Test: `tests/version/test_musx.py`
 
 **Interfaces:**
 - Consumes: `AppVersion`, `MusxDetail`, `NotFinaleFileError` from `models.py`.
 - Produces: `read(path: Path) -> MusxDetail`, and constants `MIMETYPE_VALUE: bytes`,
   `MAX_METADATA_BYTES: int`.
+- Produces (tests): the `make_musx` fixture and the `SAMPLE_METADATA` constant in
+  `tests/version/conftest.py`. **Task 5 reuses both — do not define a second archive builder.**
 
 This is the only task handling attacker-controlled structured data. Three defences are required and
 each has a test: mimetype validation, an uncompressed-size cap before reading, and `defusedxml`.
@@ -469,20 +505,15 @@ Expected: `defusedxml` and `types-defusedxml` installed.
 
 - [ ] **Step 2: Write the failing test**
 
-Create `tests/version/test_musx.py`:
+First append to `tests/version/conftest.py` (keep the existing `mus_header` fixture):
 
 ```python
 import zipfile
 from pathlib import Path
 
-import pytest
-
-from finale_file_parser.version.models import NotFinaleFileError
-from finale_file_parser.version.musx import MAX_METADATA_BYTES, read
-
 MIMETYPE = b"application/vnd.makemusic.notation"
 
-METADATA = """<?xml version="1.0" encoding="UTF-8"?>
+SAMPLE_METADATA = """<?xml version="1.0" encoding="UTF-8"?>
 <metadata version="18.0" xmlns="http://www.makemusic.com/2012/NotationMetadata">
   <fileInfo>
     <created>
@@ -498,23 +529,41 @@ METADATA = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
-def _make_musx(
-    tmp_path: Path,
-    *,
-    mimetype: bytes = MIMETYPE,
-    metadata: str | None = METADATA,
-    name: str = "sample.musx",
-) -> Path:
-    path = tmp_path / name
-    with zipfile.ZipFile(path, "w") as archive:
-        archive.writestr("mimetype", mimetype)
-        if metadata is not None:
-            archive.writestr("NotationMetadata.xml", metadata)
-    return path
+@pytest.fixture
+def make_musx(tmp_path: Path) -> Callable[..., Path]:
+    """Write a .musx-shaped archive into tmp_path and return its path."""
+
+    def build(
+        *,
+        mimetype: bytes = MIMETYPE,
+        metadata: str | None = SAMPLE_METADATA,
+        name: str = "sample.musx",
+    ) -> Path:
+        path = tmp_path / name
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr("mimetype", mimetype)
+            if metadata is not None:
+                archive.writestr("NotationMetadata.xml", metadata)
+        return path
+
+    return build
+```
+
+Then create `tests/version/test_musx.py`:
+
+```python
+import zipfile
+from collections.abc import Callable
+from pathlib import Path
+
+import pytest
+
+from finale_file_parser.version.models import NotFinaleFileError
+from finale_file_parser.version.musx import MAX_METADATA_BYTES, read
 
 
-def test_reads_created_and_modified(tmp_path: Path) -> None:
-    detail = read(_make_musx(tmp_path))
+def test_reads_created_and_modified(make_musx: Callable[..., Path]) -> None:
+    detail = read(make_musx())
     assert detail.metadata_schema == "18.0"
     assert detail.created is not None
     assert detail.created.major == 16
@@ -526,8 +575,8 @@ def test_reads_created_and_modified(tmp_path: Path) -> None:
     assert detail.modified.build == 7098
 
 
-def test_platform_comes_from_the_modifying_write(tmp_path: Path) -> None:
-    assert read(_make_musx(tmp_path)).platform == "WIN"
+def test_platform_comes_from_the_modifying_write(make_musx: Callable[..., Path]) -> None:
+    assert read(make_musx()).platform == "WIN"
 
 
 def test_rejects_zip_that_is_not_a_musx(tmp_path: Path) -> None:
@@ -538,41 +587,41 @@ def test_rejects_zip_that_is_not_a_musx(tmp_path: Path) -> None:
         read(path)
 
 
-def test_rejects_wrong_mimetype(tmp_path: Path) -> None:
+def test_rejects_wrong_mimetype(make_musx: Callable[..., Path]) -> None:
     with pytest.raises(NotFinaleFileError):
-        read(_make_musx(tmp_path, mimetype=b"application/zip"))
+        read(make_musx(mimetype=b"application/zip"))
 
 
-def test_missing_metadata_yields_empty_detail(tmp_path: Path) -> None:
-    detail = read(_make_musx(tmp_path, metadata=None))
+def test_missing_metadata_yields_empty_detail(make_musx: Callable[..., Path]) -> None:
+    detail = read(make_musx(metadata=None))
     assert detail.created is None
     assert detail.modified is None
     assert detail.metadata_schema == ""
 
 
-def test_malformed_xml_yields_empty_detail(tmp_path: Path) -> None:
-    detail = read(_make_musx(tmp_path, metadata="<metadata><unclosed>"))
+def test_malformed_xml_yields_empty_detail(make_musx: Callable[..., Path]) -> None:
+    detail = read(make_musx(metadata="<metadata><unclosed>"))
     assert detail.modified is None
 
 
-def test_missing_app_version_yields_none(tmp_path: Path) -> None:
+def test_missing_app_version_yields_none(make_musx: Callable[..., Path]) -> None:
     metadata = (
         '<metadata version="18.0" xmlns="http://www.makemusic.com/2012/NotationMetadata">'
         "<fileInfo><modified><platform>MAC</platform></modified></fileInfo></metadata>"
     )
-    detail = read(_make_musx(tmp_path, metadata=metadata))
+    detail = read(make_musx(metadata=metadata))
     assert detail.modified is None
     assert detail.platform == "MAC"
 
 
-def test_refuses_oversized_metadata_member(tmp_path: Path) -> None:
+def test_refuses_oversized_metadata_member(make_musx: Callable[..., Path]) -> None:
     # A zip bomb: small compressed, enormous uncompressed.
-    detail = read(_make_musx(tmp_path, metadata="<a/>" + " " * (MAX_METADATA_BYTES + 1)))
+    detail = read(make_musx(metadata="<a/>" + " " * (MAX_METADATA_BYTES + 1)))
     assert detail.modified is None
     assert detail.metadata_schema == ""
 
 
-def test_resists_entity_expansion(tmp_path: Path) -> None:
+def test_resists_entity_expansion(make_musx: Callable[..., Path]) -> None:
     # "Billion laughs". defusedxml must refuse it rather than expanding.
     bomb = """<?xml version="1.0"?>
 <!DOCTYPE metadata [
@@ -582,7 +631,7 @@ def test_resists_entity_expansion(tmp_path: Path) -> None:
 ]>
 <metadata version="18.0">&c;</metadata>
 """
-    detail = read(_make_musx(tmp_path, metadata=bomb))
+    detail = read(make_musx(metadata=bomb))
     assert detail.modified is None
 ```
 
@@ -733,7 +782,8 @@ Expected: PASS — 9 passed
 - [ ] **Step 6: Commit**
 
 ```bash
-git add pyproject.toml uv.lock src/finale_file_parser/version/musx.py tests/version/test_musx.py
+git add pyproject.toml uv.lock src/finale_file_parser/version/musx.py \
+        tests/version/conftest.py tests/version/test_musx.py
 git commit -m "feat: read .musx version metadata with hardened XML and zip handling"
 ```
 
@@ -744,11 +794,13 @@ git commit -m "feat: read .musx version metadata with hardened XML and zip handl
 **Files:**
 - Create: `src/finale_file_parser/version/detect.py`
 - Modify: `src/finale_file_parser/__init__.py` (export the public surface)
+- Modify: `tests/version/conftest.py` (add the `write_mus` fixture)
 - Test: `tests/version/test_detect.py`
 
 **Interfaces:**
 - Consumes: `classify`, `HEADER_SIZE` from `family.py`; `parse` from `mus.py`; `read` from
-  `musx.py`; all types from `models.py`.
+  `musx.py`; all types from `models.py`; the `mus_header` and `make_musx` fixtures from
+  `tests/version/conftest.py` (**do not define new builders — reuse both**).
 - Produces: `detect_version(path: Path) -> FileVersion`, re-exported from the package root as
   `finale_file_parser.detect_version`.
 
@@ -761,14 +813,31 @@ Label formats, fixed here so later tasks can assert on them:
 
 Create `tests/version/test_detect.py`:
 
+First append to `tests/version/conftest.py` (keep the existing fixtures). `write_mus` builds on
+`mus_header` so the header layout is defined in exactly one place:
+
 ```python
-import zipfile
+@pytest.fixture
+def write_mus(tmp_path: Path, mus_header: Callable[..., bytes]) -> Callable[..., Path]:
+    """Write a synthetic .mus file (header plus filler body) and return its path."""
+
+    def build(banner: bytes = b"", *, name: str = "sample.mus") -> Path:
+        path = tmp_path / name
+        path.write_bytes(mus_header(banner) + b"\xde\xad\xbe\xef" * 64)
+        return path
+
+    return build
+```
+
+Then create `tests/version/test_detect.py`:
+
+```python
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
 from finale_file_parser import detect_version
-from finale_file_parser.version.family import HEADER_SIZE
 from finale_file_parser.version.models import (
     Confidence,
     Family,
@@ -776,25 +845,6 @@ from finale_file_parser.version.models import (
     MusxDetail,
     NotFinaleFileError,
 )
-
-MIMETYPE = b"application/vnd.makemusic.notation"
-
-
-def _write_mus(tmp_path: Path, banner: bytes) -> Path:
-    header = bytearray(b"\x00" * HEADER_SIZE)
-    header[0:18] = b"ENIGMA BINARY FILE"
-    header[0x20 : 0x20 + len(banner)] = banner
-    path = tmp_path / "sample.mus"
-    path.write_bytes(bytes(header) + b"\xde\xad\xbe\xef" * 64)
-    return path
-
-
-def _write_musx(tmp_path: Path, metadata: str) -> Path:
-    path = tmp_path / "sample.musx"
-    with zipfile.ZipFile(path, "w") as archive:
-        archive.writestr("mimetype", MIMETYPE)
-        archive.writestr("NotationMetadata.xml", metadata)
-    return path
 
 
 def _metadata(app_version: str) -> str:
@@ -805,8 +855,8 @@ def _metadata(app_version: str) -> str:
     )
 
 
-def test_detects_mus(tmp_path: Path) -> None:
-    path = _write_mus(tmp_path, b"Finale(R) 2011 Copyright (c) 1987-2010 MakeMusic Inc.")
+def test_detects_mus(write_mus: Callable[..., Path]) -> None:
+    path = write_mus(b"Finale(R) 2011 Copyright (c) 1987-2010 MakeMusic Inc.")
     result = detect_version(path)
     assert result.family is Family.MUS
     assert result.label == "Finale 2011"
@@ -814,8 +864,10 @@ def test_detects_mus(tmp_path: Path) -> None:
     assert isinstance(result.detail, MusDetail)
 
 
-def test_unrecognised_mus_banner_is_unknown_not_an_error(tmp_path: Path) -> None:
-    path = _write_mus(tmp_path, b"Finale(R) Future Edition")
+def test_unrecognised_mus_banner_is_unknown_not_an_error(
+    write_mus: Callable[..., Path],
+) -> None:
+    path = write_mus(b"Finale(R) Future Edition")
     result = detect_version(path)
     assert result.confidence is Confidence.UNKNOWN
     assert result.label == "unknown version"
@@ -823,13 +875,12 @@ def test_unrecognised_mus_banner_is_unknown_not_an_error(tmp_path: Path) -> None
     assert result.detail.banner == "Finale(R) Future Edition"
 
 
-def test_detects_musx(tmp_path: Path) -> None:
-    path = _write_musx(
-        tmp_path,
-        _metadata(
+def test_detects_musx(make_musx: Callable[..., Path]) -> None:
+    path = make_musx(
+        metadata=_metadata(
             "<appVersion><major>18</major><maint>5</maint>"
             "<devStatus>dev</devStatus><build>7098</build></appVersion>"
-        ),
+        )
     )
     result = detect_version(path)
     assert result.family is Family.MUSX
@@ -838,19 +889,18 @@ def test_detects_musx(tmp_path: Path) -> None:
     assert isinstance(result.detail, MusxDetail)
 
 
-def test_musx_label_omits_absent_maint(tmp_path: Path) -> None:
-    path = _write_musx(
-        tmp_path,
-        _metadata(
+def test_musx_label_omits_absent_maint(make_musx: Callable[..., Path]) -> None:
+    path = make_musx(
+        metadata=_metadata(
             "<appVersion><major>16</major><devStatus>release</devStatus>"
             "<build>2</build></appVersion>"
-        ),
+        )
     )
     assert detect_version(path).label == "16 release (build 2)"
 
 
-def test_musx_without_app_version_is_unknown(tmp_path: Path) -> None:
-    path = _write_musx(tmp_path, _metadata(""))
+def test_musx_without_app_version_is_unknown(make_musx: Callable[..., Path]) -> None:
+    path = make_musx(metadata=_metadata(""))
     result = detect_version(path)
     assert result.confidence is Confidence.UNKNOWN
     assert result.label == "unknown version"
@@ -1014,7 +1064,7 @@ Expected: ruff clean, ruff format clean, mypy `Success`, all tests pass.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/finale_file_parser tests/version/test_detect.py
+git add src/finale_file_parser tests/version/conftest.py tests/version/test_detect.py
 git commit -m "feat: add detect_version public entry point"
 ```
 
