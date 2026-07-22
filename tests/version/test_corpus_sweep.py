@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from finale_file_parser import Confidence, Family, detect_version
+from finale_file_parser.version.models import MusDetail
 
 CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
@@ -27,6 +28,10 @@ EXPECTED_MUS = {
     "Finale 2012": 10,
 }
 EXPECTED_MUSX_COUNT = 401
+EXPECTED_MUS_COUNT = 238
+EXPECTED_MUS_MAC_COUNT = 136
+EXPECTED_MUS_WIN_COUNT = 102
+MIN_STAMP_YEAR, MAX_STAMP_YEAR = 1998, 2012
 
 
 def _files(suffix: str) -> list[Path]:
@@ -65,3 +70,74 @@ def test_directory_names_are_not_trusted_as_version_labels() -> None:
     mislabelled = [p for p in _files(".mus") if "holiday_tunes_2013" in str(p)]
     assert mislabelled, "No files found in holiday_tunes_2013 directory"
     assert all(detect_version(p).label == "Finale 2012" for p in mislabelled)
+
+
+def test_every_mus_file_yields_both_provenance_stamps() -> None:
+    """Pinned by the 2026-07-22 corpus survey: every one of the 238 .mus files
+    carries both a created and a modified stamp. A corpus change that regresses
+    this must update this test and docs/superpowers/specs/2026-07-22-mus-header-metadata-design.md
+    together, deliberately -- not by silently loosening the assertion.
+    """
+    paths = _files(".mus")
+    assert len(paths) == EXPECTED_MUS_COUNT
+    for path in paths:
+        detail = detect_version(path).detail
+        assert isinstance(detail, MusDetail), path
+        assert detail.created is not None, path
+        assert detail.modified is not None, path
+
+
+def test_every_mus_file_has_created_on_or_before_modified() -> None:
+    paths = _files(".mus")
+    assert len(paths) == EXPECTED_MUS_COUNT
+    for path in paths:
+        detail = detect_version(path).detail
+        assert isinstance(detail, MusDetail), path
+        created, modified = detail.created, detail.modified
+        assert created is not None and modified is not None, path
+        assert (created.year, created.month, created.day) <= (
+            modified.year,
+            modified.month,
+            modified.day,
+        ), path
+
+
+def test_every_mus_stamp_reports_application_fin() -> None:
+    paths = _files(".mus")
+    assert len(paths) == EXPECTED_MUS_COUNT
+    for path in paths:
+        detail = detect_version(path).detail
+        assert isinstance(detail, MusDetail), path
+        created, modified = detail.created, detail.modified
+        assert created is not None and modified is not None, path
+        assert created.application == "FIN", path
+        assert modified.application == "FIN", path
+
+
+def test_mus_stamp_platform_tallies_exactly() -> None:
+    """Platform is read from the created stamp of each file; per the design spec
+    every corpus file's created and modified stamps agree on platform, but this
+    tally is over the created stamp specifically so a future disagreement would
+    change this count rather than being silently averaged away.
+    """
+    paths = _files(".mus")
+    assert len(paths) == EXPECTED_MUS_COUNT
+    tally: collections.Counter[str] = collections.Counter()
+    for path in paths:
+        detail = detect_version(path).detail
+        assert isinstance(detail, MusDetail), path
+        assert detail.created is not None, path
+        tally[detail.created.platform] += 1
+    assert dict(tally) == {"MAC": EXPECTED_MUS_MAC_COUNT, "WIN": EXPECTED_MUS_WIN_COUNT}
+
+
+def test_every_mus_stamp_year_is_in_the_observed_range() -> None:
+    paths = _files(".mus")
+    assert len(paths) == EXPECTED_MUS_COUNT
+    for path in paths:
+        detail = detect_version(path).detail
+        assert isinstance(detail, MusDetail), path
+        created, modified = detail.created, detail.modified
+        assert created is not None and modified is not None, path
+        assert MIN_STAMP_YEAR <= created.year <= MAX_STAMP_YEAR, path
+        assert MIN_STAMP_YEAR <= modified.year <= MAX_STAMP_YEAR, path
