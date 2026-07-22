@@ -30,6 +30,11 @@ MAX_TOTAL_UNCOMPRESSED = 16 * 1024 * 1024
 """Corpus maximum is 419,972 bytes per archive. A per-member cap alone does not
 stop an archive of many members each just under that cap."""
 
+MAX_SCORE_BYTES = 8 * 1024 * 1024
+"""Observed corpus maximum is 412,805 bytes. This sits comfortably above real
+files while staying genuinely below MAX_TOTAL_UNCOMPRESSED, so it is a real
+per-call bound rather than an echo of the member's own declared size."""
+
 
 class MusxContainer:
     """An open .musx archive.
@@ -39,7 +44,12 @@ class MusxContainer:
 
     def __init__(self, archive: zipfile.ZipFile, entries: tuple[ContainerEntry, ...]) -> None:
         self._archive = archive
-        self.entries = entries
+        self._entries = entries
+
+    @property
+    def entries(self) -> tuple[ContainerEntry, ...]:
+        """The archive's members, as validated at open time. Read-only."""
+        return self._entries
 
     def __enter__(self) -> MusxContainer:
         return self
@@ -71,21 +81,27 @@ class MusxContainer:
                 f"member {name!r} declares {info.file_size} bytes, which exceeds max_bytes"
                 f" of {max_bytes}"
             )
-        return self._archive.read(name)
+        try:
+            return self._archive.read(name)
+        except zipfile.BadZipFile as exc:
+            raise CorruptContainerError(
+                f"member {name!r} is corrupt: its local header disagrees with the central directory"
+            ) from exc
 
     def score_stream(self) -> bytes:
         """Return the raw, still-obfuscated score payload.
 
         Raises:
-            CorruptContainerError: the archive carries no score.dat. All 401
-                corpus archives have one, so its absence is malformed input
-                rather than a caller mistake.
+            CorruptContainerError: the archive carries no score.dat, or it
+                declares more than MAX_SCORE_BYTES. All 401 corpus archives
+                have a score.dat, so its absence is malformed input rather
+                than a caller mistake.
         """
         try:
-            info = self._archive.getinfo(SCORE_NAME)
+            self._archive.getinfo(SCORE_NAME)
         except KeyError as exc:
             raise CorruptContainerError("archive has no score.dat") from exc
-        return self.read(SCORE_NAME, max_bytes=info.file_size)
+        return self.read(SCORE_NAME, max_bytes=MAX_SCORE_BYTES)
 
 
 def open_musx(path: str | os.PathLike[str]) -> MusxContainer:
@@ -103,8 +119,14 @@ def open_musx(path: str | os.PathLike[str]) -> MusxContainer:
         raise NotFinaleFileError(f"{path} is not a readable archive") from exc
 
     try:
-        _require_finale_mimetype(archive, path)
         entries = _validated_entries(archive)
+        _require_finale_mimetype(archive, path)
+    except (zipfile.BadZipFile, RuntimeError) as exc:
+        # A member read (e.g. the mimetype gate below) can hit a local header
+        # that disagrees with the central directory, or a member with the
+        # encryption bit set. Both mean "not a readable Finale archive".
+        archive.close()
+        raise NotFinaleFileError(f"{path} is not a readable Finale archive") from exc
     except Exception:
         archive.close()
         raise
