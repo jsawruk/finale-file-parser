@@ -14,10 +14,10 @@ from xml.etree.ElementTree import Element, ParseError
 from defusedxml import DefusedXmlException
 from defusedxml.ElementTree import fromstring
 
-from finale_file_parser.version.models import AppVersion, MusxDetail, NotFinaleFileError
+from finale_file_parser.container.models import CorruptContainerError
+from finale_file_parser.container.musx import open_musx
+from finale_file_parser.version.models import AppVersion, MusxDetail
 
-MIMETYPE_NAME = "mimetype"
-MIMETYPE_VALUE = b"application/vnd.makemusic.notation"
 METADATA_NAME = "NotationMetadata.xml"
 
 MAX_METADATA_BYTES = 1 << 20
@@ -38,23 +38,25 @@ def read(path: Path) -> MusxDetail:
     Unparseable *metadata* is not an error: it yields a MusxDetail with empty
     fields, so an unrecognised variant remains inspectable. This covers a
     missing metadata member, one over `MAX_METADATA_BYTES`, one that fails to
-    read (e.g. a CRC/decompression error), and one that fails to parse as XML.
+    read (e.g. a CRC/decompression error), one that fails to parse as XML, and
+    an archive whose structure violates a container safety limit.
     """
     try:
-        with zipfile.ZipFile(path) as archive:
-            _require_finale_mimetype(archive, path)
+        with open_musx(path) as container:
             try:
-                raw = _read_capped(archive, METADATA_NAME, MAX_METADATA_BYTES)
-            except zipfile.BadZipFile:
-                # The archive itself is sound (mimetype validation above
-                # already read successfully); only the metadata member is
-                # corrupt. That degrades to an empty detail, not a raise.
+                raw: bytes | None = container.read(METADATA_NAME, max_bytes=MAX_METADATA_BYTES)
+            except (KeyError, CorruptContainerError, zipfile.BadZipFile):
+                # Missing, oversized, or unreadable metadata degrades to an
+                # empty detail. Only "not a Finale file" raises.
                 raw = None
-    except zipfile.BadZipFile as exc:
-        raise NotFinaleFileError(f"{path} is not a readable archive") from exc
+    except CorruptContainerError:
+        # A structurally hostile archive makes the version unknown; it does
+        # not make version detection fail. Nothing oversized was read to get
+        # here.
+        return _empty()
 
     if raw is None:
-        return MusxDetail(created=None, modified=None, metadata_schema="", platform=None)
+        return _empty()
 
     try:
         root = fromstring(raw)
@@ -62,7 +64,7 @@ def read(path: Path) -> MusxDetail:
         # ParseError covers malformed XML; DefusedXmlException covers attack
         # payloads (entity expansion, external entities, etc). Both mean "no
         # usable metadata", which is a result, not a failure.
-        return MusxDetail(created=None, modified=None, metadata_schema="", platform=None)
+        return _empty()
 
     modified = _find_block(root, "modified")
     created = _find_block(root, "created")
@@ -74,21 +76,8 @@ def read(path: Path) -> MusxDetail:
     )
 
 
-def _require_finale_mimetype(archive: zipfile.ZipFile, path: Path) -> None:
-    raw = _read_capped(archive, MIMETYPE_NAME, len(MIMETYPE_VALUE))
-    if raw != MIMETYPE_VALUE:
-        raise NotFinaleFileError(f"{path} is a zip archive but not a Finale .musx")
-
-
-def _read_capped(archive: zipfile.ZipFile, name: str, cap: int) -> bytes | None:
-    """Read `name` only if it declares no more than `cap` uncompressed bytes."""
-    try:
-        info = archive.getinfo(name)
-    except KeyError:
-        return None
-    if info.file_size > cap:
-        return None
-    return archive.read(name)
+def _empty() -> MusxDetail:
+    return MusxDetail(created=None, modified=None, metadata_schema="", platform=None)
 
 
 def _find(parent: Element, tag: str, *, deep: bool = False) -> Element | None:
