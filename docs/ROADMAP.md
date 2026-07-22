@@ -34,20 +34,27 @@ and pull a score stream of the declared length; adversarial tests prove that a t
 archive raises `NotFinaleFileError` or `CorruptContainerError` rather than crashing. Every safety
 limit is verified by mutation, because no real corpus archive trips one.
 
+## Next up — decode `score.dat`
+
+`score.dat` is the wall between this project and actual notes. Every remaining item in `Later` —
+pitches, rhythms, staves, measures, score structure, and the MusicXML exporter — sits behind it:
+nothing there can start until the byte stream is turned into records. Community EnigmaXML
+reverse-engineering documentation may be read as reference for what the format is (DECIDED — see
+`docs/DECISIONS.md`), but the decoder is written independently, not ported from it.
+
+- [ ] Decode `score.dat` (extracted by the Phase 1 container reader) into records/chunks.
+
 ## Later
 
 <!-- Things deliberately deferred. Keep them out of Phase 1 so the MVP stays small. -->
-- [ ] Decode the score stream into records/chunks (needs the Phase 1 bytes first).
 - [ ] Notes, pitches, and rhythms as a Python data model.
 - [ ] Staves, measures, and score structure.
 - [x] `.mus` header provenance stamps (created/modified with date, application, platform).
+- [x] Unify `.musx` provenance onto `ProvenanceStamp` (see `docs/DECISIONS.md`). `MusxDetail.platform`
+      was dropped in favour of a platform on each stamp, matching `.mus`.
 - [ ] `.mus` internal record pools — open research. A `.mus` file has no member table, so there is
       no container abstraction to mirror from `.musx`; the pools must be located empirically.
 - [ ] MusicXML exporter over the IR (DECIDED — see DECISIONS.md).
 - [ ] Desktop frontend: hex viewer with decoded structure values (DECIDED — framework still open).
 - [ ] Desktop frontend: notation rendering.
 - [ ] CLI for dumping file structure.
-- [ ] Unify `.musx` provenance onto `ProvenanceStamp` (OPEN — see `docs/DECISIONS.md`). `.musx` metadata
-      has the same year/month/day/application/platform fields `ProvenanceStamp` already models but only
-      `platform` is read today, collapsed across `created`/`modified` and the dates discarded.
-      Needs its own design pass since it changes the published `MusxDetail` shape.

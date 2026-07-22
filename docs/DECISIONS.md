@@ -10,6 +10,20 @@ and resolved ones **DECIDED**.
 
 ---
 
+## 2026-07-22 — DECIDED: one provenance type for both formats
+
+`ProvenanceStamp` (renamed from `MusStamp`) carries date, application, and platform for both `.mus`
+and `.musx`, plus `modified_by` and `app_version` which only `.musx` fills. `MusxDetail.platform`
+was removed — platform now lives on each stamp, matching `.mus`'s rule that both stamps must not be
+assumed to agree.
+
+Reason: the formats recorded the same facts and the code modelled them twice, one module apart —
+`.musx` discarded its dates entirely and collapsed two platforms into one field. Breaking the
+published type was cheap at 0.0.1 and would only get more expensive.
+
+`appRegion` is deliberately not modelled: `US` in all 802 corpus blocks, so it carries no
+information yet.
+
 ## 2026-07-22 — DECIDED: both `.mus` and `.musx` are in scope
 
 Settled by what shipped: `detect_version` handles both, `.mus` banner parsing and provenance stamps
@@ -111,20 +125,6 @@ permissive license suits a format-interoperability library that other tools need
 
 <!-- Add architectural forks here as they arise, each with a recommended default and "owner to
      confirm". Move to a DECIDED entry above once resolved. -->
-- **OPEN — should `.musx` also produce `ProvenanceStamp` provenance?** `.musx`'s `NotationMetadata.xml`
-  `created`/`modified` blocks carry `<year><month><day><application><platform>` — field for field,
-  exactly what `ProvenanceStamp` (introduced for `.mus`) models. `version/musx.py` currently reads only
-  `platform` out of those blocks, collapses `created`'s and `modified`'s platform with `or` into a
-  single `MusxDetail.platform`, and discards the dates entirely. So the same data is modeled two
-  incompatible ways one module apart: `.mus` keeps full per-stamp `ProvenanceStamp`s, `.musx` throws the
-  dates away and flattens platform to one field. If `.musx` moved to `ProvenanceStamp` provenance too,
-  `MusxDetail.platform` would presumably be dropped in favour of a platform on each stamp, matching
-  `.mus`'s "each stamp carries its own — do not assume both agree" rule. Recommended default:
-  unify, because leaving this alone means two representations of identical data drifting further
-  apart with every change to either module. **Not done in this branch** — `MusxDetail` is a
-  published type, and changing its shape (dropping `platform`, adding stamp-based `created`/
-  `modified`) needs its own design pass, not a slip-in alongside a `.mus`-only slice. Owner to
-  confirm.
 - **OPEN — GUI framework and repo layout for the desktop frontend.** The frontend is DECIDED (see
   above); how to build and package it is not. Recommended default: keep the parser a standalone
   importable package and add the app as a separate package in the same repo, so the library never
