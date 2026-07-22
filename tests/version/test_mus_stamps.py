@@ -85,3 +85,22 @@ def test_unterminated_application_tag_stops_at_the_field_boundary(
     assert created is not None
     assert created.application == "WXYZ"
     assert created.platform == "MAC"
+
+
+def test_unterminated_platform_tag_stops_at_the_field_boundary(
+    mus_metadata_header: Callable[..., bytes],
+) -> None:
+    """A platform tag with no NUL must not absorb bytes beyond the field boundary.
+
+    Mirrors the application-tag bleed test above, for the platform tag: the
+    created stamp's platform field is at offset 0x74, `_TAG_FIELD_SIZE` (4)
+    bytes wide. A four-byte, non-NUL-terminated platform value has nothing to
+    stop it at the right byte except that fixed field width, so a marker is
+    planted immediately past the field to prove the read does not run on.
+    """
+    CREATED_PLAT = 0x74
+    header = bytearray(mus_metadata_header(platform=b"MACX"))
+    header[CREATED_PLAT + 4 : CREATED_PLAT + 8] = b"BAD!"
+    created = parse(bytes(header)).created
+    assert created is not None
+    assert created.platform == "MACX"
