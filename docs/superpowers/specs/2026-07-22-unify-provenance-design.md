@@ -1,6 +1,6 @@
 # Unified provenance stamps — design
 
-**Status:** approved, not yet implemented
+**Status:** implemented
 **Date:** 2026-07-22
 
 Make `.mus` and `.musx` express provenance with one shared type instead of two incompatible ones.
@@ -101,9 +101,14 @@ Which removes the usual safety net, so the guard becomes narrower and more speci
   assertion must pass untouched.** If a label test needs editing, behaviour changed; stop.
 - The corpus sweep must report the same tallies as today: 401 `.musx` at schema 18.0, 238 `.mus`
   with 136 `MAC` / 102 `WIN`.
-- `modified` remains the layout authority for `.musx` — 264 of 401 files were created by major=16
-  and last modified by major=18, so preferring `created` would misreport most real files. This rule
-  is unchanged and its existing test must keep passing.
+- `modified` remains the layout authority for `.musx` — 267 of 401 files were created by major=16
+  and last modified by major=18, and **370 of 401 diverge between the two majors at all**, so
+  preferring `created` would misreport most real files. This rule is unchanged and its existing
+  test must keep passing.
+
+  (The 2026-07-21 version-detection spec put the first figure at 264. That was read off a single
+  row of a tally rather than measured; a direct count gives 267. A correction note is appended
+  there rather than rewriting it.)
 
 ## Consequences
 

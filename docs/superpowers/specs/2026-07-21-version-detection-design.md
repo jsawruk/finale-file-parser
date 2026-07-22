@@ -75,6 +75,12 @@ A zip archive with `mimetype` = `application/vnd.makemusic.notation`. Version in
 
 All 401 files report metadata schema `18.0`; 0 parse failures.
 
+> **Correction, 2026-07-22.** This section's "264" was wrong. It was read off a single row of an
+> earlier tally (`major=16`, `release`, `MAC`), not the count of all files created by major 16. A
+> direct measurement gives **267** files created by major 16, all 267 of which were last modified by
+> major 18 — and **370 of 401** archives diverge between `created` and `modified` at all. The
+> conclusion is unchanged and in fact stronger. See `docs/ARCHITECTURE.md` for the current figures.
+
 **`created` and `modified` diverge, and only `modified` matters for parsing.** 264 files were
 created by `major=16` but last modified by `major=18`. The last writer determines the on-disk
 layout, so `modified` is the layout authority. `created` is retained as provenance, not as a
