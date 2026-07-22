@@ -542,3 +542,22 @@ def test_read_translates_deflate_score_member_with_corrupt_bytes(tmp_path: Path)
     with open_musx(path) as container:
         with pytest.raises(CorruptContainerError):
             container.read("score.dat", max_bytes=1024)
+
+
+def test_member_cap_is_the_documented_value(make_archive: Callable[..., Path]) -> None:
+    """Pin MAX_MEMBERS to a literal, not to itself.
+
+    Every other cap test derives its archive size from the constant, so raising
+    MAX_MEMBERS would leave them all passing while silently diverging from the
+    64 documented in docs/SECURITY.md. This asserts the value and exercises the
+    boundary with literal counts.
+    """
+    assert MAX_MEMBERS == 64
+
+    at_cap = [("mimetype", MIMETYPE)] + [(f"presets/{i}.preset", b"x") for i in range(63)]
+    with open_musx(make_archive(tuple(at_cap))) as container:
+        assert len(container.entries) == 64
+
+    over_cap = [("mimetype", MIMETYPE)] + [(f"presets/{i}.preset", b"x") for i in range(64)]
+    with pytest.raises(CorruptContainerError, match="too many members"):
+        open_musx(make_archive(tuple(over_cap)))
