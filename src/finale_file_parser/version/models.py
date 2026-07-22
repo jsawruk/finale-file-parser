@@ -38,17 +38,31 @@ class AppVersion:
 
 
 @dataclass(frozen=True)
-class MusStamp:
-    """One provenance stamp from a .mus header: when, by what, on which platform."""
+class ProvenanceStamp:
+    """When a file was written, by what application, on which platform.
+
+    Both formats produce these. `.musx` additionally fills `app_version`, and
+    may fill `modified_by`; `.mus` leaves both at their defaults.
+    """
 
     year: int
     month: int
     day: int
+
     application: str
     """Observed: "FIN"."""
 
     platform: str
-    """Observed: "MAC" or "WIN". Each stamp carries its own — do not assume both agree."""
+    """Observed: "MAC" or "WIN". Each stamp carries its own — do not assume
+    both stamps in a file agree."""
+
+    modified_by: str = ""
+    """Who last wrote the file. `.musx` only; non-empty in 28 of 802 corpus
+    blocks, where it holds a person's initials. Empty for `.mus`."""
+
+    app_version: AppVersion | None = None
+    """The writing application's version. `.musx` only — `.mus` records no
+    version in its stamps, only the banner year."""
 
 
 @dataclass(frozen=True)
@@ -56,11 +70,11 @@ class MusDetail:
     """Version evidence from a legacy .mus header.
 
     `created`/`modified` share their names with `MusxDetail.created`/
-    `.modified` but not their shape: these are `MusStamp` (date, application,
-    platform); `MusxDetail`'s pair is `AppVersion` (major/maint/devStatus/
-    build). Both formats expose created/modified provenance, but `.mus`
-    records *when and where* a file was written while `.musx` records *which
-    application version* wrote it. A caller cannot treat `.created`/
+    `.modified` but not their shape: these are `ProvenanceStamp` (date,
+    application, platform); `MusxDetail`'s pair is `AppVersion` (major/maint/
+    devStatus/build). Both formats expose created/modified provenance, but
+    `.mus` records *when and where* a file was written while `.musx` records
+    *which application version* wrote it. A caller cannot treat `.created`/
     `.modified` generically across the two formats.
     """
 
@@ -70,10 +84,10 @@ class MusDetail:
     year: int | None
     """Marketing year parsed from the banner, or None if it did not match."""
 
-    created: MusStamp | None = None
+    created: ProvenanceStamp | None = None
     """When and where the file was first written, or None if unparseable."""
 
-    modified: MusStamp | None = None
+    modified: ProvenanceStamp | None = None
     """When and where the file was last written, or None if unparseable."""
 
 

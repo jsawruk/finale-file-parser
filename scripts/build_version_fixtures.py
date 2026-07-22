@@ -20,7 +20,7 @@ from defusedxml.ElementTree import fromstring as defused_fromstring
 
 from finale_file_parser import MusDetail, NotFinaleFileError, detect_version
 from finale_file_parser.version.family import HEADER_SIZE
-from finale_file_parser.version.models import MusStamp
+from finale_file_parser.version.models import ProvenanceStamp
 from finale_file_parser.version.mus import MUS_METADATA_SIZE
 
 CORPUS = Path("corpus")
@@ -218,7 +218,7 @@ def _entry(target: Path, source: Path, taken: str) -> str:
     return text
 
 
-def _stamp_toml(stamp: MusStamp) -> str:
+def _stamp_toml(stamp: ProvenanceStamp) -> str:
     return (
         "{ "
         f"year = {stamp.year}, month = {stamp.month}, day = {stamp.day}, "

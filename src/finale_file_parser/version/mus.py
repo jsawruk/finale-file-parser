@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from finale_file_parser.version.models import MusDetail, MusStamp
+from finale_file_parser.version.models import MusDetail, ProvenanceStamp
 
 BANNER_OFFSET = 0x20
 BANNER_FIELD_SIZE = 0x40
@@ -50,7 +50,7 @@ def parse(header: bytes) -> MusDetail:
     )
 
 
-def _stamp(header: bytes, date_off: int, app_off: int, plat_off: int) -> MusStamp | None:
+def _stamp(header: bytes, date_off: int, app_off: int, plat_off: int) -> ProvenanceStamp | None:
     """Return the stamp at these offsets, or None if it is absent or implausible."""
     date = header[date_off : date_off + 3]
     if len(date) < 3:
@@ -65,7 +65,7 @@ def _stamp(header: bytes, date_off: int, app_off: int, plat_off: int) -> MusStam
     application = _tag(header, app_off, plat_off - app_off)
     if not application:
         return None
-    return MusStamp(
+    return ProvenanceStamp(
         year=year,
         month=month,
         day=day,

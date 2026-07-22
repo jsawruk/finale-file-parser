@@ -7,7 +7,7 @@ import pytest
 from defusedxml.ElementTree import fromstring
 
 from finale_file_parser import detect_version
-from finale_file_parser.version.models import MusDetail, MusStamp
+from finale_file_parser.version.models import MusDetail, ProvenanceStamp
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "version"
 MANIFEST = FIXTURES / "MANIFEST.toml"
@@ -136,10 +136,10 @@ def test_musx_fixture_labels_are_pinned_independently_of_the_generator() -> None
     assert detect_version(FIXTURES / "musx-18-WIN.musx").label == "18 dev (build 3163)"
 
 
-def _stamp_from_manifest(raw: dict[str, str | int] | None) -> MusStamp | None:
+def _stamp_from_manifest(raw: dict[str, str | int] | None) -> ProvenanceStamp | None:
     if raw is None:
         return None
-    return MusStamp(
+    return ProvenanceStamp(
         year=int(raw["year"]),
         month=int(raw["month"]),
         day=int(raw["day"]),

@@ -14,9 +14,9 @@ from finale_file_parser.version.models import (
     FileVersion,
     FinaleFileError,
     MusDetail,
-    MusStamp,
     MusxDetail,
     NotFinaleFileError,
+    ProvenanceStamp,
 )
 
 __all__ = [
@@ -28,10 +28,10 @@ __all__ = [
     "FileVersion",
     "FinaleFileError",
     "MusDetail",
-    "MusStamp",
     "MusxContainer",
     "MusxDetail",
     "NotFinaleFileError",
+    "ProvenanceStamp",
     "detect_version",
     "open_musx",
 ]

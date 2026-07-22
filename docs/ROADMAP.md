@@ -47,7 +47,7 @@ limit is verified by mutation, because no real corpus archive trips one.
 - [ ] Desktop frontend: hex viewer with decoded structure values (DECIDED — framework still open).
 - [ ] Desktop frontend: notation rendering.
 - [ ] CLI for dumping file structure.
-- [ ] Unify `.musx` provenance onto `MusStamp` (OPEN — see `docs/DECISIONS.md`). `.musx` metadata
-      has the same year/month/day/application/platform fields `MusStamp` already models but only
+- [ ] Unify `.musx` provenance onto `ProvenanceStamp` (OPEN — see `docs/DECISIONS.md`). `.musx` metadata
+      has the same year/month/day/application/platform fields `ProvenanceStamp` already models but only
       `platform` is read today, collapsed across `created`/`modified` and the dates discarded.
       Needs its own design pass since it changes the published `MusxDetail` shape.

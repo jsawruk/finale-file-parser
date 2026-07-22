@@ -111,13 +111,13 @@ permissive license suits a format-interoperability library that other tools need
 
 <!-- Add architectural forks here as they arise, each with a recommended default and "owner to
      confirm". Move to a DECIDED entry above once resolved. -->
-- **OPEN — should `.musx` also produce `MusStamp` provenance?** `.musx`'s `NotationMetadata.xml`
+- **OPEN — should `.musx` also produce `ProvenanceStamp` provenance?** `.musx`'s `NotationMetadata.xml`
   `created`/`modified` blocks carry `<year><month><day><application><platform>` — field for field,
-  exactly what `MusStamp` (introduced for `.mus`) models. `version/musx.py` currently reads only
+  exactly what `ProvenanceStamp` (introduced for `.mus`) models. `version/musx.py` currently reads only
   `platform` out of those blocks, collapses `created`'s and `modified`'s platform with `or` into a
   single `MusxDetail.platform`, and discards the dates entirely. So the same data is modeled two
-  incompatible ways one module apart: `.mus` keeps full per-stamp `MusStamp`s, `.musx` throws the
-  dates away and flattens platform to one field. If `.musx` moved to `MusStamp` provenance too,
+  incompatible ways one module apart: `.mus` keeps full per-stamp `ProvenanceStamp`s, `.musx` throws the
+  dates away and flattens platform to one field. If `.musx` moved to `ProvenanceStamp` provenance too,
   `MusxDetail.platform` would presumably be dropped in favour of a platform on each stamp, matching
   `.mus`'s "each stamp carries its own — do not assume both agree" rule. Recommended default:
   unify, because leaving this alone means two representations of identical data drifting further
