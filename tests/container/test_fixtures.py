@@ -3,6 +3,7 @@ import zipfile
 from pathlib import Path
 from typing import cast
 
+import build_container_fixtures
 import pytest
 
 from finale_file_parser.container.musx import open_musx
@@ -11,6 +12,7 @@ FIXTURES = Path(__file__).parent.parent / "fixtures" / "container"
 PROFILES = FIXTURES / "PROFILES.toml"
 FILLER = b"FINALE-FIXTURE-SYNTHETIC-PAYLOAD-DO-NOT-INTERPRET-"
 MIMETYPE_VALUE = b"application/vnd.makemusic.notation"
+CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
 
 def _profiles() -> list[dict[str, object]]:
@@ -105,3 +107,86 @@ def test_no_fixture_contains_a_non_synthetic_payload() -> None:
                 else:
                     expected = (FILLER * (len(data) // len(FILLER) + 1))[: len(data)]
                 assert data == expected, f"{path.name}:{name} is not synthetic filler"
+
+
+def test_allowlist_refuses_a_member_name_with_a_trailing_newline(tmp_path: Path) -> None:
+    # `re.match(..., "$")` matches BEFORE a trailing newline, so a member
+    # literally named "score.dat\n" would sail through a `.match`-based
+    # allowlist. `_harvest` must use `fullmatch` and refuse it outright: this
+    # allowlist is the generator's last line of defence against a member
+    # named after a musical work riding along into a committed fixture.
+    assert build_container_fixtures.ALLOWED_NAME.fullmatch("score.dat") is not None
+    assert build_container_fixtures.ALLOWED_NAME.fullmatch("score.dat\n") is None
+
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    with zipfile.ZipFile(corpus / "smuggled.musx", "w") as archive:
+        archive.writestr("mimetype", MIMETYPE_VALUE, compress_type=zipfile.ZIP_STORED)
+        archive.writestr("score.dat\n", b"x")
+
+    original_corpus = build_container_fixtures.CORPUS
+    build_container_fixtures.CORPUS = corpus
+    try:
+        with pytest.raises(SystemExit):
+            build_container_fixtures._harvest()
+    finally:
+        build_container_fixtures.CORPUS = original_corpus
+
+
+# These two totals come from a one-time survey of the corpus (401 archives
+# folding into the 22 committed profiles; see
+# docs/superpowers/specs/2026-07-21-musx-container-design.md). They are NOT
+# derived from whatever the generator emits today: if a future regeneration
+# changes either number, that is a signal to re-derive these constants from
+# the corpus and confirm the change is expected, not to edit them to match
+# the new output.
+EXPECTED_TOTAL_DECLARED_SIZE = 2939506
+EXPECTED_TOTAL_MEMBER_COUNT = 155
+
+
+def test_total_declared_size_and_member_count_are_pinned() -> None:
+    total_size = 0
+    total_members = 0
+    for profile in _profiles():
+        members = profile["members"]
+        assert isinstance(members, list)
+        for member in members:
+            assert isinstance(member["size"], int)
+            total_size += member["size"]
+            total_members += 1
+    assert total_size == EXPECTED_TOTAL_DECLARED_SIZE
+    assert total_members == EXPECTED_TOTAL_MEMBER_COUNT
+
+
+@pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
+def test_profiles_toml_matches_a_fresh_derivation_from_the_corpus() -> None:
+    # Independent of the fixtures on disk: re-runs the generator's own
+    # harvesting/grouping logic (imported, not reimplemented, so this can't
+    # drift from the real rule) directly against corpus/, and checks the
+    # committed PROFILES.toml still matches. This is the test that catches a
+    # stale commit after the corpus changed underneath it.
+    fresh_profiles = build_container_fixtures._profiles()
+    fresh_entries = [
+        {
+            "file": f"variant-{index:02d}.musx",
+            "source_count": profile.source_count,
+            "method_varied": profile.method_varied,
+            "members": [
+                {"name": m.name, "size": m.size, "compress_type": m.compress_type}
+                for m in profile.members
+            ],
+        }
+        for index, profile in enumerate(fresh_profiles, start=1)
+    ]
+
+    committed_entries = [
+        {
+            "file": profile["file"],
+            "source_count": profile["source_count"],
+            "method_varied": profile.get("method_varied", False),
+            "members": profile["members"],
+        }
+        for profile in _profiles()
+    ]
+
+    assert fresh_entries == committed_entries

@@ -32,8 +32,9 @@ from pathlib import Path
 
 from finale_file_parser.container.musx import MIMETYPE_NAME, MIMETYPE_VALUE
 
-CORPUS = Path("corpus")
-OUT = Path("tests/fixtures/container")
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+CORPUS = _REPO_ROOT / "corpus"
+OUT = _REPO_ROOT / "tests/fixtures/container"
 
 ALLOWED_NAME = re.compile(
     r"^(mimetype"
@@ -114,7 +115,7 @@ def _harvest() -> dict[NameShape, list[ArchiveRecord]]:
         except zipfile.BadZipFile:
             continue
         for info in infos:
-            if not ALLOWED_NAME.match(info.filename):
+            if not ALLOWED_NAME.fullmatch(info.filename):
                 raise SystemExit(
                     f"refusing to harvest {path.name}: unrecognised member name "
                     f"{info.filename!r}. Widen ALLOWED_NAME only after confirming "
@@ -130,6 +131,12 @@ def _harvest() -> dict[NameShape, list[ArchiveRecord]]:
 def _profiles() -> list[Profile]:
     """Reduce each name-shape group to one profile: modal size and modal
     compression method per member position, plus whether method disagreed.
+
+    When a group's declared sizes (or methods) at a position are all
+    distinct, there is no true mode; `statistics.mode` then returns the
+    first-encountered value. That's deterministic given `_harvest`'s stable
+    ordering, but it is a tie-break, not evidence of a genuine consensus
+    value.
     """
     profiles: list[Profile] = []
     for names, records in sorted(_harvest().items()):
@@ -155,11 +162,14 @@ def _profiles() -> list[Profile]:
 
 
 def main() -> None:
+    # Harvest (and let any allowlist refusal raise) before touching OUT, so a
+    # mid-run SystemExit can't leave the 22 committed fixtures deleted.
+    profiles = _profiles()
+
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir(parents=True)
 
-    profiles = _profiles()
     entries: list[str] = []
     for index, profile in enumerate(profiles, start=1):
         name = f"variant-{index:02d}.musx"
