@@ -41,7 +41,7 @@ graphics/<n>.jpg          0 or more
 Observed `score.dat` sizes: **min 86,170 · median 96,427 · max 412,805 bytes**.
 
 > **Safety.** Treat the archive as hostile. Validate member names, reject duplicates, and cap both
-> the member count and the total declared uncompressed size *before* reading anything. Never extract
+> the member count and the total declared uncompressed size _before_ reading anything. Never extract
 > to disk.
 
 ---
@@ -58,19 +58,13 @@ INCREMENT     = 0x3039
 RESET_EVERY   = 0x20000        # 131,072 bytes
 ```
 
-### Pseudocode
+#### Pseudocode
 
 ```
-function decrypt(data):
-    state = INITIAL_STATE
-    for i from 0 to length(data) - 1:
-        if i mod RESET_EVERY == 0:
-            state = INITIAL_STATE                       # keystream restarts
-        state = (state * MULTIPLIER + INCREMENT) mod 2^32
-        upper = (state >> 16) and 0xFFFF                # high 16 bits
-        c     = (upper + (upper div 255)) and 0xFF      # integer division
-        output[i] = data[i] xor c
-    return output
+state = 0x28006D45                          # reset every 0x20000 bytes
+state = state * 0x41C64E6D + 0x3039         # BSD rand() LCG, mod 2^32
+upper = state >> 16
+byte ^= (upper + upper // 255) & 0xFF
 ```
 
 Step by step, for each byte at index `i`:
@@ -106,10 +100,10 @@ def decrypt(data: bytes) -> bytes:
 
 Measured directly, on the largest file (`score.dat` = 412,805 bytes, 3.1 keystream blocks):
 
-| Decoder | Largest file | Smallest file (86,170 bytes) |
-|---|---|---|
-| With the reset | OK — 10,781,112 bytes of XML | OK — 2,481,759 bytes |
-| Without the reset | **fails to inflate** | OK — identical output |
+| Decoder           | Largest file                 | Smallest file (86,170 bytes) |
+| ----------------- | ---------------------------- | ---------------------------- |
+| With the reset    | OK — 10,781,112 bytes of XML | OK — 2,481,759 bytes         |
+| Without the reset | **fails to inflate**         | OK — identical output        |
 
 The smallest file never reaches the boundary, so both decoders agree on it. **Test with a
 `score.dat` over 128 KiB, or the bug ships.**
@@ -187,11 +181,11 @@ has not yet parsed them.
 
 ## Corpus measurements
 
-| Property | Min | Median | Max |
-|---|---|---|---|
-| `score.dat` (encrypted) | 86,170 | 96,427 | 412,805 |
-| Inflated EnigmaXML | 2,481,759 | 2,651,032 | 10,781,112 |
-| Inflation ratio | 25.6× | 28.5× | 37.3× |
+| Property                | Min       | Median    | Max        |
+| ----------------------- | --------- | --------- | ---------- |
+| `score.dat` (encrypted) | 86,170    | 96,427    | 412,805    |
+| Inflated EnigmaXML      | 2,481,759 | 2,651,032 | 10,781,112 |
+| Inflation ratio         | 25.6×     | 28.5×     | 37.3×      |
 
 401 of 401 archives decoded successfully; every result has a `<finale>` root element.
 
@@ -214,7 +208,7 @@ Before consulting any implementation:
 - **Not a short repeating XOR key.** Byte equality at lags 8, 16, 24, 32, 48, 64, 128, 256 and 512
   all sat at 0.30-0.47%, against a 0.39% random baseline. A repeating key of any of those lengths
   would spike sharply.
-- **The output is gzip**, from denigma's *prose* README, which documents writing a temporary
+- **The output is gzip**, from denigma's _prose_ README, which documents writing a temporary
   `score.gz` before decompressing it.
 
 ### Dead ends
@@ -231,8 +225,8 @@ magnitude past the 65,535 cap — and the output byte is not a plain shift of th
 `(upper + upper // 255) & 0xFF`, which no shift value would have produced.
 
 **A wrong conclusion drawn from that failure.** The combination of uniform keystream, no
-periodicity, and no LCG match was read as pointing at *a stream cipher such as RC4 with a fixed
-key* — which would have been unbreakable from ciphertext alone and would have ended the
+periodicity, and no LCG match was read as pointing at _a stream cipher such as RC4 with a fixed
+key_ — which would have been unbreakable from ciphertext alone and would have ended the
 investigation. That was wrong. It was an ordinary LCG the whole time; the search was simply bounded
 too tightly and assumed too simple an output function. **A failed parameter search is evidence about
 the search, not about the algorithm.**
