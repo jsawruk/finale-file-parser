@@ -177,3 +177,106 @@ def test_musx_app_version_without_a_date_is_unknown(make_musx: Callable[..., Pat
     result = detect_version(path)
     assert result.confidence is Confidence.UNKNOWN
     assert result.label == "unknown version"
+
+
+def test_musx_modified_stamp_without_version_falls_back_to_created(
+    make_musx: Callable[..., Path],
+) -> None:
+    """Regression test for the "fallback moved up a level" bug (final-review Finding 1,
+    table row 1): `modified` has a date but no `appVersion`, so `musx._stamp` still
+    builds a stamp for it (a stamp only requires a date, not a version) -- it is just a
+    versionless one. The buggy selector (`detail.modified or detail.created`) picked
+    that stamp merely because it was *present*, discarding `created`'s perfectly good
+    version and reporting UNKNOWN. The correct behaviour -- confirmed by running the
+    pre-unify-provenance code (which selected on `AppVersion` presence directly) on this
+    same input -- is to fall back to `created`.
+    """
+    metadata = (
+        '<metadata version="18.0" xmlns="http://www.makemusic.com/2012/NotationMetadata">'
+        "<fileInfo>"
+        "<created><year>2010</year><month>9</month><day>14</day><platform>MAC</platform>"
+        "<appVersion><major>16</major><devStatus>release</devStatus><build>2</build></appVersion>"
+        "</created>"
+        "<modified><year>2015</year><month>11</month><day>23</day><platform>WIN</platform></modified>"
+        "</fileInfo></metadata>"
+    )
+    path = make_musx(metadata=metadata)
+    result = detect_version(path)
+    assert isinstance(result.detail, MusxDetail)
+    assert result.detail.modified is not None  # a stamp exists...
+    assert result.detail.modified.app_version is None  # ...but carries no version
+    assert result.label == "16 release (build 2)"
+    assert result.confidence is Confidence.EXACT
+
+
+def test_musx_modified_missing_a_date_cannot_outrank_created(
+    make_musx: Callable[..., Path],
+) -> None:
+    """Companion case to the test above (final-review Finding 1, table row 2):
+    `modified` carries an `appVersion` but no date at all, while `created` has both.
+
+    Unlike row 1, this shape is not reachable through `detect.py`'s stamp-selection
+    fix: `musx._stamp` never builds a `ProvenanceStamp` for a block lacking a usable
+    date, regardless of whether that block carries an `appVersion` -- the same
+    protected rule pinned for the modified-only case by
+    `test_musx_app_version_without_a_date_is_unknown` above. So `detail.modified` is
+    `None` here before `detect.py`'s selection logic ever runs, and `created` wins
+    whether that selection is the buggy `detail.modified or detail.created` or the
+    corrected, version-aware form -- verified directly by swapping the two in.
+
+    The pre-unify-provenance code (which read `AppVersion` straight off the block
+    with no date requirement) would have reported `modified`'s version here --
+    "18.5 dev (build 7098)" / EXACT. That value is not recoverable without loosening
+    `musx._stamp`'s date requirement, which this fix must not do (it is a separately
+    protected invariant, unrelated to the fallback-selection bug this branch fixes).
+    This test pins the current, correct-given-that-invariant behaviour instead of
+    asserting a value neither the buggy nor the fixed selector can produce.
+    """
+    metadata = (
+        '<metadata version="18.0" xmlns="http://www.makemusic.com/2012/NotationMetadata">'
+        "<fileInfo>"
+        "<created><year>2010</year><month>9</month><day>14</day><platform>MAC</platform>"
+        "<appVersion><major>16</major><devStatus>release</devStatus><build>2</build></appVersion>"
+        "</created>"
+        "<modified><platform>WIN</platform>"
+        "<appVersion><major>18</major><maint>5</maint><devStatus>dev</devStatus>"
+        "<build>7098</build></appVersion></modified>"
+        "</fileInfo></metadata>"
+    )
+    path = make_musx(metadata=metadata)
+    result = detect_version(path)
+    assert isinstance(result.detail, MusxDetail)
+    assert result.detail.modified is None
+    assert result.label == "16 release (build 2)"
+    assert result.confidence is Confidence.EXACT
+
+
+def test_musx_created_without_app_version_and_no_modified_is_unknown(
+    make_musx: Callable[..., Path],
+) -> None:
+    """Guards `known = stamp is not None and stamp.app_version is not None` against
+    regressing to `known = stamp is not None`.
+
+    Before Finding 1's fix, `_musx_stamp`'s selection (`detail.modified or
+    detail.created`) meant a lone versionless `modified` stamp (with no `created` at
+    all) was itself the selected `stamp` -- `test_musx_without_app_version_is_unknown`
+    above already covered that shape and would have caught a stamp-presence-only
+    confidence computation. After the fix, that same shape instead falls through to
+    `detail.created` (`None` here), so the existing test no longer exercises a
+    non-`None`-but-versionless *selected* stamp. This case -- `created` present but
+    versionless, `modified` absent entirely -- is the shape that now reaches that
+    code path, restoring the mutation coverage.
+    """
+    metadata = (
+        '<metadata version="18.0" xmlns="http://www.makemusic.com/2012/NotationMetadata">'
+        "<fileInfo><created><year>2010</year><month>9</month><day>14</day>"
+        "<platform>MAC</platform></created></fileInfo></metadata>"
+    )
+    path = make_musx(metadata=metadata)
+    result = detect_version(path)
+    assert isinstance(result.detail, MusxDetail)
+    assert result.detail.created is not None
+    assert result.detail.created.app_version is None
+    assert result.detail.modified is None
+    assert result.confidence is Confidence.UNKNOWN
+    assert result.label == "unknown version"

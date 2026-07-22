@@ -186,6 +186,15 @@ def test_each_stamp_carries_its_own_platform(make_musx: Callable[..., Path]) -> 
     assert detail.modified.platform == "WIN"
 
 
+def test_each_stamp_carries_its_application(make_musx: Callable[..., Path]) -> None:
+    """All 802 created/modified blocks in the corpus carry `<application>FIN</application>`;
+    SAMPLE_METADATA (tests/version/conftest.py) now reflects that on both blocks."""
+    detail = read(make_musx())
+    assert detail.created is not None and detail.modified is not None
+    assert detail.created.application == "FIN"
+    assert detail.modified.application == "FIN"
+
+
 def test_extracts_modified_by(make_musx: Callable[..., Path]) -> None:
     # SAMPLE_METADATA (tests/version/conftest.py) carries no <modifiedBy> element
     # at all -- it is optional and absent from most corpus files -- so this test

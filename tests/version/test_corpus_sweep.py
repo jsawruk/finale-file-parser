@@ -32,10 +32,11 @@ EXPECTED_MUS_COUNT = 238
 EXPECTED_MUS_MAC_COUNT = 136
 EXPECTED_MUS_WIN_COUNT = 102
 EXPECTED_MUSX_CREATED16_MODIFIED18_COUNT = 267
-"""docs/ARCHITECTURE.md and the 2026-07-21 design spec state 264 -- a direct corpus
-measurement (this test) instead finds 267. Pinned to what the corpus actually shows rather
-than silently matched to the older documented figure; see the task-3/4 report for this
-discrepancy, flagged rather than quietly reconciled per project practice."""
+"""docs/ARCHITECTURE.md -- the current source of truth -- documents this as 267, matching
+this direct corpus measurement. The 2026-07-21 design spec still reads 264: that was read off
+a single row of a tally rather than measured, and the spec deliberately retains that original
+figure with a dated (2026-07-22) correction note appended, per this project's practice of not
+rewriting a spec's history. Pinned here to what the corpus actually shows, not the older figure."""
 MIN_STAMP_YEAR, MAX_STAMP_YEAR = 1998, 2012
 
 
@@ -179,10 +180,17 @@ def test_musx_modified_over_created_divergence_still_holds() -> None:
     a stable subset of corpus files were created by one `appVersion.major` and last
     modified by a later one. Tallied over the `app_version.major` carried by each stamp,
     not a bare `.major` on the detail, since that field now lives on the stamp.
+
+    Alongside the 16-to-18 tally, this also asserts the broader 370-of-401 figure --
+    archives where `created` and `modified` disagree on major at all, not only the
+    16-to-18 case -- per docs/ARCHITECTURE.md and the 2026-07-22 unify-provenance design
+    spec. Both figures are pinned as literals: a corpus change that moves either must
+    update this test and those docs together, deliberately.
     """
     paths = _files(".musx")
     assert len(paths) == EXPECTED_MUSX_COUNT
     diverging = 0
+    diverging_any_major = 0
     for path in paths:
         detail = detect_version(path).detail
         assert isinstance(detail, MusxDetail), path
@@ -192,4 +200,7 @@ def test_musx_modified_over_created_divergence_still_holds() -> None:
         modified_major = modified.app_version.major if modified.app_version else None
         if created_major == 16 and modified_major == 18:
             diverging += 1
+        if created_major != modified_major:
+            diverging_any_major += 1
     assert diverging == EXPECTED_MUSX_CREATED16_MODIFIED18_COUNT
+    assert diverging_any_major == 370
