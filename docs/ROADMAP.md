@@ -16,9 +16,11 @@ through. Each item is one branch / one PR.
 - [x] Version detection for `.mus` and `.musx` (`detect_version`). Landed ahead of the container
       reader below.
 - [x] `open_musx(path)` — open and structurally validate a `.musx` container. Raises
-      `NotFinaleFileError` (not a Finale file) or `CorruptContainerError` (a Finale file violating
-      a safety limit). The earlier `InvalidFinaleFile` name was dropped in favour of reusing the
-      existing error type.
+      `NotFinaleFileError` (not a Finale file) or `CorruptContainerError` (the archive violates a
+      structural safety limit). Structural validation runs *before* the Finale mimetype value is
+      confirmed, so `CorruptContainerError` can fire on an archive that turns out not to be a
+      Finale file at all, not only on a confirmed-Finale archive that is malformed or hostile. The
+      earlier `InvalidFinaleFile` name was dropped in favour of reusing the existing error type.
 - [x] Enumerate the container's entries (name, declared size, compressed size, method) in archive
       order.
 - [x] Extract the score stream as bytes, with size caps applied before reading.

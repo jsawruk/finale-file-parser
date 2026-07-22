@@ -72,7 +72,7 @@ class ContainerEntry:
 class MusxContainer:
     """An open .musx archive. Use as a context manager; it owns the zip handle."""
 
-    entries: tuple[ContainerEntry, ...]   # archive order preserved; mimetype first
+    entries: tuple[ContainerEntry, ...]   # archive order preserved, not sorted
 
     def read(self, name: str, *, max_bytes: int) -> bytes: ...
     def score_stream(self) -> bytes: ...
@@ -96,7 +96,11 @@ Two deliberate choices:
   the size is known up front, and the reader does not interpret the stream. If streaming is needed
   later (e.g. for the hex viewer over very large files), it is an additive method, not a rewrite.
 
-`entries` preserves archive order because order is structural, not incidental.
+`entries` preserves archive order because order is structural, not incidental. `mimetype` being
+first and stored uncompressed is *observed* in all 401 corpus archives (see "Findings from the
+corpus" above) and is asserted of both the fixtures and the corpus by tests, but `open_musx`
+deliberately does not enforce either its position or its compression method — a future Finale
+variant that reorders members must stay inspectable rather than being rejected outright.
 
 ## Errors
 
@@ -106,9 +110,12 @@ line; `docs/ROADMAP.md` is corrected instead.
 
 - **`NotFinaleFileError`** — not a readable zip, or a zip without the Finale mimetype.
 - **`FileNotFoundError`** — no such path (unchanged, standard).
-- **`CorruptContainerError`** (new, subclasses `FinaleFileError`) — the archive opens and is
-  genuinely Finale, but violates a structural safety rule: unsafe member name, duplicate names,
-  member count over the cap, or total declared size over the cap.
+- **`CorruptContainerError`** (new, subclasses `FinaleFileError`) — the archive violates a
+  structural safety rule: unsafe member name, duplicate names, member count over the cap, or total
+  declared size over the cap. `open_musx` checks in this order: `mimetype`-member *presence*
+  (central directory only), then structural validation, then the mimetype *value*. So this error
+  can fire on an archive that is not confirmed Finale at all, not only on a genuinely-Finale
+  archive that turns out malformed or hostile.
 - **`KeyError`** — `read()` for an absent member. `score_stream()` raises `CorruptContainerError`
   instead when `score.dat` is missing, since a Finale archive without one is malformed rather than
   a caller mistake.

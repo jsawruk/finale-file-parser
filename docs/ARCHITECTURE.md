@@ -62,7 +62,10 @@ Evidence: all 401 corpus archives, surveyed 2026-07-21. See
 
 - A `.musx` is a zip. `mimetype` is always the **first** member and always **stored
   uncompressed** (401/401) — the ODF/EPUB convention. Member order is structural; do not
-  assume alphabetical.
+  assume alphabetical. This is an *observed* fact, asserted of the fixtures and the corpus by
+  tests — `open_musx` deliberately does not enforce `mimetype`'s position or its compression
+  method, so a future Finale variant that reorders members stays inspectable rather than being
+  rejected outright.
 - Members observed: `mimetype`, `META-INF/container.xml`, `NotationMetadata.xml`, `score.dat`,
   `presets/<n>.preset`, `graphics/<n>.jpg`. Archives embed images, so container content is not
   limited to notation.

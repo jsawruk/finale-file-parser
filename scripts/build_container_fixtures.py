@@ -145,11 +145,15 @@ def _profiles() -> list[Profile]:
         for position in range(len(names)):
             sizes_here = [sizes[position] for sizes, _methods in records]
             methods_here = [methods[position] for _sizes, methods in records]
-            size_mode = statistics.mode(sizes_here)
-            method_mode = statistics.mode(methods_here)
+            # Named `_pick`, not `_mode`: statistics.mode() degenerates to a
+            # first-seen tie-break, not a genuine consensus value, whenever
+            # every value at this position is distinct (see this function's
+            # docstring below) -- a name claiming "mode" would overstate that.
+            size_pick = statistics.mode(sizes_here)
+            method_pick = statistics.mode(methods_here)
             if len(set(methods_here)) > 1:
                 method_varied = True
-            members.append(Member(names[position], size_mode, method_mode))
+            members.append(Member(names[position], size_pick, method_pick))
         profiles.append(
             Profile(
                 names=names,

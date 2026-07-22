@@ -17,9 +17,12 @@ def is_safe_name(name: str) -> bool:
     """Return True if `name` is safe to surface and to look up.
 
     Unsafe means: empty, absolute, containing a `..` path segment, containing a
-    backslash, containing a colon, containing control or format characters
-    (Unicode categories Cc/Cf — including DEL, the C1 range, and bidi overrides
-    such as U+202E), or carrying a drive-letter prefix.
+    backslash, containing control or format characters (Unicode categories
+    Cc/Cf — including DEL, the C1 range, and bidi overrides such as U+202E),
+    or containing a colon anywhere. There is no dedicated drive-letter check;
+    a Windows drive-letter prefix such as `C:` is rejected as a side effect of
+    the colon check, which also rejects a colon anywhere else in the name
+    (e.g. an NTFS alternate-data-stream suffix).
     """
     if not name:
         return False
