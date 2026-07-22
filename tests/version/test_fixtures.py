@@ -7,7 +7,7 @@ import pytest
 from defusedxml.ElementTree import fromstring
 
 from finale_file_parser import detect_version
-from finale_file_parser.version.models import MusDetail
+from finale_file_parser.version.models import MusDetail, MusStamp
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "version"
 MANIFEST = FIXTURES / "MANIFEST.toml"
@@ -134,3 +134,56 @@ def test_musx_fixture_labels_are_pinned_independently_of_the_generator() -> None
     """
     assert detect_version(FIXTURES / "musx-18-MAC.musx").label == "18 dev (build 3062)"
     assert detect_version(FIXTURES / "musx-18-WIN.musx").label == "18 dev (build 3163)"
+
+
+def _stamp_from_manifest(raw: dict[str, str | int] | None) -> MusStamp | None:
+    if raw is None:
+        return None
+    return MusStamp(
+        year=int(raw["year"]),
+        month=int(raw["month"]),
+        day=int(raw["day"]),
+        application=str(raw["application"]),
+        platform=str(raw["platform"]),
+    )
+
+
+@pytest.mark.parametrize(
+    "entry", [e for e in _entries() if e["file"].endswith(".bin")], ids=lambda e: e["file"]
+)
+def test_mus_fixture_stamps_match_manifest(entry: dict[str, str | int]) -> None:
+    """Each fixture's declared created/modified (omitted entirely when the stamp is None)
+    must match what detect_version reports. Every committed .mus fixture happens to carry
+    both stamps, since the corpus survey found them present in all 238 files -- the "a
+    fixture declaring no stamp yields None" case is therefore not exercisable through a
+    real committed fixture, and stays covered by synthetic headers in
+    tests/version/test_mus_stamps.py (test_truncated_header_yields_no_stamps_and_does_not_raise,
+    test_empty_header_does_not_raise) instead.
+    """
+    result = detect_version(FIXTURES / cast(str, entry["file"]))
+    assert isinstance(result.detail, MusDetail)
+    assert result.detail.created == _stamp_from_manifest(
+        cast(dict[str, str | int] | None, entry.get("created"))
+    )
+    assert result.detail.modified == _stamp_from_manifest(
+        cast(dict[str, str | int] | None, entry.get("modified"))
+    )
+
+
+def test_mus_2011_stamp_is_pinned_independently_of_the_generator() -> None:
+    """MANIFEST.toml's created/modified for .mus fixtures is computed by
+    build_version_fixtures.py calling detect_version on the fixture it just wrote --
+    comparing test_mus_fixture_stamps_match_manifest against the manifest is therefore
+    comparing the code against a recording of itself. Pin one value independently, taken
+    from the corpus survey (docs/superpowers/specs/2026-07-22-mus-header-metadata-design.md)
+    rather than the generator: the Finale 2011 fixture's stamps carry application "FIN" and
+    a platform in {"MAC", "WIN"}.
+    """
+    result = detect_version(FIXTURES / "mus-2011.bin")
+    assert isinstance(result.detail, MusDetail)
+    assert result.detail.created is not None
+    assert result.detail.created.application == "FIN"
+    assert result.detail.created.platform in {"MAC", "WIN"}
+    assert result.detail.modified is not None
+    assert result.detail.modified.application == "FIN"
+    assert result.detail.modified.platform in {"MAC", "WIN"}
