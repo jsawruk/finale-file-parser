@@ -14,9 +14,13 @@ from finale_file_parser.version.models import (
 
 
 def _metadata(app_version: str) -> str:
+    # Every created/modified block in the 401-file corpus carries a date (802/802
+    # blocks). A block without one cannot occur in a real .musx, so the date here
+    # keeps this helper's input realistic; it is not asserted on by these tests.
     return (
         '<metadata version="18.0" xmlns="http://www.makemusic.com/2012/NotationMetadata">'
-        f"<fileInfo><modified><platform>MAC</platform>{app_version}</modified></fileInfo>"
+        "<fileInfo><modified><year>2020</year><month>1</month><day>1</day>"
+        f"<platform>MAC</platform>{app_version}</modified></fileInfo>"
         "</metadata>"
     )
 
@@ -91,10 +95,13 @@ def test_musx_prefers_modified_over_created(make_musx: Callable[..., Path]) -> N
 def test_musx_falls_back_to_created_when_modified_absent(
     make_musx: Callable[..., Path],
 ) -> None:
+    # As in _metadata() above, the date is added here to keep the input realistic
+    # (no real .musx block lacks one); it is not asserted on by this test.
     metadata = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<metadata version="18.0" xmlns="http://www.makemusic.com/2012/NotationMetadata">'
-        "<fileInfo><created><platform>MAC</platform>"
+        "<fileInfo><created><year>2011</year><month>3</month><day>4</day>"
+        "<platform>MAC</platform>"
         "<appVersion><major>16</major><devStatus>release</devStatus>"
         "<build>2</build></appVersion></created></fileInfo>"
         "</metadata>"
@@ -149,3 +156,24 @@ def test_accepts_a_str_path(write_mus: Callable[..., Path]) -> None:
     assert result.family is Family.MUS
     assert result.label == "Finale 2011"
     assert result.confidence is Confidence.EXACT
+
+
+def test_musx_app_version_without_a_date_is_unknown(make_musx: Callable[..., Path]) -> None:
+    """A stamp requires a date, so an appVersion with no date yields no stamp at all.
+
+    This input does not occur in real files: all 802 created/modified blocks across
+    the 401-file corpus carry year/month/day. This test does not endorse the input as
+    realistic — it pins the deliberate behaviour that a dateless block, even with a
+    parseable appVersion, cannot produce a ProvenanceStamp.
+    """
+    metadata = (
+        '<metadata version="18.0" xmlns="http://www.makemusic.com/2012/NotationMetadata">'
+        "<fileInfo><modified><platform>MAC</platform>"
+        "<appVersion><major>18</major><maint>5</maint>"
+        "<devStatus>dev</devStatus><build>7098</build></appVersion>"
+        "</modified></fileInfo></metadata>"
+    )
+    path = make_musx(metadata=metadata)
+    result = detect_version(path)
+    assert result.confidence is Confidence.UNKNOWN
+    assert result.label == "unknown version"

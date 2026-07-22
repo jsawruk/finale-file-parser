@@ -46,7 +46,8 @@ def detect_version(path: str | os.PathLike[str]) -> FileVersion:
         return _assemble(Family.MUS, _mus_label(detail), detail.year is not None, detail)
 
     musx_detail = musx.read(path)
-    known = musx_detail.modified is not None or musx_detail.created is not None
+    stamp = musx_detail.modified or musx_detail.created
+    known = stamp is not None and stamp.app_version is not None
     return _assemble(Family.MUSX, _musx_label(musx_detail), known, musx_detail)
 
 
@@ -66,7 +67,8 @@ def _mus_label(detail: MusDetail) -> str:
 
 
 def _musx_label(detail: MusxDetail) -> str:
-    app = detail.modified or detail.created
+    stamp = detail.modified or detail.created
+    app = stamp.app_version if stamp is not None else None
     if app is None:
         return UNKNOWN_LABEL
     number = f"{app.major}.{app.maint}" if app.maint is not None else str(app.major)

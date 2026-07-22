@@ -11,6 +11,7 @@ from finale_file_parser.version.musx import MAX_METADATA_BYTES, METADATA_NAME, r
 _VALID_METADATA = (
     '<metadata version="18.0" xmlns="http://www.makemusic.com/2012/NotationMetadata">'
     "<fileInfo><modified>"
+    "<year>2015</year><month>11</month><day>23</day>"
     "<platform>WIN</platform>"
     "<appVersion><major>18</major><maint>5</maint>"
     "<devStatus>dev</devStatus><build>7098</build></appVersion>"
@@ -24,17 +25,23 @@ def test_reads_created_and_modified(make_musx: Callable[..., Path]) -> None:
     detail = read(make_musx())
     assert detail.metadata_schema == "18.0"
     assert detail.created is not None
-    assert detail.created.major == 16
-    assert detail.created.maint is None
-    assert detail.created.dev_status == "release"
+    created_app = detail.created.app_version
+    assert created_app is not None
+    assert created_app.major == 16
+    assert created_app.maint is None
+    assert created_app.dev_status == "release"
     assert detail.modified is not None
-    assert detail.modified.major == 18
-    assert detail.modified.maint == 5
-    assert detail.modified.build == 7098
+    modified_app = detail.modified.app_version
+    assert modified_app is not None
+    assert modified_app.major == 18
+    assert modified_app.maint == 5
+    assert modified_app.build == 7098
 
 
 def test_platform_comes_from_the_modifying_write(make_musx: Callable[..., Path]) -> None:
-    assert read(make_musx()).platform == "WIN"
+    detail = read(make_musx())
+    assert detail.modified is not None
+    assert detail.modified.platform == "WIN"
 
 
 def test_rejects_zip_that_is_not_a_musx(tmp_path: Path) -> None:
@@ -62,14 +69,16 @@ def test_malformed_xml_yields_empty_detail(make_musx: Callable[..., Path]) -> No
     assert detail.modified is None
 
 
-def test_missing_app_version_yields_none(make_musx: Callable[..., Path]) -> None:
+def test_missing_app_version_yields_a_stamp_without_one(make_musx: Callable[..., Path]) -> None:
     metadata = (
         '<metadata version="18.0" xmlns="http://www.makemusic.com/2012/NotationMetadata">'
-        "<fileInfo><modified><platform>MAC</platform></modified></fileInfo></metadata>"
+        "<fileInfo><modified><year>2015</year><month>1</month><day>2</day>"
+        "<platform>MAC</platform></modified></fileInfo></metadata>"
     )
     detail = read(make_musx(metadata=metadata))
-    assert detail.modified is None
-    assert detail.platform == "MAC"
+    assert detail.modified is not None
+    assert detail.modified.app_version is None
+    assert detail.modified.platform == "MAC"
 
 
 def test_reads_valid_metadata_under_the_cap(make_musx: Callable[..., Path]) -> None:
@@ -81,7 +90,9 @@ def test_reads_valid_metadata_under_the_cap(make_musx: Callable[..., Path]) -> N
     detail = read(make_musx(metadata=padded))
     assert detail.metadata_schema == "18.0"
     assert detail.modified is not None
-    assert detail.modified.major == 18
+    modified_app = detail.modified.app_version
+    assert modified_app is not None
+    assert modified_app.major == 18
 
 
 def test_refuses_oversized_metadata_member(make_musx: Callable[..., Path]) -> None:
@@ -159,3 +170,56 @@ def test_no_mimetype_over_cap_archive_raises_not_finale_file(tmp_path: Path) -> 
             archive.writestr(f"presets/{i}.preset", b"x")
     with pytest.raises(NotFinaleFileError):
         read(path)
+
+
+def test_extracts_dates_from_both_blocks(make_musx: Callable[..., Path]) -> None:
+    detail = read(make_musx())
+    assert detail.created is not None and detail.modified is not None
+    assert (detail.created.year, detail.created.month, detail.created.day) == (2010, 9, 14)
+    assert (detail.modified.year, detail.modified.month, detail.modified.day) == (2015, 11, 23)
+
+
+def test_each_stamp_carries_its_own_platform(make_musx: Callable[..., Path]) -> None:
+    detail = read(make_musx())
+    assert detail.created is not None and detail.modified is not None
+    assert detail.created.platform == "MAC"
+    assert detail.modified.platform == "WIN"
+
+
+def test_extracts_modified_by(make_musx: Callable[..., Path]) -> None:
+    # SAMPLE_METADATA (tests/version/conftest.py) carries no <modifiedBy> element
+    # at all -- it is optional and absent from most corpus files -- so this test
+    # supplies its own metadata rather than patching a placeholder that isn't there.
+    metadata = (
+        '<metadata version="18.0" xmlns="http://www.makemusic.com/2012/NotationMetadata">'
+        "<fileInfo><modified><year>2015</year><month>11</month><day>23</day>"
+        "<platform>WIN</platform><modifiedBy>ABC</modifiedBy>"
+        "<appVersion><major>18</major><maint>5</maint><devStatus>dev</devStatus>"
+        "<build>7098</build></appVersion></modified></fileInfo></metadata>"
+    )
+    detail = read(make_musx(metadata=metadata))
+    assert detail.modified is not None
+    assert detail.modified.modified_by == "ABC"
+
+
+def test_block_without_a_date_yields_no_stamp(make_musx: Callable[..., Path]) -> None:
+    metadata = (
+        '<metadata version="18.0" xmlns="http://www.makemusic.com/2012/NotationMetadata">'
+        "<fileInfo><modified><platform>MAC</platform>"
+        "<appVersion><major>18</major></appVersion></modified></fileInfo></metadata>"
+    )
+    assert read(make_musx(metadata=metadata)).modified is None
+
+
+def test_block_with_dates_but_no_app_version_still_yields_a_stamp(
+    make_musx: Callable[..., Path],
+) -> None:
+    metadata = (
+        '<metadata version="18.0" xmlns="http://www.makemusic.com/2012/NotationMetadata">'
+        "<fileInfo><modified><year>2015</year><month>1</month><day>2</day>"
+        "<platform>MAC</platform></modified></fileInfo></metadata>"
+    )
+    stamp = read(make_musx(metadata=metadata)).modified
+    assert stamp is not None
+    assert stamp.app_version is None
+    assert stamp.year == 2015

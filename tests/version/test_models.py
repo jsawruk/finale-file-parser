@@ -9,6 +9,7 @@ from finale_file_parser.version.models import (
     MusDetail,
     MusxDetail,
     NotFinaleFileError,
+    ProvenanceStamp,
 )
 
 
@@ -21,9 +22,15 @@ def test_details_are_frozen() -> None:
 def test_file_version_holds_family_specific_detail() -> None:
     musx = MusxDetail(
         created=None,
-        modified=AppVersion(major=18, maint=5, dev_status="dev", build=7098),
+        modified=ProvenanceStamp(
+            year=2015,
+            month=11,
+            day=23,
+            application="FIN",
+            platform="MAC",
+            app_version=AppVersion(major=18, maint=5, dev_status="dev", build=7098),
+        ),
         metadata_schema="18.0",
-        platform="MAC",
     )
     version = FileVersion(
         family=Family.MUSX,
