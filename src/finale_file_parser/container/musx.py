@@ -132,12 +132,19 @@ def open_musx(path: str | os.PathLike[str]) -> MusxContainer:
 
     Raises:
         FileNotFoundError: no such path.
-        NotFinaleFileError: not a readable zip, or a zip that does not carry the
-            Finale notation mimetype.
+        NotFinaleFileError: not a readable zip; a zip with no `mimetype`
+            member at all; or a zip whose `mimetype` member's value does not
+            match the Finale notation mimetype.
         CorruptContainerError: the archive violates a structural limit.
-            Structural validation runs before the Finale mimetype is
-            confirmed, so this can be raised by an archive that turns out not
-            to be a Finale file at all.
+
+    Order of checks: whether a `mimetype` member is present at all is
+    checked first, consulting only the already-parsed central directory (no
+    read). Structural validation runs next. Only then is the `mimetype`
+    member's value read and compared. This means a `mimetype`-less archive
+    is always reported as "not a Finale file", even if it is also
+    structurally hostile - and a Finale-shaped archive (mimetype member
+    present) that is structurally hostile is reported as corrupt before its
+    mimetype value is ever checked.
 
     OS-level errors from opening the path itself (e.g. IsADirectoryError,
     PermissionError) propagate unchanged.
@@ -156,23 +163,43 @@ def open_musx(path: str | os.PathLike[str]) -> MusxContainer:
         raise NotFinaleFileError(f"{path} is not a readable archive") from exc
 
     try:
+        _require_mimetype_member_present(archive, path)
         entries = _validated_entries(archive)
-        _require_finale_mimetype(archive, path)
+        _require_finale_mimetype_value(archive, path)
     except Exception:
         # Translation of any archive-level failure into our public exception
         # types happens closer to the calls that can raise them (see
-        # _require_finale_mimetype and read()). This catch-all exists only to
-        # guarantee the handle is closed before whatever was raised propagates.
+        # _require_mimetype_member_present, _require_finale_mimetype_value,
+        # and read()). This catch-all exists only to guarantee the handle is
+        # closed before whatever was raised propagates.
         archive.close()
         raise
     return MusxContainer(archive, entries)
 
 
-def _require_finale_mimetype(archive: zipfile.ZipFile, path: object) -> None:
+def _require_mimetype_member_present(archive: zipfile.ZipFile, path: object) -> None:
+    """Raise NotFinaleFileError if the archive has no `mimetype` member.
+
+    Consults only `getinfo`, i.e. the central directory already parsed by
+    `zipfile.ZipFile()` above - it reads no member bytes and costs no extra
+    I/O. This runs before structural validation so that "not a Finale file"
+    wins over "structurally corrupt" for an archive that is both.
+    """
     try:
-        info = archive.getinfo(MIMETYPE_NAME)
+        archive.getinfo(MIMETYPE_NAME)
     except KeyError as exc:
         raise NotFinaleFileError(f"{path} is a zip archive with no mimetype member") from exc
+
+
+def _require_finale_mimetype_value(archive: zipfile.ZipFile, path: object) -> None:
+    """Read the `mimetype` member (already confirmed present) and check its
+    value matches MIMETYPE_VALUE.
+
+    Runs after structural validation, so a member count/name/size violation
+    is reported as CorruptContainerError even for an archive whose mimetype
+    member would otherwise have matched.
+    """
+    info = archive.getinfo(MIMETYPE_NAME)
     if info.file_size > len(MIMETYPE_VALUE):
         raise NotFinaleFileError(f"{path} is a zip archive but not a Finale .musx")
     try:

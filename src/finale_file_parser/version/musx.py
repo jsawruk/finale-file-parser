@@ -1,13 +1,14 @@
 """Read version evidence from a .musx archive's metadata.
 
-Every input is treated as hostile: the archive is validated by mimetype, the
-metadata member's declared size is capped before it is read, and the XML is
-parsed with defusedxml so entity-expansion payloads are refused.
+Every input is treated as hostile: the archive is validated by mimetype and by
+the structural limits (member count, name safety, total declared size) it
+inherits from the container reader, the metadata member's declared size is
+capped before it is read, and the XML is parsed with defusedxml so
+entity-expansion payloads are refused.
 """
 
 from __future__ import annotations
 
-import zipfile
 from pathlib import Path
 from xml.etree.ElementTree import Element, ParseError
 
@@ -45,7 +46,7 @@ def read(path: Path) -> MusxDetail:
         with open_musx(path) as container:
             try:
                 raw: bytes | None = container.read(METADATA_NAME, max_bytes=MAX_METADATA_BYTES)
-            except (KeyError, CorruptContainerError, zipfile.BadZipFile):
+            except (KeyError, CorruptContainerError):
                 # Missing, oversized, or unreadable metadata degrades to an
                 # empty detail. Only "not a Finale file" raises.
                 raw = None

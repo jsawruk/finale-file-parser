@@ -154,18 +154,54 @@ def test_closing_releases_the_handle(make_archive: Callable[..., Path]) -> None:
 # --- Finding 1: structural validation must run before any member is read -----
 
 
-def test_structural_violations_are_reported_even_without_a_finale_mimetype(
+def test_structural_violations_are_reported_for_a_finale_archive(
     make_archive: Callable[..., Path],
 ) -> None:
-    """An archive with an unsafe name and too many members must fail as
-    CorruptContainerError, not NotFinaleFileError, even when it has no
-    mimetype member at all. If the mimetype gate ran before structural
-    validation, this archive would fail there first, and the structural
-    checks would never run."""
-    members = [("../../../../etc/passwd", b"x")]
+    """The structural gate runs before any member is read. A Finale-shaped
+    archive (a valid mimetype member is present) that also has an unsafe
+    member name and too many members must still fail as
+    CorruptContainerError: a Finale-shaped but hostile archive is reported
+    as corrupt, not as a valid Finale file."""
+    members = [("mimetype", MIMETYPE), ("../../../../etc/passwd", b"x")]
     members += [(f"presets/{i}.preset", b"y") for i in range(MAX_MEMBERS + 1)]
     with pytest.raises(CorruptContainerError):
         open_musx(make_archive(tuple(members)))
+
+
+# --- Fix pass 2: mimetype presence is checked before structural validation --
+#
+# Presence of a `mimetype` member is now checked first, consulting only the
+# already-parsed central directory (no read), before structural validation
+# runs. This means an archive with no mimetype member at all is always
+# reported as NotFinaleFileError, even when it is also structurally hostile
+# -- "not a Finale file" beats "structurally corrupt" for an archive that is
+# both, and the presence check costs no extra I/O to get that answer.
+
+
+def test_rejects_no_mimetype_member_even_when_over_member_cap(tmp_path: Path) -> None:
+    """An archive with no mimetype member and more than MAX_MEMBERS entries
+    must be reported as NotFinaleFileError, not CorruptContainerError: the
+    presence check runs -- and wins -- before the member-count check does."""
+    path = tmp_path / "no-mimetype-over-cap.musx"
+    with zipfile.ZipFile(path, "w") as archive:
+        for i in range(MAX_MEMBERS + 1):
+            archive.writestr(f"presets/{i}.preset", b"x")
+    with pytest.raises(NotFinaleFileError):
+        open_musx(path)
+
+
+def test_rejects_too_many_members_when_mimetype_is_present(tmp_path: Path) -> None:
+    """The same over-cap member count, but with a valid mimetype member
+    present, is reported as CorruptContainerError: presence alone does not
+    satisfy the gate, structural validation still runs and still enforces
+    the member cap."""
+    path = tmp_path / "many-members-with-mimetype.musx"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("mimetype", MIMETYPE, compress_type=zipfile.ZIP_STORED)
+        for i in range(MAX_MEMBERS + 1):
+            archive.writestr(f"presets/{i}.preset", b"x")
+    with pytest.raises(CorruptContainerError):
+        open_musx(path)
 
 
 # --- Finding 2: the mimetype read must be inside the exception guard --------
