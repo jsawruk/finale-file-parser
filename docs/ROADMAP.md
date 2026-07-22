@@ -27,8 +27,10 @@ through. Each item is one branch / one PR.
       what makes CI coverage possible without committing a real score.
 - [x] Document the container layout in `docs/ARCHITECTURE.md`, with evidence.
 
-Done when: a test opens the fixture, lists its entries, pulls the score stream, and a second test
-proves a truncated/garbage file raises `InvalidFinaleFile` rather than crashing.
+**Done.** Tests open each of the 22 synthetic fixtures, enumerate their entries in archive order,
+and pull a score stream of the declared length; adversarial tests prove that a truncated or hostile
+archive raises `NotFinaleFileError` or `CorruptContainerError` rather than crashing. Every safety
+limit is verified by mutation, because no real corpus archive trips one.
 
 ## Later
 
