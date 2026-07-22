@@ -36,6 +36,23 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
 - That banner field is fixed-size and is **not** zero-filled on rewrite, so a shorter banner can
   leave a tail of the previous, longer one behind (observed: `logy` from the Finale 2004 Coda
   banner surviving into a 2005 file). Always cut at the first NUL.
+- `.mus` carries two provenance stamps (date, application, platform) at fixed offsets: created —
+  date `0x66`, application tag `0x70`, platform tag `0x74`; modified — date `0x8C`, application tag
+  `0x96`, platform tag `0x9A`. The date is `[year - 1900, month, day]` as three `u8`. Present in
+  238/238 corpus files, with `created <= modified` in all of them. **Platform is recoverable from
+  `.mus`, not `.musx`-only** — an earlier version of this document recorded platform as available
+  only from `.musx`; that was wrong. Corpus tally: `MAC` in 136 files, `WIN` in 102.
+- 89 of the 136 `MAC` `.mus` files (0 of the 102 `WIN` files) end in a **macOS plist trailer**
+  occupying the last 1-3% of the file (938-1694 bytes) — apparently appended OS-level metadata.
+  Not parsed; recorded so the next investigation starts from it.
+- **A hypothesis that did not survive testing:** `.mus` was suspected to share `.musx`'s
+  record-type numbering (`10001`, `10002`, ...). Scanning all 238 files for those values as aligned
+  little-endian `u16` gave occurrence rates close to the chance baseline expected in files dense
+  with small integers and zero runs. The hypothesis is **not supported** — recorded here so it is
+  not re-derived from the same coincidence.
+- `.mus` has **no member table** — it is a monolithic binary with no directory and no confirmed
+  record framing, unlike `.musx`. There is no container abstraction to build for it; locating any
+  internal record pools remains open-ended research.
 - `.musx` is a zip with `mimetype` = `application/vnd.makemusic.notation`. Version data lives in
   `NotationMetadata.xml` as plaintext, with separate `created` and `modified` blocks. **`modified`
   is the layout authority** — 264 of 401 corpus files were created by major=16 but last written by

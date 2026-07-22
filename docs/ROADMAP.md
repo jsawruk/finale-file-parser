@@ -40,7 +40,9 @@ limit is verified by mutation, because no real corpus archive trips one.
 - [ ] Decode the score stream into records/chunks (needs the Phase 1 bytes first).
 - [ ] Notes, pitches, and rhythms as a Python data model.
 - [ ] Staves, measures, and score structure.
-- [ ] Legacy `.mus` reader behind the same public API (see DECISIONS.md — open).
+- [x] `.mus` header provenance stamps (created/modified with date, application, platform).
+- [ ] `.mus` internal record pools — open research. A `.mus` file has no member table, so there is
+      no container abstraction to mirror from `.musx`; the pools must be located empirically.
 - [ ] MusicXML exporter over the IR (DECIDED — see DECISIONS.md).
 - [ ] Desktop frontend: hex viewer with decoded structure values (DECIDED — framework still open).
 - [ ] Desktop frontend: notation rendering.
