@@ -15,15 +15,24 @@ through. Each item is one branch / one PR.
 
 - [x] Version detection for `.mus` and `.musx` (`detect_version`). Landed ahead of the container
       reader below.
-- [ ] Create a public-domain test fixture: a tiny score we author ourselves, saved as `.musx`.
-- [ ] `open_musx(path)` — validate the file is a readable zip container; raise a typed
-      `InvalidFinaleFile` on anything else.
-- [ ] Enumerate the container's entries (name + size) and expose them as structured data.
-- [ ] Extract the primary score stream as bytes, with size caps on untrusted length fields.
-- [ ] Document the container layout found so far in `docs/ARCHITECTURE.md`, with evidence.
+- [x] `open_musx(path)` — open and structurally validate a `.musx` container. Raises
+      `NotFinaleFileError` (not a Finale file) or `CorruptContainerError` (the archive violates a
+      structural safety limit). Structural validation runs *before* the Finale mimetype value is
+      confirmed, so `CorruptContainerError` can fire on an archive that turns out not to be a
+      Finale file at all, not only on a confirmed-Finale archive that is malformed or hostile. The
+      earlier `InvalidFinaleFile` name was dropped in favour of reusing the existing error type.
+- [x] Enumerate the container's entries (name, declared size, compressed size, method) in archive
+      order.
+- [x] Extract the score stream as bytes, with size caps applied before reading.
+- [x] Synthetic container fixtures harvested from corpus *structure* — this replaced "author a
+      public-domain fixture", which needed a working Finale install. Structure-only harvesting is
+      what makes CI coverage possible without committing a real score.
+- [x] Document the container layout in `docs/ARCHITECTURE.md`, with evidence.
 
-Done when: a test opens the fixture, lists its entries, pulls the score stream, and a second test
-proves a truncated/garbage file raises `InvalidFinaleFile` rather than crashing.
+**Done.** Tests open each of the 22 synthetic fixtures, enumerate their entries in archive order,
+and pull a score stream of the declared length; adversarial tests prove that a truncated or hostile
+archive raises `NotFinaleFileError` or `CorruptContainerError` rather than crashing. Every safety
+limit is verified by mutation, because no real corpus archive trips one.
 
 ## Later
 

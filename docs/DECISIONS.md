@@ -10,6 +10,27 @@ and resolved ones **DECIDED**.
 
 ---
 
+## 2026-07-21 — DECIDED: one module owns archive access
+
+`container/` owns opening, validating, and reading `.musx` archives. `version/musx.py` is a client.
+Reason: the two had parallel implementations of the same zip-safety logic, which can drift; a
+single owner means one place to harden.
+
+## 2026-07-21 — DECIDED: reject unsafe member names, allow unknown ones
+
+The container reader raises only on genuinely dangerous names (absolute, `..` segments,
+backslashes, control characters). A merely *unfamiliar* name is surfaced as data. Reason: rejecting
+unrecognised archives would contradict the principle that unknown variants stay inspectable, and
+would make a new Finale member name break version detection outright. The fixture generator keeps a
+strict allowlist, because we control what gets committed.
+
+## 2026-07-21 — DECIDED: container fixtures carry structure only
+
+Committed `.musx` fixtures harvest member names, order, compression method and declared lengths
+from the corpus, and regenerate every payload. Reason: `score.dat` is the musical work and the
+corpus also embeds `graphics/*.jpg` which may be licensed artwork. Payload bytes never leave the
+gitignored corpus.
+
 ## 2026-07-21 — DECIDED: version detection precedes record parsing
 
 Version is detected from headers/metadata before any record parsing, and both formats are covered.

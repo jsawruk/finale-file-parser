@@ -22,6 +22,10 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
 - `src/finale_file_parser/version/` — identifies which Finale version wrote a file, before any
   record parsing. `models.py` (types), `family.py` (magic → family), `mus.py` (banner parsing),
   `musx.py` (archive metadata), `detect.py` (public entry).
+- `src/finale_file_parser/container/` — owns all `.musx` archive access. `models.py`
+  (`ContainerEntry`, `CorruptContainerError`), `names.py` (member-name safety), `musx.py`
+  (`open_musx`, `MusxContainer`). `version/musx.py` is a client of this module; nothing else
+  opens archives directly.
 
 ### Known format facts — version
 
@@ -50,6 +54,31 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
   `modifiedBy` — which holds real people's initials in 28 corpus files — plus attributes such as
   `<created author="...">` that could carry the same kind of identifying data. Do not loosen this
   filter to pass through more fields or attributes.
+
+### Known format facts — the .musx container
+
+Evidence: all 401 corpus archives, surveyed 2026-07-21. See
+`docs/superpowers/specs/2026-07-21-musx-container-design.md`.
+
+- A `.musx` is a zip. `mimetype` is always the **first** member and always **stored
+  uncompressed** (401/401) — the ODF/EPUB convention. Member order is structural; do not
+  assume alphabetical. This is an *observed* fact, asserted of the fixtures and the corpus by
+  tests — `open_musx` deliberately does not enforce `mimetype`'s position or its compression
+  method, so a future Finale variant that reorders members stays inspectable rather than being
+  rejected outright.
+- Members observed: `mimetype`, `META-INF/container.xml`, `NotationMetadata.xml`, `score.dat`,
+  `presets/<n>.preset`, `graphics/<n>.jpg`. Archives embed images, so container content is not
+  limited to notation.
+- Member count 5-10; per-archive uncompressed total 89 KB - 420 KB; `score.dat` 86 KB - 413 KB.
+- 22 distinct **ordered sequences of member names**. This is measured by name and order only —
+  not by (name, size, compress method) — because size and method vary between archives that share
+  the same name sequence, which would otherwise inflate the count. Comparing *sorted* name sets
+  instead of ordered sequences gives 18 and discards ordering, which is meaningful here: this
+  distinction caused a real bug during implementation.
+- `score.dat` is high-entropy obfuscated data and barely compresses. It is extracted, never
+  interpreted, at this layer.
+- No corpus archive has duplicate or unsafe member names, so the reader's safety checks cannot be
+  exercised by real files — they are covered by synthetic hostile input and verified by mutation.
 
 ## Data flow
 

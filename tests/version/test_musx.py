@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from finale_file_parser.container.musx import MAX_MEMBERS
 from finale_file_parser.version.models import NotFinaleFileError
 from finale_file_parser.version.musx import MAX_METADATA_BYTES, METADATA_NAME, read
 
@@ -128,3 +129,33 @@ def test_corrupt_metadata_member_yields_empty_detail(make_musx: Callable[..., Pa
     assert detail.created is None
     assert detail.modified is None
     assert detail.metadata_schema == ""
+
+
+def test_structurally_hostile_archive_yields_empty_detail(tmp_path: Path) -> None:
+    # Duplicate member names trip a container safety limit. Version detection
+    # degrades to "unknown" rather than raising — unknown variants stay
+    # inspectable.
+    path = tmp_path / "hostile.musx"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("mimetype", b"application/vnd.makemusic.notation")
+        for _ in range(2):
+            info = zipfile.ZipInfo("NotationMetadata.xml")
+            archive.writestr(info, "<metadata/>")
+    detail = read(path)
+    assert detail.modified is None
+    assert detail.metadata_schema == ""
+
+
+def test_no_mimetype_over_cap_archive_raises_not_finale_file(tmp_path: Path) -> None:
+    # An archive with no mimetype member at all, and more than MAX_MEMBERS
+    # entries, must raise NotFinaleFileError -- not silently degrade to an
+    # empty MusxDetail the way a structurally hostile *Finale* archive does
+    # (see test_structurally_hostile_archive_yields_empty_detail above).
+    # Presence of the mimetype member is checked before structural
+    # validation runs, so "not a Finale file" wins here.
+    path = tmp_path / "no-mimetype-over-cap.musx"
+    with zipfile.ZipFile(path, "w") as archive:
+        for i in range(MAX_MEMBERS + 1):
+            archive.writestr(f"presets/{i}.preset", b"x")
+    with pytest.raises(NotFinaleFileError):
+        read(path)
