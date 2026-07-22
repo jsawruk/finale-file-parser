@@ -40,8 +40,9 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
   date `0x66`, application tag `0x70`, platform tag `0x74`; modified — date `0x8C`, application tag
   `0x96`, platform tag `0x9A`. The date is `[year - 1900, month, day]` as three `u8`. Present in
   238/238 corpus files, with `created <= modified` in all of them. **Platform is recoverable from
-  `.mus`, not `.musx`-only** — an earlier version of this document recorded platform as available
-  only from `.musx`; that was wrong. Corpus tally: `MAC` in 136 files, `WIN` in 102.
+  `.mus`, not `.musx`-only** (see the correction note in
+  `docs/superpowers/specs/2026-07-21-version-detection-design.md`, which had claimed otherwise).
+  Corpus tally: `MAC` in 136 files, `WIN` in 102.
 - 89 of the 136 `MAC` `.mus` files (0 of the 102 `WIN` files) end in a **macOS plist trailer**
   occupying the last 1-3% of the file (938-1694 bytes) — apparently appended OS-level metadata.
   Not parsed; recorded so the next investigation starts from it.

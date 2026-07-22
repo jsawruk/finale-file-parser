@@ -88,6 +88,11 @@ Other observations:
   `presets/*.preset` files are present. Do not assume a fixed manifest; check membership.
 - Platform (`MAC`/`WIN`) is available for `.musx` and was not found in the `.mus` header.
 
+  > **Correction, 2026-07-22:** this was wrong. Platform is recoverable from `.mus` as well — see
+  > `docs/superpowers/specs/2026-07-22-mus-header-metadata-design.md` and
+  > `docs/ARCHITECTURE.md`. Left here uncorrected in place rather than rewritten, per this
+  > project's practice of not rewriting a spec's history.
+
 ### Corpus directory labels are not version labels
 
 `corpus/CORPUS.md` names directories after marketing releases, which do not match writing versions —

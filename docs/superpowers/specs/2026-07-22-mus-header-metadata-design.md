@@ -1,6 +1,6 @@
 # `.mus` header metadata — design
 
-**Status:** approved, not yet implemented
+**Status:** implemented
 **Date:** 2026-07-22
 
 Parse the two metadata stamps in a legacy `.mus` header into created/modified records carrying a
@@ -85,9 +85,19 @@ The two new fields **default to `None`**, so every existing construction site an
 working unchanged. Those existing tests passing untouched is the proof that this slice adds
 information without altering behaviour.
 
-`MusDetail` now mirrors `MusxDetail`'s created/modified shape, so a caller can ask the same
-provenance question of either format. `detect_version`'s `label` and `confidence` are unchanged —
-they still derive from the banner year alone. The stamps are detail, not identity.
+`MusDetail` now names its fields `created`/`modified` to match `MusxDetail`, but the two are not
+interchangeable: `MusDetail`'s pair is a `MusStamp` (date, application, platform) while
+`MusxDetail`'s is an `AppVersion` (major/maint/devStatus/build) — they share zero fields. Both
+formats expose created/modified provenance, but `.mus` records *when and where* a file was written
+while `.musx` records *which application version* wrote it. A caller cannot ask "the same
+question" of `detail.created` generically across formats. `detect_version`'s `label` and
+`confidence` are unchanged — they still derive from the banner year alone. The stamps are detail,
+not identity.
+
+See `docs/DECISIONS.md`'s open question on unifying the two: `.musx`'s metadata blocks carry the
+same year/month/day/application/platform fields a `MusStamp` models, so a future slice could make
+`.musx` produce `MusStamp` provenance too, closing this gap for real instead of just documenting
+it.
 
 ## Parsing rules
 
