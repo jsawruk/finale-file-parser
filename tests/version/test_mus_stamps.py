@@ -69,3 +69,19 @@ def test_truncated_header_yields_no_stamps_and_does_not_raise(
 def test_empty_header_does_not_raise() -> None:
     detail = parse(b"")
     assert detail.created is None and detail.modified is None and detail.year is None
+
+
+def test_unterminated_application_tag_stops_at_the_field_boundary(
+    mus_metadata_header: Callable[..., bytes],
+) -> None:
+    """An application tag with no NUL must not absorb the platform bytes.
+
+    The application and platform fields are four bytes apart, so a four-byte
+    unterminated tag runs straight into the platform tag unless the read is
+    bounded by the field width.
+    """
+    header = mus_metadata_header(app=b"WXYZ", platform=b"MAC")
+    created = parse(header).created
+    assert created is not None
+    assert created.application == "WXYZ"
+    assert created.platform == "MAC"

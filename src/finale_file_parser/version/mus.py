@@ -19,6 +19,9 @@ corpus files; see the design spec."""
 
 _MIN_YEAR, _MAX_YEAR = 1980, 2030
 
+_TAG_FIELD_SIZE = 4
+"""Observed tags are three characters plus a NUL terminator."""
+
 _BANNER_YEAR = re.compile(r"Finale\(R\)\s+(\d{4})\b")
 
 
@@ -55,7 +58,11 @@ def _stamp(header: bytes, date_off: int, app_off: int, plat_off: int) -> MusStam
     year, month, day = 1900 + date[0], date[1], date[2]
     if not (_MIN_YEAR <= year <= _MAX_YEAR and 1 <= month <= 12 and 1 <= day <= 31):
         return None
-    application = _tag(header, app_off)
+    # Bound each tag by the distance to the next field. Observed tags are three
+    # characters plus a NUL, exactly filling the four bytes between the
+    # application and platform offsets. An unterminated tag must stop at the
+    # field boundary rather than running on into the next field's bytes.
+    application = _tag(header, app_off, plat_off - app_off)
     if not application:
         return None
     return MusStamp(
@@ -63,10 +70,14 @@ def _stamp(header: bytes, date_off: int, app_off: int, plat_off: int) -> MusStam
         month=month,
         day=day,
         application=application,
-        platform=_tag(header, plat_off),
+        platform=_tag(header, plat_off, _TAG_FIELD_SIZE),
     )
 
 
-def _tag(header: bytes, offset: int, limit: int = 8) -> str:
-    """Read a NUL-terminated ASCII tag, bounded by `limit` bytes."""
+def _tag(header: bytes, offset: int, limit: int) -> str:
+    """Read a NUL-terminated tag, bounded by `limit` bytes.
+
+    `limit` is required: a default here silently lets one field's bytes bleed
+    into another when a tag is not NUL-terminated.
+    """
     return header[offset : offset + limit].split(b"\x00", 1)[0].decode("latin-1")
