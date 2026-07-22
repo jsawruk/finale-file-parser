@@ -364,3 +364,68 @@ def test_read_translates_encrypted_non_mimetype_member(tmp_path: Path) -> None:
     with open_musx(path) as container:
         with pytest.raises(CorruptContainerError):
             container.read("score.dat", max_bytes=1024)
+
+
+# --- Fix pass 3: zlib.error escaped the four-type tuple ----------------------
+#
+# A member declared as ZIP_DEFLATED whose actual bytes are not valid DEFLATE
+# data makes zipfile's decompressor raise zlib.error, which subclasses only
+# Exception -- not BadZipFile, RuntimeError, OSError, or NotImplementedError.
+# The enumerated tuple missed it a third time; the guard is now a category
+# catch (`except Exception`) instead. These tests build the escape by writing
+# a member with ZIP_STORED and garbage bytes, then patching the compression
+# method field to ZIP_DEFLATED in both the local file header and the central
+# directory entry, so zipfile is told to inflate bytes that were never
+# deflated.
+
+
+def _set_local_header_compress_type(path: Path, header_offset: int, compress_type: int) -> None:
+    """Patch the compression-method field of the local file header located at
+    `header_offset`, leaving the rest of the local header untouched."""
+    data = bytearray(path.read_bytes())
+    struct.pack_into("<H", data, header_offset + 8, compress_type)
+    path.write_bytes(bytes(data))
+
+
+def _declare_member_as_deflate(path: Path, member_name: str) -> None:
+    """Patch `member_name`'s declared compression method to ZIP_DEFLATED in
+    both the local file header and the central directory record, without
+    touching the member's actual (still-ZIP_STORED-written) bytes. The result
+    is a member zipfile will try to inflate that was never deflated."""
+    with zipfile.ZipFile(path) as archive:
+        header_offset = archive.getinfo(member_name).header_offset
+    _set_local_header_compress_type(path, header_offset, zipfile.ZIP_DEFLATED)
+    _set_central_directory_compress_type(path, member_name, zipfile.ZIP_DEFLATED)
+
+
+def test_rejects_mimetype_declared_deflate_with_corrupt_bytes(tmp_path: Path) -> None:
+    """A mimetype member declared ZIP_DEFLATED whose bytes are garbage raises
+    zlib.error from archive.read(); must translate to NotFinaleFileError.
+    Garbage is exactly len(MIMETYPE_VALUE) bytes so the file-size
+    short-circuit in _require_finale_mimetype does not mask the decompression
+    failure -- the read must actually be attempted."""
+    path = tmp_path / "deflate-mimetype.musx"
+    garbage = bytes(range(256))[: len(MIMETYPE)]  # not a valid DEFLATE stream
+    assert len(garbage) == len(MIMETYPE)
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("mimetype", garbage, compress_type=zipfile.ZIP_STORED)
+        archive.writestr("score.dat", b"x")
+    _declare_member_as_deflate(path, "mimetype")
+    with pytest.raises(NotFinaleFileError):
+        open_musx(path)
+
+
+def test_read_translates_deflate_score_member_with_corrupt_bytes(tmp_path: Path) -> None:
+    """The same escape, but on a post-open member read: score.dat declared
+    ZIP_DEFLATED with bytes that are not valid DEFLATE data must translate to
+    CorruptContainerError."""
+    path = tmp_path / "deflate-score.musx"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("mimetype", MIMETYPE, compress_type=zipfile.ZIP_STORED)
+        archive.writestr(
+            "score.dat", b"not a valid deflate stream", compress_type=zipfile.ZIP_STORED
+        )
+    _declare_member_as_deflate(path, "score.dat")
+    with open_musx(path) as container:
+        with pytest.raises(CorruptContainerError):
+            container.read("score.dat", max_bytes=1024)

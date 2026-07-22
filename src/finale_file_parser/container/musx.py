@@ -82,16 +82,31 @@ class MusxContainer:
                 f" of {max_bytes}"
             )
         try:
+            # This guards exactly one stdlib call, with no code of ours inside
+            # it, so there is no project logic whose bugs a broad except could
+            # mask. Decompressing a hostile member can fail via whatever
+            # exception its codec happens to raise: BadZipFile (local header
+            # disagrees with the central directory), RuntimeError (encryption
+            # bit set), OSError (a codec rejects the stream outright, e.g.
+            # bzip2), NotImplementedError (unsupported or deflate64 method),
+            # or zlib.error (a DEFLATE-declared member with corrupt bytes —
+            # this one subclasses only Exception, not any of the above, which
+            # is why three successive passes of naming concrete types each
+            # missed one). Any way this call fails means the member could not
+            # be decompressed, which is exactly what CorruptContainerError
+            # reports below — so catching the category, not an enumerated
+            # list, is correct here, not sloppy. Do not narrow this back to a
+            # tuple of named types. KeyboardInterrupt and SystemExit derive
+            # from BaseException, not Exception, so they still propagate.
             return self._archive.read(name)
-        except (zipfile.BadZipFile, RuntimeError, OSError, NotImplementedError) as exc:
-            # Decompressing a hostile member can fail however its codec fails:
-            # a local header that disagrees with the central directory
-            # (BadZipFile), an encryption bit set (RuntimeError), an
-            # unsupported or deflate64 compression method (NotImplementedError
-            # — itself a RuntimeError subclass, named explicitly so this reads
-            # as "however decompression failed" rather than an enumerated
-            # list), or a codec rejecting the stream outright, e.g. bzip2
-            # (OSError). All of these mean the member is corrupt.
+        except ValueError:
+            # zipfile raises exactly this type when the handle is already
+            # closed (see MusxContainer.close()). That is a caller misusing a
+            # closed resource, not a hostile member failing to decompress -
+            # a different failure category from everything the comment above
+            # covers, so it must not be relabeled as CorruptContainerError.
+            raise
+        except Exception as exc:
             raise CorruptContainerError(f"member {name!r} could not be decompressed") from exc
 
     def score_stream(self) -> bytes:
@@ -133,18 +148,11 @@ def open_musx(path: str | os.PathLike[str]) -> MusxContainer:
     try:
         entries = _validated_entries(archive)
         _require_finale_mimetype(archive, path)
-    except (zipfile.BadZipFile, RuntimeError, OSError, NotImplementedError) as exc:
-        # The mimetype read below can fail however decompression fails: a
-        # local header that disagrees with the central directory
-        # (BadZipFile), a member with the encryption bit set (RuntimeError),
-        # an unsupported or deflate64 compression method (NotImplementedError
-        # — itself a RuntimeError subclass, named explicitly so this guard
-        # reads as "however decompression failed" rather than an enumerated
-        # list), or a codec rejecting the stream outright, e.g. bzip2
-        # (OSError). All of these mean "not a readable Finale archive".
-        archive.close()
-        raise NotFinaleFileError(f"{path} is not a readable Finale archive") from exc
     except Exception:
+        # Translation of any archive-level failure into our public exception
+        # types happens closer to the calls that can raise them (see
+        # _require_finale_mimetype and read()). This catch-all exists only to
+        # guarantee the handle is closed before whatever was raised propagates.
         archive.close()
         raise
     return MusxContainer(archive, entries)
@@ -155,7 +163,29 @@ def _require_finale_mimetype(archive: zipfile.ZipFile, path: object) -> None:
         info = archive.getinfo(MIMETYPE_NAME)
     except KeyError as exc:
         raise NotFinaleFileError(f"{path} is a zip archive with no mimetype member") from exc
-    if info.file_size > len(MIMETYPE_VALUE) or archive.read(MIMETYPE_NAME) != MIMETYPE_VALUE:
+    if info.file_size > len(MIMETYPE_VALUE):
+        raise NotFinaleFileError(f"{path} is a zip archive but not a Finale .musx")
+    try:
+        # This guards exactly one stdlib call, with no code of ours inside it,
+        # so there is no project logic whose bugs a broad except could mask.
+        # Decompressing a hostile member can fail via whatever exception its
+        # codec happens to raise: BadZipFile (local header disagrees with the
+        # central directory), RuntimeError (encryption bit set), OSError (a
+        # codec rejects the stream outright, e.g. bzip2), NotImplementedError
+        # (unsupported or deflate64 method), or zlib.error (a
+        # DEFLATE-declared member with corrupt bytes — this one subclasses
+        # only Exception, not any of the above, which is why three successive
+        # passes of naming concrete types each missed one). Any way this call
+        # fails means the mimetype member could not be decompressed, which is
+        # exactly "not a readable Finale archive" — so catching the category,
+        # not an enumerated list, is correct here, not sloppy. Do not narrow
+        # this back to a tuple of named types. KeyboardInterrupt and
+        # SystemExit derive from BaseException, not Exception, so they still
+        # propagate.
+        contents = archive.read(MIMETYPE_NAME)
+    except Exception as exc:
+        raise NotFinaleFileError(f"{path} is a zip archive but not a Finale .musx") from exc
+    if contents != MIMETYPE_VALUE:
         raise NotFinaleFileError(f"{path} is a zip archive but not a Finale .musx")
 
 
