@@ -38,10 +38,10 @@ EXPECTED_PUBLIC_NAMES = {
     "FileVersion",
     "FinaleFileError",
     "MusDetail",
-    "MusStamp",
     "MusxContainer",
     "MusxDetail",
     "NotFinaleFileError",
+    "ProvenanceStamp",
     "detect_version",
     "open_musx",
 }

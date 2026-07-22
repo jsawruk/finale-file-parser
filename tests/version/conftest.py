@@ -46,11 +46,15 @@ SAMPLE_METADATA = """<?xml version="1.0" encoding="UTF-8"?>
 <metadata version="18.0" xmlns="http://www.makemusic.com/2012/NotationMetadata">
   <fileInfo>
     <created>
+      <year>2010</year><month>9</month><day>14</day>
       <platform>MAC</platform>
+      <application>FIN</application>
       <appVersion><major>16</major><devStatus>release</devStatus><build>2</build></appVersion>
     </created>
     <modified>
+      <year>2015</year><month>11</month><day>23</day>
       <platform>WIN</platform>
+      <application>FIN</application>
       <appVersion><major>18</major><maint>5</maint><devStatus>dev</devStatus><build>7098</build></appVersion>
     </modified>
   </fileInfo>

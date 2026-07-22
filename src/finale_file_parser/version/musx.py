@@ -17,7 +17,7 @@ from defusedxml.ElementTree import fromstring
 
 from finale_file_parser.container.models import CorruptContainerError
 from finale_file_parser.container.musx import open_musx
-from finale_file_parser.version.models import AppVersion, MusxDetail
+from finale_file_parser.version.models import AppVersion, MusxDetail, ProvenanceStamp
 
 METADATA_NAME = "NotationMetadata.xml"
 
@@ -70,15 +70,14 @@ def read(path: Path) -> MusxDetail:
     modified = _find_block(root, "modified")
     created = _find_block(root, "created")
     return MusxDetail(
-        created=_app_version(created),
-        modified=_app_version(modified),
+        created=_stamp(created),
+        modified=_stamp(modified),
         metadata_schema=root.get("version") or "",
-        platform=_platform(modified) or _platform(created),
     )
 
 
 def _empty() -> MusxDetail:
-    return MusxDetail(created=None, modified=None, metadata_schema="", platform=None)
+    return MusxDetail(created=None, modified=None, metadata_schema="")
 
 
 def _find(parent: Element, tag: str, *, deep: bool = False) -> Element | None:
@@ -129,5 +128,24 @@ def _app_version(block: Element | None) -> AppVersion | None:
     )
 
 
-def _platform(block: Element | None) -> str | None:
-    return _text(block, "platform")
+def _stamp(block: Element | None) -> ProvenanceStamp | None:
+    """Build a provenance stamp from a created/modified block.
+
+    Returns None when the block is absent or carries no usable date. Unlike
+    `.mus`, a `.musx` block may legitimately omit `maint`, so a missing
+    optional field does not invalidate the stamp.
+    """
+    if block is None:
+        return None
+    year, month, day = _int(block, "year"), _int(block, "month"), _int(block, "day")
+    if year is None or month is None or day is None:
+        return None
+    return ProvenanceStamp(
+        year=year,
+        month=month,
+        day=day,
+        application=_text(block, "application") or "",
+        platform=_text(block, "platform") or "",
+        modified_by=_text(block, "modifiedBy") or "",
+        app_version=_app_version(block),
+    )

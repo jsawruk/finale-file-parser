@@ -8,8 +8,8 @@ bytes = "first 160 bytes"
 expected_family = "mus"
 expected_label = "Finale 2001"
 expected_confidence = "exact"
-created = { year = 2000, month = 9, day = 12, application = "FIN", platform = "WIN" }
-modified = { year = 2000, month = 9, day = 12, application = "FIN", platform = "WIN" }
+created = { year = 2000, month = 9, day = 12, application = "FIN", platform = "WIN", modified_by = "" }
+modified = { year = 2000, month = 9, day = 12, application = "FIN", platform = "WIN", modified_by = "" }
 
 [[fixture]]
 file = "mus-2004.bin"
@@ -18,8 +18,8 @@ bytes = "first 160 bytes"
 expected_family = "mus"
 expected_label = "Finale 2004"
 expected_confidence = "exact"
-created = { year = 2003, month = 8, day = 29, application = "FIN", platform = "MAC" }
-modified = { year = 2003, month = 8, day = 29, application = "FIN", platform = "MAC" }
+created = { year = 2003, month = 8, day = 29, application = "FIN", platform = "MAC", modified_by = "" }
+modified = { year = 2003, month = 8, day = 29, application = "FIN", platform = "MAC", modified_by = "" }
 
 [[fixture]]
 file = "mus-2005.bin"
@@ -28,8 +28,8 @@ bytes = "first 160 bytes"
 expected_family = "mus"
 expected_label = "Finale 2005"
 expected_confidence = "exact"
-created = { year = 2005, month = 4, day = 23, application = "FIN", platform = "MAC" }
-modified = { year = 2005, month = 4, day = 23, application = "FIN", platform = "MAC" }
+created = { year = 2005, month = 4, day = 23, application = "FIN", platform = "MAC", modified_by = "" }
+modified = { year = 2005, month = 4, day = 23, application = "FIN", platform = "MAC", modified_by = "" }
 
 [[fixture]]
 file = "mus-2005-residue.bin"
@@ -38,8 +38,8 @@ bytes = "first 160 bytes"
 expected_family = "mus"
 expected_label = "Finale 2005"
 expected_confidence = "exact"
-created = { year = 2004, month = 5, day = 29, application = "FIN", platform = "MAC" }
-modified = { year = 2005, month = 4, day = 23, application = "FIN", platform = "MAC" }
+created = { year = 2004, month = 5, day = 29, application = "FIN", platform = "MAC", modified_by = "" }
+modified = { year = 2005, month = 4, day = 23, application = "FIN", platform = "MAC", modified_by = "" }
 
 [[fixture]]
 file = "mus-2011.bin"
@@ -48,8 +48,8 @@ bytes = "first 160 bytes"
 expected_family = "mus"
 expected_label = "Finale 2011"
 expected_confidence = "exact"
-created = { year = 2009, month = 10, day = 23, application = "FIN", platform = "MAC" }
-modified = { year = 2010, month = 11, day = 4, application = "FIN", platform = "MAC" }
+created = { year = 2009, month = 10, day = 23, application = "FIN", platform = "MAC", modified_by = "" }
+modified = { year = 2010, month = 11, day = 4, application = "FIN", platform = "MAC", modified_by = "" }
 
 [[fixture]]
 file = "mus-2012.bin"
@@ -58,8 +58,8 @@ bytes = "first 160 bytes"
 expected_family = "mus"
 expected_label = "Finale 2012"
 expected_confidence = "exact"
-created = { year = 2012, month = 10, day = 10, application = "FIN", platform = "MAC" }
-modified = { year = 2012, month = 11, day = 19, application = "FIN", platform = "MAC" }
+created = { year = 2012, month = 10, day = 10, application = "FIN", platform = "MAC", modified_by = "" }
+modified = { year = 2012, month = 11, day = 19, application = "FIN", platform = "MAC", modified_by = "" }
 
 [[fixture]]
 file = "musx-18-MAC.musx"
@@ -68,6 +68,8 @@ bytes = "mimetype + scrubbed NotationMetadata.xml only"
 expected_family = "musx"
 expected_label = "18 dev (build 3062)"
 expected_confidence = "exact"
+created = { year = 2012, month = 10, day = 10, application = "FIN", platform = "MAC", modified_by = "" }
+modified = { year = 2013, month = 11, day = 18, application = "FIN", platform = "MAC", modified_by = "" }
 
 [[fixture]]
 file = "musx-18-WIN.musx"
@@ -76,3 +78,5 @@ bytes = "mimetype + scrubbed NotationMetadata.xml only"
 expected_family = "musx"
 expected_label = "18 dev (build 3163)"
 expected_confidence = "exact"
+created = { year = 2009, month = 10, day = 21, application = "FIN", platform = "MAC", modified_by = "" }
+modified = { year = 2013, month = 11, day = 18, application = "FIN", platform = "WIN", modified_by = "" }

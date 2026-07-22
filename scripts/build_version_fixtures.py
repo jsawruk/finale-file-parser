@@ -18,9 +18,9 @@ from typing import cast
 
 from defusedxml.ElementTree import fromstring as defused_fromstring
 
-from finale_file_parser import MusDetail, NotFinaleFileError, detect_version
+from finale_file_parser import MusDetail, MusxDetail, NotFinaleFileError, detect_version
 from finale_file_parser.version.family import HEADER_SIZE
-from finale_file_parser.version.models import MusStamp
+from finale_file_parser.version.models import ProvenanceStamp
 from finale_file_parser.version.mus import MUS_METADATA_SIZE
 
 CORPUS = Path("corpus")
@@ -144,7 +144,7 @@ def _mus_fixtures() -> dict[str, Path]:
 
 
 def _musx_fixtures() -> dict[str, Path]:
-    """One .musx per distinct (modified major, platform) pair."""
+    """One .musx per distinct (modified major, modified platform) pair."""
     chosen: dict[str, Path] = {}
     for path in sorted(CORPUS.rglob("*")):
         if not path.is_file() or path.suffix.lower() != ".musx":
@@ -153,9 +153,13 @@ def _musx_fixtures() -> dict[str, Path]:
             detail = detect_version(path).detail
         except (FileNotFoundError, NotFinaleFileError):
             continue
-        app = getattr(detail, "modified", None)
-        platform = getattr(detail, "platform", None)
-        key = f"musx-{app.major if app else 'none'}-{platform or 'none'}"
+        if not isinstance(detail, MusxDetail):
+            continue
+        stamp = detail.modified
+        app_version = stamp.app_version if stamp else None
+        major = app_version.major if app_version else "none"
+        platform = stamp.platform if stamp else "none"
+        key = f"musx-{major}-{platform}"
         chosen.setdefault(key, path)
     return chosen
 
@@ -210,7 +214,7 @@ def _entry(target: Path, source: Path, taken: str) -> str:
         f'expected_label = "{result.label}"\n'
         f'expected_confidence = "{result.confidence.value}"\n'
     )
-    if isinstance(result.detail, MusDetail):
+    if isinstance(result.detail, MusDetail | MusxDetail):
         if result.detail.created is not None:
             text += f"created = {_stamp_toml(result.detail.created)}\n"
         if result.detail.modified is not None:
@@ -218,11 +222,12 @@ def _entry(target: Path, source: Path, taken: str) -> str:
     return text
 
 
-def _stamp_toml(stamp: MusStamp) -> str:
+def _stamp_toml(stamp: ProvenanceStamp) -> str:
     return (
         "{ "
         f"year = {stamp.year}, month = {stamp.month}, day = {stamp.day}, "
-        f'application = "{stamp.application}", platform = "{stamp.platform}"'
+        f'application = "{stamp.application}", platform = "{stamp.platform}", '
+        f'modified_by = "{stamp.modified_by}"'
         " }"
     )
 

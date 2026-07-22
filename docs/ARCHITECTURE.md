@@ -43,6 +43,12 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
   `.mus`, not `.musx`-only** (see the correction note in
   `docs/superpowers/specs/2026-07-21-version-detection-design.md`, which had claimed otherwise).
   Corpus tally: `MAC` in 136 files, `WIN` in 102.
+- Both formats produce the same provenance type, `ProvenanceStamp` (date, application, platform,
+  plus `modified_by` and `app_version`) — see the 2026-07-22 "one provenance type for both formats"
+  decision in `docs/DECISIONS.md`. `.musx`'s stamps are a strict superset of `.mus`'s: `.mus` always
+  leaves `modified_by` and `app_version` at their defaults, `.musx` fills both. `MusxDetail.platform`
+  was removed; platform now lives on each stamp, matching `.mus`'s rule that both stamps must not be
+  assumed to agree.
 - 89 of the 136 `MAC` `.mus` files (0 of the 102 `WIN` files) end in a **macOS plist trailer**
   occupying the last 1-3% of the file (938-1694 bytes) — apparently appended OS-level metadata.
   Not parsed; recorded so the next investigation starts from it.
@@ -56,8 +62,14 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
   internal record pools remains open-ended research.
 - `.musx` is a zip with `mimetype` = `application/vnd.makemusic.notation`. Version data lives in
   `NotationMetadata.xml` as plaintext, with separate `created` and `modified` blocks. **`modified`
-  is the layout authority** — 264 of 401 corpus files were created by major=16 but last written by
-  major=18.
+  is the layout authority** — 267 of 401 corpus files were created by major=16 but last written by
+  major=18, and **370 of 401 diverge between the `created` and `modified` majors at all** (not only
+  the 16-to-18 case). (The 2026-07-21 design spec recorded the first figure as 264; a direct corpus
+  measurement pinned in
+  `tests/version/test_corpus_sweep.py::test_musx_modified_over_created_divergence_still_holds`
+  found 267 (and asserts 370 alongside it). The spec is left as originally written per this
+  project's practice of not rewriting a spec's history; this figure is corrected here since
+  `ARCHITECTURE.md` is the current source of truth.)
 - `score.dat` is obfuscated high-entropy data. Version detection never reads it.
 - The `.musx` `major` version number (15/16/17/18) has no established mapping to Finale's
   marketing years (2009/2011/2012/2014...). Nothing in the corpus bridges the two schemes, so
@@ -69,9 +81,11 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
   detection, so none are kept), and every `<modifiedBy>` is blanked rather than dropped. This is
   deliberate: the corpus metadata carries `title`, `subtitle`, `composer`, `arranger`, `lyricist`,
   `copyright` (including a MakeMusic notice restricting commercial redistribution), and
-  `modifiedBy` — which holds real people's initials in 28 corpus files — plus attributes such as
-  `<created author="...">` that could carry the same kind of identifying data. Do not loosen this
-  filter to pass through more fields or attributes.
+  `modifiedBy` — non-empty in 28 of the 802 `created`/`modified` blocks across the corpus (14
+  files), where it holds real people's initials — plus attributes such as `<created author="...">`
+  that could carry the same kind of identifying data. `modified_by` is exposed through
+  `ProvenanceStamp` for parsing, but every committed fixture's `<modifiedBy>` stays blanked. Do not
+  loosen this filter to pass through more fields or attributes.
 
 ### Known format facts — the .musx container
 

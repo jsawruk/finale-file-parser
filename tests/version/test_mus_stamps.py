@@ -104,3 +104,13 @@ def test_unterminated_platform_tag_stops_at_the_field_boundary(
     created = parse(bytes(header)).created
     assert created is not None
     assert created.platform == "MACX"
+
+
+def test_mus_stamps_leave_the_musx_only_fields_at_defaults(
+    mus_metadata_header: Callable[..., bytes],
+) -> None:
+    """.mus records no version and no author in its stamps."""
+    created = parse(mus_metadata_header()).created
+    assert created is not None
+    assert created.modified_by == ""
+    assert created.app_version is None
