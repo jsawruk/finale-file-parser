@@ -1,3 +1,4 @@
+import dataclasses
 import tomllib
 import zipfile
 from pathlib import Path
@@ -7,7 +8,7 @@ import pytest
 from defusedxml.ElementTree import fromstring
 
 from finale_file_parser import detect_version
-from finale_file_parser.version.models import MusDetail, ProvenanceStamp
+from finale_file_parser.version.models import MusDetail, MusxDetail, ProvenanceStamp
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "version"
 MANIFEST = FIXTURES / "MANIFEST.toml"
@@ -145,6 +146,7 @@ def _stamp_from_manifest(raw: dict[str, str | int] | None) -> ProvenanceStamp | 
         day=int(raw["day"]),
         application=str(raw["application"]),
         platform=str(raw["platform"]),
+        modified_by=str(raw.get("modified_by", "")),
     )
 
 
@@ -187,3 +189,28 @@ def test_mus_2011_stamp_is_pinned_independently_of_the_generator() -> None:
     assert result.detail.modified is not None
     assert result.detail.modified.application == "FIN"
     assert result.detail.modified.platform in {"MAC", "WIN"}
+
+
+@pytest.mark.parametrize(
+    "entry", [e for e in _entries() if e["file"].endswith(".musx")], ids=lambda e: e["file"]
+)
+def test_musx_fixture_stamps_match_manifest(entry: dict[str, str | int]) -> None:
+    """Mirrors test_mus_fixture_stamps_match_manifest for `.musx`. The manifest records a
+    stamp's shape shared with `.mus` (year/month/day/application/platform/modified_by) but
+    not `app_version` -- that fact is pinned independently, via the derived label, by
+    test_musx_fixture_labels_are_pinned_independently_of_the_generator. So the comparison
+    strips `app_version` off the live result before comparing, rather than re-encoding the
+    same fact twice in the manifest.
+    """
+    result = detect_version(FIXTURES / cast(str, entry["file"]))
+    assert isinstance(result.detail, MusxDetail)
+
+    expected_created = _stamp_from_manifest(cast(dict[str, str | int] | None, entry.get("created")))
+    assert result.detail.created is not None
+    assert dataclasses.replace(result.detail.created, app_version=None) == expected_created
+
+    expected_modified = _stamp_from_manifest(
+        cast(dict[str, str | int] | None, entry.get("modified"))
+    )
+    assert result.detail.modified is not None
+    assert dataclasses.replace(result.detail.modified, app_version=None) == expected_modified

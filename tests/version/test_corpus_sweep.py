@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from finale_file_parser import Confidence, Family, detect_version
-from finale_file_parser.version.models import MusDetail
+from finale_file_parser.version.models import MusDetail, MusxDetail
 
 CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
@@ -31,6 +31,11 @@ EXPECTED_MUSX_COUNT = 401
 EXPECTED_MUS_COUNT = 238
 EXPECTED_MUS_MAC_COUNT = 136
 EXPECTED_MUS_WIN_COUNT = 102
+EXPECTED_MUSX_CREATED16_MODIFIED18_COUNT = 267
+"""docs/ARCHITECTURE.md and the 2026-07-21 design spec state 264 -- a direct corpus
+measurement (this test) instead finds 267. Pinned to what the corpus actually shows rather
+than silently matched to the older documented figure; see the task-3/4 report for this
+discrepancy, flagged rather than quietly reconciled per project practice."""
 MIN_STAMP_YEAR, MAX_STAMP_YEAR = 1998, 2012
 
 
@@ -141,3 +146,50 @@ def test_every_mus_stamp_year_is_in_the_observed_range() -> None:
         assert created is not None and modified is not None, path
         assert MIN_STAMP_YEAR <= created.year <= MAX_STAMP_YEAR, path
         assert MIN_STAMP_YEAR <= modified.year <= MAX_STAMP_YEAR, path
+
+
+def test_every_musx_file_yields_both_provenance_stamps() -> None:
+    """Unified provenance parity with `.mus`: every one of the 401 `.musx` files carries
+    both a created and a modified stamp, not only the platform/appVersion fields read
+    before this change.
+    """
+    paths = _files(".musx")
+    assert len(paths) == EXPECTED_MUSX_COUNT
+    for path in paths:
+        detail = detect_version(path).detail
+        assert isinstance(detail, MusxDetail), path
+        assert detail.created is not None, path
+        assert detail.modified is not None, path
+
+
+def test_every_musx_stamp_reports_a_non_empty_application() -> None:
+    paths = _files(".musx")
+    assert len(paths) == EXPECTED_MUSX_COUNT
+    for path in paths:
+        detail = detect_version(path).detail
+        assert isinstance(detail, MusxDetail), path
+        created, modified = detail.created, detail.modified
+        assert created is not None and modified is not None, path
+        assert created.application, path
+        assert modified.application, path
+
+
+def test_musx_modified_over_created_divergence_still_holds() -> None:
+    """`modified` remains the layout authority over `created` (see docs/ARCHITECTURE.md):
+    a stable subset of corpus files were created by one `appVersion.major` and last
+    modified by a later one. Tallied over the `app_version.major` carried by each stamp,
+    not a bare `.major` on the detail, since that field now lives on the stamp.
+    """
+    paths = _files(".musx")
+    assert len(paths) == EXPECTED_MUSX_COUNT
+    diverging = 0
+    for path in paths:
+        detail = detect_version(path).detail
+        assert isinstance(detail, MusxDetail), path
+        created, modified = detail.created, detail.modified
+        assert created is not None and modified is not None, path
+        created_major = created.app_version.major if created.app_version else None
+        modified_major = modified.app_version.major if modified.app_version else None
+        if created_major == 16 and modified_major == 18:
+            diverging += 1
+    assert diverging == EXPECTED_MUSX_CREATED16_MODIFIED18_COUNT
