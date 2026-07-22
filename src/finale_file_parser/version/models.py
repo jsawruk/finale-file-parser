@@ -5,13 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-
-class FinaleFileError(Exception):
-    """Base class for every error this package raises."""
-
-
-class NotFinaleFileError(FinaleFileError):
-    """The file is not a Finale file at all — no recognised container or magic."""
+# Re-exported so existing imports of `finale_file_parser.version.models.FinaleFileError`
+# / `.NotFinaleFileError` keep working. The types themselves live in
+# `finale_file_parser.errors`, which neither `version` nor `container` owns —
+# see that module's docstring for why.
+from finale_file_parser.errors import FinaleFileError as FinaleFileError
+from finale_file_parser.errors import NotFinaleFileError as NotFinaleFileError
 
 
 class Family(Enum):

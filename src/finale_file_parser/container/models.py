@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from finale_file_parser.version.models import FinaleFileError
+from finale_file_parser.errors import FinaleFileError
 
 
 class CorruptContainerError(FinaleFileError):

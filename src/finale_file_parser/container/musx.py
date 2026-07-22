@@ -17,7 +17,7 @@ from types import TracebackType
 
 from finale_file_parser.container.models import ContainerEntry, CorruptContainerError
 from finale_file_parser.container.names import is_safe_name
-from finale_file_parser.version.models import NotFinaleFileError
+from finale_file_parser.errors import NotFinaleFileError
 
 MIMETYPE_NAME = "mimetype"
 MIMETYPE_VALUE = b"application/vnd.makemusic.notation"
@@ -203,22 +203,14 @@ def _require_finale_mimetype_value(archive: zipfile.ZipFile, path: object) -> No
     if info.file_size > len(MIMETYPE_VALUE):
         raise NotFinaleFileError(f"{path} is a zip archive but not a Finale .musx")
     try:
-        # This guards exactly one stdlib call, with no code of ours inside it,
-        # so there is no project logic whose bugs a broad except could mask.
-        # Decompressing a hostile member can fail via whatever exception its
-        # codec happens to raise: BadZipFile (local header disagrees with the
-        # central directory), RuntimeError (encryption bit set), OSError (a
-        # codec rejects the stream outright, e.g. bzip2), NotImplementedError
-        # (unsupported or deflate64 method), or zlib.error (a
-        # DEFLATE-declared member with corrupt bytes — this one subclasses
-        # only Exception, not any of the above, which is why three successive
-        # passes of naming concrete types each missed one). Any way this call
-        # fails means the mimetype member could not be decompressed, which is
-        # exactly "not a readable Finale archive" — so catching the category,
-        # not an enumerated list, is correct here, not sloppy. Do not narrow
-        # this back to a tuple of named types. KeyboardInterrupt and
-        # SystemExit derive from BaseException, not Exception, so they still
-        # propagate.
+        # See MusxContainer.read()'s comment on its own archive.read() call
+        # for the full rationale on why this catches Exception broadly rather
+        # than an enumerated list of concrete types: decompression can fail
+        # via any of several exception types depending on how a hostile
+        # member is malformed, and naming them one by one has already missed
+        # one on three separate occasions. Do not narrow this back to a
+        # tuple of named types. KeyboardInterrupt and SystemExit derive from
+        # BaseException, not Exception, so they still propagate.
         contents = archive.read(MIMETYPE_NAME)
     except Exception as exc:
         raise NotFinaleFileError(f"{path} is a zip archive but not a Finale .musx") from exc
