@@ -1,0 +1,71 @@
+"""Tests for provenance-stamp parsing in legacy .mus headers."""
+
+from collections.abc import Callable
+
+from finale_file_parser.version.mus import parse
+
+
+def test_parses_both_stamps(mus_metadata_header: Callable[..., bytes]) -> None:
+    detail = parse(mus_metadata_header())
+    assert detail.created is not None and detail.modified is not None
+    assert (detail.created.year, detail.created.month, detail.created.day) == (2011, 10, 23)
+    assert (detail.modified.year, detail.modified.month, detail.modified.day) == (2012, 4, 1)
+    assert detail.created.application == "FIN"
+    assert detail.created.platform == "MAC"
+
+
+def test_banner_and_year_are_unaffected_by_stamps(
+    mus_metadata_header: Callable[..., bytes],
+) -> None:
+    detail = parse(mus_metadata_header())
+    assert detail.year == 2011
+    assert detail.banner.startswith("Finale(R) 2011")
+
+
+def test_windows_platform_tag(mus_metadata_header: Callable[..., bytes]) -> None:
+    created = parse(mus_metadata_header(platform=b"WIN")).created
+    assert created is not None
+    assert created.platform == "WIN"
+
+
+def test_implausible_month_yields_none_for_that_stamp_only(
+    mus_metadata_header: Callable[..., bytes],
+) -> None:
+    detail = parse(mus_metadata_header(created=(111, 13, 1)))
+    assert detail.created is None
+    assert detail.modified is not None
+
+
+def test_implausible_year_yields_none(mus_metadata_header: Callable[..., bytes]) -> None:
+    assert parse(mus_metadata_header(created=(10, 6, 1))).created is None  # 1910
+    assert parse(mus_metadata_header(created=(200, 6, 1))).created is None  # 2100
+
+
+def test_implausible_day_yields_none(mus_metadata_header: Callable[..., bytes]) -> None:
+    assert parse(mus_metadata_header(created=(111, 6, 0))).created is None
+    assert parse(mus_metadata_header(created=(111, 6, 32))).created is None
+
+
+def test_missing_application_tag_yields_none(mus_metadata_header: Callable[..., bytes]) -> None:
+    assert parse(mus_metadata_header(app=b"")).created is None
+
+
+def test_stamp_is_all_or_nothing_never_partial(
+    mus_metadata_header: Callable[..., bytes],
+) -> None:
+    # A bad date must not leave a stamp carrying only the tags.
+    assert parse(mus_metadata_header(created=(0, 0, 0))).created is None
+
+
+def test_truncated_header_yields_no_stamps_and_does_not_raise(
+    mus_metadata_header: Callable[..., bytes],
+) -> None:
+    detail = parse(mus_metadata_header(size=0x60))
+    assert detail.created is None
+    assert detail.modified is None
+    assert detail.year == 2011
+
+
+def test_empty_header_does_not_raise() -> None:
+    detail = parse(b"")
+    assert detail.created is None and detail.modified is None and detail.year is None

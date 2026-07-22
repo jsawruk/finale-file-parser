@@ -38,6 +38,7 @@ EXPECTED_PUBLIC_NAMES = {
     "FileVersion",
     "FinaleFileError",
     "MusDetail",
+    "MusStamp",
     "MusxContainer",
     "MusxDetail",
     "NotFinaleFileError",

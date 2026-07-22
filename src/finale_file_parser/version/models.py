@@ -38,6 +38,20 @@ class AppVersion:
 
 
 @dataclass(frozen=True)
+class MusStamp:
+    """One provenance stamp from a .mus header: when, by what, on which platform."""
+
+    year: int
+    month: int
+    day: int
+    application: str
+    """Observed: "FIN"."""
+
+    platform: str
+    """Observed: "MAC" or "WIN". Each stamp carries its own — do not assume both agree."""
+
+
+@dataclass(frozen=True)
 class MusDetail:
     """Version evidence from a legacy .mus header."""
 
@@ -46,6 +60,11 @@ class MusDetail:
 
     year: int | None
     """Marketing year parsed from the banner, or None if it did not match."""
+
+    created: MusStamp | None = None
+    modified: MusStamp | None = None
+    """Mirrors MusxDetail's created/modified pair, so the same provenance
+    question can be asked of either format."""
 
 
 @dataclass(frozen=True)

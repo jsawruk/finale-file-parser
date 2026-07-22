@@ -14,6 +14,7 @@ from finale_file_parser.version.models import (
     MusDetail,
     MusxDetail,
 )
+from finale_file_parser.version.mus import MUS_METADATA_SIZE
 
 UNKNOWN_LABEL = "unknown version"
 
@@ -33,7 +34,7 @@ def detect_version(path: str | os.PathLike[str]) -> FileVersion:
     """
     path = Path(path)
     with open(path, "rb") as handle:
-        header = handle.read(HEADER_SIZE)
+        header = handle.read(max(HEADER_SIZE, MUS_METADATA_SIZE))
 
     family = classify(header)
     if family is Family.MUS:
