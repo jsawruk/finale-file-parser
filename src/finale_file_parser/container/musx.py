@@ -100,9 +100,11 @@ class MusxContainer:
             # from BaseException, not Exception, so they still propagate.
             return self._archive.read(name)
         except ValueError:
-            # zipfile raises exactly this type when the handle is already
-            # closed (see MusxContainer.close()). That is a caller misusing a
-            # closed resource, not a hostile member failing to decompress -
+            # zipfile raises ValueError for handle-state problems, of which the
+            # reachable one here is reading after close() (the other, an open
+            # writing handle, cannot occur - this module never opens for
+            # write). That is a caller misusing a closed resource, rather than
+            # a hostile member failing to decompress -
             # a different failure category from everything the comment above
             # covers, so it must not be relabeled as CorruptContainerError.
             raise
@@ -142,7 +144,15 @@ def open_musx(path: str | os.PathLike[str]) -> MusxContainer:
     """
     try:
         archive = zipfile.ZipFile(path)
-    except zipfile.BadZipFile as exc:
+    except (zipfile.BadZipFile, NotImplementedError) as exc:
+        # NotImplementedError comes from zipfile's own central-directory parse
+        # when an entry declares an extract_version above MAX_EXTRACT_VERSION.
+        # It is a malformed-archive signal like BadZipFile, not a gap in our
+        # implementation.
+        #
+        # Deliberately NOT widened to OSError: FileNotFoundError subclasses it,
+        # and a missing path must keep raising FileNotFoundError per the
+        # contract above. Guard the *reads* broadly, not the open.
         raise NotFinaleFileError(f"{path} is not a readable archive") from exc
 
     try:

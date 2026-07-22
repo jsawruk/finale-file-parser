@@ -429,3 +429,22 @@ def test_read_translates_deflate_score_member_with_corrupt_bytes(tmp_path: Path)
     with open_musx(path) as container:
         with pytest.raises(CorruptContainerError):
             container.read("score.dat", max_bytes=1024)
+
+
+def test_rejects_unsupported_extract_version(tmp_path: Path) -> None:
+    """zipfile's own central-directory parse raises NotImplementedError when an
+    entry declares an extract_version above MAX_EXTRACT_VERSION. That is a
+    malformed archive, and must surface as NotFinaleFileError rather than
+    escaping raw."""
+    path = tmp_path / "future.musx"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("mimetype", MIMETYPE)
+        archive.writestr("score.dat", b"payload")
+    raw = bytearray(path.read_bytes())
+    index = raw.find(b"PK\x01\x02")
+    assert index != -1, "no central directory record found"
+    raw[index + 6] = 99  # extract_version, well above MAX_EXTRACT_VERSION (63)
+    path.write_bytes(bytes(raw))
+
+    with pytest.raises(NotFinaleFileError):
+        open_musx(path)
