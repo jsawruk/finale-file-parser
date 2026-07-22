@@ -83,10 +83,16 @@ class MusxContainer:
             )
         try:
             return self._archive.read(name)
-        except zipfile.BadZipFile as exc:
-            raise CorruptContainerError(
-                f"member {name!r} is corrupt: its local header disagrees with the central directory"
-            ) from exc
+        except (zipfile.BadZipFile, RuntimeError, OSError, NotImplementedError) as exc:
+            # Decompressing a hostile member can fail however its codec fails:
+            # a local header that disagrees with the central directory
+            # (BadZipFile), an encryption bit set (RuntimeError), an
+            # unsupported or deflate64 compression method (NotImplementedError
+            # — itself a RuntimeError subclass, named explicitly so this reads
+            # as "however decompression failed" rather than an enumerated
+            # list), or a codec rejecting the stream outright, e.g. bzip2
+            # (OSError). All of these mean the member is corrupt.
+            raise CorruptContainerError(f"member {name!r} could not be decompressed") from exc
 
     def score_stream(self) -> bytes:
         """Return the raw, still-obfuscated score payload.
@@ -111,7 +117,13 @@ def open_musx(path: str | os.PathLike[str]) -> MusxContainer:
         FileNotFoundError: no such path.
         NotFinaleFileError: not a readable zip, or a zip that does not carry the
             Finale notation mimetype.
-        CorruptContainerError: a Finale archive violating a structural limit.
+        CorruptContainerError: the archive violates a structural limit.
+            Structural validation runs before the Finale mimetype is
+            confirmed, so this can be raised by an archive that turns out not
+            to be a Finale file at all.
+
+    OS-level errors from opening the path itself (e.g. IsADirectoryError,
+    PermissionError) propagate unchanged.
     """
     try:
         archive = zipfile.ZipFile(path)
@@ -121,10 +133,15 @@ def open_musx(path: str | os.PathLike[str]) -> MusxContainer:
     try:
         entries = _validated_entries(archive)
         _require_finale_mimetype(archive, path)
-    except (zipfile.BadZipFile, RuntimeError) as exc:
-        # A member read (e.g. the mimetype gate below) can hit a local header
-        # that disagrees with the central directory, or a member with the
-        # encryption bit set. Both mean "not a readable Finale archive".
+    except (zipfile.BadZipFile, RuntimeError, OSError, NotImplementedError) as exc:
+        # The mimetype read below can fail however decompression fails: a
+        # local header that disagrees with the central directory
+        # (BadZipFile), a member with the encryption bit set (RuntimeError),
+        # an unsupported or deflate64 compression method (NotImplementedError
+        # — itself a RuntimeError subclass, named explicitly so this guard
+        # reads as "however decompression failed" rather than an enumerated
+        # list), or a codec rejecting the stream outright, e.g. bzip2
+        # (OSError). All of these mean "not a readable Finale archive".
         archive.close()
         raise NotFinaleFileError(f"{path} is not a readable Finale archive") from exc
     except Exception:

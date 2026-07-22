@@ -8,10 +8,11 @@ from finale_file_parser.version.models import FinaleFileError
 
 
 class CorruptContainerError(FinaleFileError):
-    """The archive is a Finale container but violates a structural safety rule.
+    """The archive violates a structural safety rule.
 
-    Distinct from NotFinaleFileError, which means "this is not a Finale file at
-    all". This means "it is one, and it is malformed or hostile".
+    Structural validation runs before the Finale mimetype is confirmed, so
+    this can be raised by an archive that is not a Finale file at all, not
+    only by a confirmed Finale container that turns out malformed or hostile.
     """
 
 

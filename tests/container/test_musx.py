@@ -274,3 +274,93 @@ def test_entries_is_read_only(make_archive: Callable[..., Path]) -> None:
     with open_musx(make_archive()) as container:
         with pytest.raises(AttributeError):
             container.entries = ()  # type: ignore[misc]
+
+
+# --- Fix pass 2, Findings 1+2: the decompression guard is a category, not a --
+# --- named list of exception types ------------------------------------------
+#
+# `BadZipFile` and `RuntimeError` were the two types a previous reviewer
+# happened to name. Decompressing a hostile member can fail in several other
+# ways: bzip2 rejecting a stream it doesn't recognise (OSError), or an
+# unsupported/unknown compression method (NotImplementedError). Each test
+# below drives one of those and confirms the guard categorises by "however
+# decompression failed", not by an enumerated list.
+
+
+def _set_central_directory_compress_type(path: Path, member_name: str, compress_type: int) -> None:
+    """Patch the declared compression method of `member_name`'s central
+    directory record in place, leaving the actual member bytes untouched.
+
+    The point of each escape being tested is that zipfile's decompressor
+    rejects what it finds for the declared method; genuine compressed data
+    for that method is not required.
+    """
+    data = bytearray(path.read_bytes())
+    name_bytes = member_name.encode()
+    signature = b"PK\x01\x02"
+    pos = 0
+    while True:
+        pos = data.find(signature, pos)
+        if pos == -1:
+            raise AssertionError(f"central directory record for {member_name!r} not found")
+        name_len = struct.unpack_from("<H", data, pos + 28)[0]
+        if bytes(data[pos + 46 : pos + 46 + name_len]) == name_bytes:
+            struct.pack_into("<H", data, pos + 10, compress_type)
+            path.write_bytes(bytes(data))
+            return
+        pos += len(signature)
+
+
+def test_rejects_bzip2_mimetype_member(tmp_path: Path) -> None:
+    """A mimetype member declared as bzip2-compressed makes archive.read()
+    raise OSError: Invalid data stream, since the stored bytes are not valid
+    bzip2. Must translate to NotFinaleFileError, same as any other unreadable
+    mimetype member."""
+    path = tmp_path / "bzip2-mimetype.musx"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("mimetype", MIMETYPE, compress_type=zipfile.ZIP_STORED)
+        archive.writestr("score.dat", b"x")
+    _set_central_directory_compress_type(path, "mimetype", zipfile.ZIP_BZIP2)
+    with pytest.raises(NotFinaleFileError):
+        open_musx(path)
+
+
+def test_read_translates_bzip2_score_member(tmp_path: Path) -> None:
+    """The same bzip2 escape, but on a post-open member read: score.dat
+    declared as bzip2-compressed must translate to CorruptContainerError."""
+    path = tmp_path / "bzip2-score.musx"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("mimetype", MIMETYPE, compress_type=zipfile.ZIP_STORED)
+        archive.writestr("score.dat", b"not actually bzip2 data")
+    _set_central_directory_compress_type(path, "score.dat", zipfile.ZIP_BZIP2)
+    with open_musx(path) as container:
+        with pytest.raises(CorruptContainerError):
+            container.score_stream()
+
+
+def test_read_translates_unsupported_compression_method(tmp_path: Path) -> None:
+    """An unknown/unsupported compression method on a member raises
+    NotImplementedError from zipfile; must translate to CorruptContainerError,
+    not escape raw."""
+    path = tmp_path / "unsupported-method.musx"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("mimetype", MIMETYPE, compress_type=zipfile.ZIP_STORED)
+        archive.writestr("score.dat", b"payload")
+    _set_central_directory_compress_type(path, "score.dat", 99)
+    with open_musx(path) as container:
+        with pytest.raises(CorruptContainerError):
+            container.read("score.dat", max_bytes=1024)
+
+
+def test_read_translates_encrypted_non_mimetype_member(tmp_path: Path) -> None:
+    """The encryption-bit escape, previously only tested against mimetype
+    (inside open_musx's guard), must also translate at the read()/
+    score_stream() guard for a member encountered after a successful open."""
+    path = tmp_path / "encrypted-score.musx"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("mimetype", MIMETYPE, compress_type=zipfile.ZIP_STORED)
+        archive.writestr("score.dat", b"payload")
+    _set_central_directory_flag_bits(path, "score.dat", 0x1)  # bit 0: encrypted
+    with open_musx(path) as container:
+        with pytest.raises(CorruptContainerError):
+            container.read("score.dat", max_bytes=1024)
