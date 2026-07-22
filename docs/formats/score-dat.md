@@ -58,7 +58,22 @@ INCREMENT     = 0x3039
 RESET_EVERY   = 0x20000        # 131,072 bytes
 ```
 
-For each byte at index `i`:
+### Pseudocode
+
+```
+function decrypt(data):
+    state = INITIAL_STATE
+    for i from 0 to length(data) - 1:
+        if i mod RESET_EVERY == 0:
+            state = INITIAL_STATE                       # keystream restarts
+        state = (state * MULTIPLIER + INCREMENT) mod 2^32
+        upper = (state >> 16) and 0xFFFF                # high 16 bits
+        c     = (upper + (upper div 255)) and 0xFF      # integer division
+        output[i] = data[i] xor c
+    return output
+```
+
+Step by step, for each byte at index `i`:
 
 1. If `i % RESET_EVERY == 0`, reset `state = INITIAL_STATE`.
 2. Advance: `state = (state * MULTIPLIER + INCREMENT) mod 2**32`.
@@ -85,18 +100,33 @@ def decrypt(data: bytes) -> bytes:
 
 #### Three details that are easy to get wrong
 
-**The reset is real and it hides.** The keystream restarts every 131,072 bytes. Because the median
-`score.dat` is ~96 KB, **an implementation that omits the reset decodes most files correctly** and
-fails only on those above 128 KB. Test with a file over that size, or the bug ships.
+**The reset is real and it hides.** The keystream restarts every 131,072 bytes. Only **68 of the
+401 corpus archives** have a `score.dat` larger than that, so an implementation that omits the reset
+**silently decodes 333 of 401 files (83%) correctly** and fails only on the largest.
+
+Measured directly, on the largest file (`score.dat` = 412,805 bytes, 3.1 keystream blocks):
+
+| Decoder | Largest file | Smallest file (86,170 bytes) |
+|---|---|---|
+| With the reset | OK — 10,781,112 bytes of XML | OK — 2,481,759 bytes |
+| Without the reset | **fails to inflate** | OK — identical output |
+
+The smallest file never reaches the boundary, so both decoders agree on it. **Test with a
+`score.dat` over 128 KiB, or the bug ships.**
 
 **`upper + upper // 255` is not `upper / 255`.** It is integer division added back to the value,
 then truncated to 8 bits. This maps the 16-bit range onto 0-255 slightly differently than a plain
 shift or modulo, and getting it wrong produces plausible-looking garbage rather than an obvious
 failure.
 
-**The keystream is constant**, so it need not be regenerated per file — or per byte. Compute the
-131,072-byte block once, cache it, and tile it. Across this corpus that is the difference between
-minutes and ~3 seconds.
+**The keystream is constant**, so it need not be regenerated per file — or per byte. Because the
+generator is reseeded to the same `INITIAL_STATE` at every `0x20000` boundary and nothing else feeds
+it, the keystream is one fixed 131,072-byte block repeated end to end. Compute it once, cache it,
+and tile it.
+
+Verified on the largest corpus file: the tiled implementation produces **byte-identical output** to
+the per-byte LCG version, in 15.1 ms versus 68.7 ms — 4.6× faster on one file, and the gap widens
+across a corpus because the block is computed once rather than per file.
 
 ```python
 KEYSTREAM = _build_block()                       # once
@@ -169,18 +199,51 @@ has not yet parsed them.
 
 Recorded so the reasoning can be checked, and so the dead ends are not re-walked.
 
-Independently, before consulting any implementation:
+### What was derived from the corpus alone
+
+Before consulting any implementation:
 
 - **The keystream is fixed, not per-file.** 40 archives share 12-14 identical leading ciphertext
-  bytes while measuring 7.9985 bits/byte of entropy. Per-file keys would randomise that prefix.
-- **The plaintext is compressed.** XOR-ing two ciphertexts together — which cancels a shared
-  keystream — leaves entropy at 7.9973 rather than collapsing into structure. That means the
-  plaintexts themselves are near-random, i.e. compressed.
-- **`keystream[0:3] = 09 5c 5b`**, from the ciphertext `16 d7 53` XOR the gzip magic `1f 8b 08`.
-- **Not a short repeating key.** Byte equality at lags 8-512 sits at the 0.39% random baseline.
-- **Not a common LCG** within a ~25M-combination search over standard multipliers, increments, and
-  output shifts. That search contained the correct multiplier and increment; it capped seeds at
-  65,535, and the true seed is `0x28006D45` — about 671 million.
+  bytes while measuring 7.9985 bits/byte of entropy. Per-file keys or a random IV would randomise
+  that prefix; a constant prefix means a constant keystream over a constant plaintext header.
+- **The plaintext is compressed.** XOR-ing two ciphertexts together cancels a shared keystream,
+  leaving `plaintext_A XOR plaintext_B`. That result stayed at 7.9973 bits/byte instead of
+  collapsing into structure — so the plaintexts are themselves near-random, i.e. compressed. The
+  first 14 bytes did XOR to zero, which is the shared header showing through.
+- **`keystream[0:3] = 09 5c 5b`**, from ciphertext `16 d7 53` XOR the gzip magic `1f 8b 08`.
+- **Not a short repeating XOR key.** Byte equality at lags 8, 16, 24, 32, 48, 64, 128, 256 and 512
+  all sat at 0.30-0.47%, against a 0.39% random baseline. A repeating key of any of those lengths
+  would spike sharply.
+- **The output is gzip**, from denigma's *prose* README, which documents writing a temporary
+  `score.gz` before decompressing it.
 
-The seed came from denigma's source (see Attribution). Everything above is reproducible from the
-corpus alone.
+### Dead ends
+
+**A classic-PRNG search that should have worked, and did not.** Assuming a standard gzip header with
+`MTIME = 0` gives `keystream[0:8] = 09 5c 5b a9 a9 8d f5 5f`. That was searched against roughly 25
+million combinations: multipliers `0x41C64E6D`, `1103515245`, `214013`, `22695477`, `69069`,
+`16807`, `1664525`, `134775813`, `0x5851F42D`; increments `0x3039`, `12345`, `2531011`, `1`, `0`,
+`11`; output shifts of 0, 8, 16 and 24 bits; and seeds 0 through 65,535. **No hit.**
+
+The search space contained the correct multiplier (`0x41C64E6D`) and the correct increment
+(`0x3039`). It failed on two counts: the seed is `0x28006D45` — about 671 million, four orders of
+magnitude past the 65,535 cap — and the output byte is not a plain shift of the state but
+`(upper + upper // 255) & 0xFF`, which no shift value would have produced.
+
+**A wrong conclusion drawn from that failure.** The combination of uniform keystream, no
+periodicity, and no LCG match was read as pointing at *a stream cipher such as RC4 with a fixed
+key* — which would have been unbreakable from ciphertext alone and would have ended the
+investigation. That was wrong. It was an ordinary LCG the whole time; the search was simply bounded
+too tightly and assumed too simple an output function. **A failed parameter search is evidence about
+the search, not about the algorithm.**
+
+### What came from reading source
+
+The seed `0x28006D45`, the output function `(upper + upper // 255) & 0xFF`, and **the 128 KiB
+reset** were read from denigma's `main.cpp` (MIT). None of the three was derived here. The reset in
+particular would have been difficult to find from ciphertext: it produces no detectable periodicity
+in the ciphertext, because the plaintext beneath it is compressed and therefore random-looking.
+
+All three were then **verified against the corpus**: 401 of 401 archives decrypt and inflate to
+valid XML, and the reset specifically was confirmed by decoding the largest file both with and
+without it — see the table above.
