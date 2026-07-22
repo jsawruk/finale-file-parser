@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 from finale_file_parser.version import mus, musx
-from finale_file_parser.version.family import HEADER_SIZE, classify
+from finale_file_parser.version.family import classify
 from finale_file_parser.version.models import (
     Confidence,
     Family,
@@ -14,6 +14,7 @@ from finale_file_parser.version.models import (
     MusDetail,
     MusxDetail,
 )
+from finale_file_parser.version.mus import MUS_METADATA_SIZE
 
 UNKNOWN_LABEL = "unknown version"
 
@@ -33,7 +34,11 @@ def detect_version(path: str | os.PathLike[str]) -> FileVersion:
     """
     path = Path(path)
     with open(path, "rb") as handle:
-        header = handle.read(HEADER_SIZE)
+        # MUS_METADATA_SIZE (0xA0) exceeds HEADER_SIZE (0x60): the read is sized
+        # to reach both .mus provenance stamps, not just the banner that
+        # `classify` inspects, so one read serves both `classify` and
+        # `mus.parse`.
+        header = handle.read(MUS_METADATA_SIZE)
 
     family = classify(header)
     if family is Family.MUS:

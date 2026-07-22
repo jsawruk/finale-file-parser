@@ -38,14 +38,43 @@ class AppVersion:
 
 
 @dataclass(frozen=True)
+class MusStamp:
+    """One provenance stamp from a .mus header: when, by what, on which platform."""
+
+    year: int
+    month: int
+    day: int
+    application: str
+    """Observed: "FIN"."""
+
+    platform: str
+    """Observed: "MAC" or "WIN". Each stamp carries its own — do not assume both agree."""
+
+
+@dataclass(frozen=True)
 class MusDetail:
-    """Version evidence from a legacy .mus header."""
+    """Version evidence from a legacy .mus header.
+
+    `created`/`modified` share their names with `MusxDetail.created`/
+    `.modified` but not their shape: these are `MusStamp` (date, application,
+    platform); `MusxDetail`'s pair is `AppVersion` (major/maint/devStatus/
+    build). Both formats expose created/modified provenance, but `.mus`
+    records *when and where* a file was written while `.musx` records *which
+    application version* wrote it. A caller cannot treat `.created`/
+    `.modified` generically across the two formats.
+    """
 
     banner: str
     """The copyright banner, cut at the first NUL and decoded verbatim."""
 
     year: int | None
     """Marketing year parsed from the banner, or None if it did not match."""
+
+    created: MusStamp | None = None
+    """When and where the file was first written, or None if unparseable."""
+
+    modified: MusStamp | None = None
+    """When and where the file was last written, or None if unparseable."""
 
 
 @dataclass(frozen=True)

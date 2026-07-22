@@ -10,6 +10,19 @@ and resolved ones **DECIDED**.
 
 ---
 
+## 2026-07-22 — DECIDED: both `.mus` and `.musx` are in scope
+
+Settled by what shipped: `detect_version` handles both, `.mus` banner parsing and provenance stamps
+are done, and `.musx` has a full container reader. Reason: the corpus is 238 `.mus` and 401 `.musx`
+— dropping either would abandon a third of real files.
+
+## 2026-07-22 — DECIDED: use community reverse-engineering as reference, not as source
+
+Published community documentation (e.g. the MIT-licensed EnigmaXML documentation) may be read as a
+reference for what the format is; implementations are written independently rather than ported.
+Reason: keeps provenance simple while not re-deriving what is already public. Licenses of known
+sources are recorded in `docs/REFERENCES.md`.
+
 ## 2026-07-21 — DECIDED: one module owns archive access
 
 `container/` owns opening, validating, and reading `.musx` archives. `version/musx.py` is a client.
@@ -98,14 +111,20 @@ permissive license suits a format-interoperability library that other tools need
 
 <!-- Add architectural forks here as they arise, each with a recommended default and "owner to
      confirm". Move to a DECIDED entry above once resolved. -->
-- **OPEN — format coverage: `.musx` only, or `.mus` too?** They are different formats (`.musx` is a
-  zip container; legacy `.mus` is a monolithic binary). Recommended default: target `.musx` first
-  and treat `.mus` as a later, separate reader behind the same public API. Owner to confirm.
-- **OPEN — how much to rely on existing community reverse-engineering work** (e.g. the `musx`
-  ecosystem and Finale plug-in documentation), and under what license those findings arrive.
-  Recommended default: use published documentation as reference, don't copy code. Owner to confirm.
-  (Licenses of the known community sources are recorded in `docs/REFERENCES.md` — the code-bearing
-  ones are MIT, the Finale Lua scripts CC0-1.0.)
+- **OPEN — should `.musx` also produce `MusStamp` provenance?** `.musx`'s `NotationMetadata.xml`
+  `created`/`modified` blocks carry `<year><month><day><application><platform>` — field for field,
+  exactly what `MusStamp` (introduced for `.mus`) models. `version/musx.py` currently reads only
+  `platform` out of those blocks, collapses `created`'s and `modified`'s platform with `or` into a
+  single `MusxDetail.platform`, and discards the dates entirely. So the same data is modeled two
+  incompatible ways one module apart: `.mus` keeps full per-stamp `MusStamp`s, `.musx` throws the
+  dates away and flattens platform to one field. If `.musx` moved to `MusStamp` provenance too,
+  `MusxDetail.platform` would presumably be dropped in favour of a platform on each stamp, matching
+  `.mus`'s "each stamp carries its own — do not assume both agree" rule. Recommended default:
+  unify, because leaving this alone means two representations of identical data drifting further
+  apart with every change to either module. **Not done in this branch** — `MusxDetail` is a
+  published type, and changing its shape (dropping `platform`, adding stamp-based `created`/
+  `modified`) needs its own design pass, not a slip-in alongside a `.mus`-only slice. Owner to
+  confirm.
 - **OPEN — GUI framework and repo layout for the desktop frontend.** The frontend is DECIDED (see
   above); how to build and package it is not. Recommended default: keep the parser a standalone
   importable package and add the app as a separate package in the same repo, so the library never

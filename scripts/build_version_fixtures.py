@@ -18,8 +18,10 @@ from typing import cast
 
 from defusedxml.ElementTree import fromstring as defused_fromstring
 
-from finale_file_parser import NotFinaleFileError, detect_version
+from finale_file_parser import MusDetail, NotFinaleFileError, detect_version
 from finale_file_parser.version.family import HEADER_SIZE
+from finale_file_parser.version.models import MusStamp
+from finale_file_parser.version.mus import MUS_METADATA_SIZE
 
 CORPUS = Path("corpus")
 OUT = Path("tests/fixtures/version")
@@ -167,8 +169,8 @@ def main() -> None:
     for name, src in sorted(_mus_fixtures().items()):
         target = OUT / f"{name}.bin"
         with src.open("rb") as handle:
-            target.write_bytes(handle.read(HEADER_SIZE))
-        entries.append(_entry(target, src, f"first {HEADER_SIZE} bytes"))
+            target.write_bytes(handle.read(MUS_METADATA_SIZE))
+        entries.append(_entry(target, src, f"first {MUS_METADATA_SIZE} bytes"))
 
     for name, src in sorted(_musx_fixtures().items()):
         target = OUT / f"{name}.musx"
@@ -199,7 +201,7 @@ def _assert_metadata_only(archive_path: Path) -> None:
 
 def _entry(target: Path, source: Path, taken: str) -> str:
     result = detect_version(target)
-    return (
+    text = (
         "[[fixture]]\n"
         f'file = "{target.name}"\n'
         f'source = "{source.relative_to(CORPUS)}"\n'
@@ -207,6 +209,21 @@ def _entry(target: Path, source: Path, taken: str) -> str:
         f'expected_family = "{result.family.value}"\n'
         f'expected_label = "{result.label}"\n'
         f'expected_confidence = "{result.confidence.value}"\n'
+    )
+    if isinstance(result.detail, MusDetail):
+        if result.detail.created is not None:
+            text += f"created = {_stamp_toml(result.detail.created)}\n"
+        if result.detail.modified is not None:
+            text += f"modified = {_stamp_toml(result.detail.modified)}\n"
+    return text
+
+
+def _stamp_toml(stamp: MusStamp) -> str:
+    return (
+        "{ "
+        f"year = {stamp.year}, month = {stamp.month}, day = {stamp.day}, "
+        f'application = "{stamp.application}", platform = "{stamp.platform}"'
+        " }"
     )
 
 
