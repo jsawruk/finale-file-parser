@@ -26,14 +26,16 @@ a list here.
 from __future__ import annotations
 
 import finale_file_parser
-from finale_file_parser import container
+from finale_file_parser import container, enigma
 from finale_file_parser.version import models as version_models
 
 EXPECTED_PUBLIC_NAMES = {
+    "MAX_INFLATED",
     "AppVersion",
     "Confidence",
     "ContainerEntry",
     "CorruptContainerError",
+    "CorruptScoreError",
     "Family",
     "FileVersion",
     "FinaleFileError",
@@ -42,8 +44,10 @@ EXPECTED_PUBLIC_NAMES = {
     "MusxDetail",
     "NotFinaleFileError",
     "ProvenanceStamp",
+    "decrypt",
     "detect_version",
     "open_musx",
+    "score_xml",
 }
 
 
@@ -63,6 +67,10 @@ def test_every_subpackage_export_reaches_the_package_root() -> None:
     root = set(finale_file_parser.__all__)
     missing = set(container.__all__) - root
     assert not missing, f"exported by finale_file_parser.container but not at the root: {missing}"
+    missing_enigma = set(enigma.__all__) - root
+    assert not missing_enigma, (
+        f"exported by finale_file_parser.enigma but not at the root: {missing_enigma}"
+    )
     version_public = (
         {name for name in version_models.__all__ if not name.startswith("_")}
         if hasattr(version_models, "__all__")
