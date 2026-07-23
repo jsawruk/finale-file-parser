@@ -1,4 +1,5 @@
 import gzip
+import random
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
@@ -52,9 +53,20 @@ def test_accepts_a_str_path(make_score: Callable[..., Path]) -> None:
 def test_handles_a_payload_spanning_the_keystream_reset(
     make_score: Callable[..., Path],
 ) -> None:
-    """Exercises the reset end to end, not just in the cipher unit tests."""
-    big = b'<finale version="18.0">' + b"<t>x</t>" * 40000 + b"</finale>"
-    assert score_xml(make_score(xml=big)) == big
+    """Exercises the keystream reset end to end.
+
+    The reset lives at RESET_EVERY (131,072) bytes of *encrypted* score.dat, so
+    the score.dat must exceed that. A compressible payload would gzip down to a
+    few hundred bytes and never reach the boundary — the point this test is
+    named for. Deterministic random bytes are incompressible, so the gzip
+    stream (and thus the encrypted score.dat) is ~200 KB, safely past the reset.
+    """
+    from finale_file_parser.enigma.crypt import RESET_EVERY
+
+    payload = random.Random(0xF1A1E).randbytes(200_000)
+    encrypted = decrypt(gzip.compress(payload))
+    assert len(encrypted) > RESET_EVERY, "payload must span the reset to test it"
+    assert score_xml(make_score(raw_plaintext=gzip.compress(payload))) == payload
 
 
 def test_rejects_a_stream_that_is_not_gzip(make_score: Callable[..., Path]) -> None:

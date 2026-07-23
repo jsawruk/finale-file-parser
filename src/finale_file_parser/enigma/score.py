@@ -70,4 +70,7 @@ def _inflate(data: bytes, path: str | os.PathLike[str]) -> bytes:
         raise CorruptScoreError(f"{path} score stream failed to inflate: {exc}") from exc
     if not engine.eof:
         raise CorruptScoreError(f"{path} score stream is a truncated gzip stream")
+    # Only the first gzip member is decoded; a concatenated second member or
+    # trailing bytes after EOF are ignored. Every corpus score.dat is a single
+    # member, so this is deliberate rather than a gap.
     return bytes(out)
