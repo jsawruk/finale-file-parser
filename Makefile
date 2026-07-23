@@ -7,11 +7,12 @@
 PY ?= uv run
 CODE ?= src tests scripts
 
-.PHONY: help install test lint fmt typecheck check clean
+.PHONY: help install hooks test lint fmt typecheck check clean
 
 help:
 	@echo "Targets:"
-	@echo "  install    create the venv and install dependencies (uv sync)"
+	@echo "  install    create the venv, install dependencies (uv sync), and enable git hooks"
+	@echo "  hooks      point git at .githooks/ (blocks direct pushes to main)"
 	@echo "  test       run the test suite (pytest)"
 	@echo "  lint       ruff check"
 	@echo "  fmt        auto-format with ruff"
@@ -19,8 +20,16 @@ help:
 	@echo "  check      lint + format-check + typecheck + test  (the pre-push gate)"
 	@echo "  clean      remove caches and build artifacts"
 
-install:
+install: hooks
 	uv sync
+
+# Git will not use committed hooks on its own — core.hooksPath is local config, so every fresh
+# clone starts unprotected until this runs. It is wired into `install` so that happens by default.
+hooks:
+	@git rev-parse --git-dir >/dev/null 2>&1 || { echo "not a git repo; skipping hooks"; exit 0; }
+	@chmod +x .githooks/* 2>/dev/null || true
+	@git config core.hooksPath .githooks
+	@echo "git hooks enabled (core.hooksPath=.githooks) — direct pushes to main are blocked"
 
 test:
 	$(PY) pytest
