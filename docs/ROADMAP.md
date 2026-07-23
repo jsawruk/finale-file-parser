@@ -41,16 +41,26 @@ limit is verified by mutation, because no real corpus archive trips one.
       decode, every result schema `version="18.0"`. See `docs/formats/score-dat.md` and
       `docs/ARCHITECTURE.md`.
 
-## Next up — parse EnigmaXML into a model
+## EnigmaXML generic structure — done
 
-`score_xml` hands back a raw EnigmaXML document; nothing yet turns it into structured data. The
-`<finale>` document carries `mappings`, `header`, `options`, `others`, `details`, `entries`, and
-`texts` pools, described by the community
-[EnigmaXML documentation](https://github.com/Project-Attacca/enigmaxml-documentation). Inflated
-documents run 2.5-10.8 MB, so parsing strategy (streaming vs. whole-document) is a real design
-question, not an obvious one.
+- [x] Parse EnigmaXML into a Python document model: seven pools (`header`, `mappings`, `options`,
+      `others`, `details`, `entries`, `texts`), each holding recursive `Record`s (tag, attrs, text,
+      fields) in document order, navigable via `Pool.of_tag`. Verified against all 401 corpus
+      archives. See `docs/ARCHITECTURE.md` and
+      `docs/superpowers/specs/2026-07-22-enigma-document-design.md`.
 
-- [ ] Parse EnigmaXML into a Python data model covering the pools above.
+## Next up — keyed lookup
+
+`Pool.of_tag` is a linear, tag-only lookup; nothing yet indexes records by their identifying
+attributes. The survey found no fixed key set is unique — `cmper` alone spans 54 tags, and
+`measSpec` needs `part` alongside `cmper` to disambiguate its per-part variants — so keyed lookup
+is deferred until the full key-attribute set per tag is mapped.
+
+- [ ] Map the key-attribute set each record tag actually needs (starting from `cmper`, `part`, and
+      the `details` pool's compound `cmper1`/`cmper2` keys) and add keyed lookup once it is unique.
+- [ ] Typed record models, starting with `entries`/`note` (the musical core the recursive model
+      already reaches) — converting from the generic `Record` shape to per-tag Python types once
+      keyed lookup exists to build them from.
 
 ## Later
 

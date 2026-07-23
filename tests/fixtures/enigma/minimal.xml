@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-written synthetic EnigmaXML fixture. Every value below is an invented
+  placeholder for exercising finale_file_parser.enigma.document.parse_enigma
+  none of it is corpus content. Deliberately contains NO <fileInfo>
+  element: real EnigmaXML carries title/composer/copyright there, inside the
+  texts pool, and this project never commits that content.
+-->
+<finale version="18.0" xmlns="http://www.makemusic.com/2012/finale">
+  <header>
+    <headerData>
+      <wordOrder>1</wordOrder>
+    </headerData>
+  </header>
+  <mappings>
+    <mapGroup minInclusive="17.0"/>
+  </mappings>
+  <options>
+    <beamOptions>
+      <maxSlope>10</maxSlope>
+    </beamOptions>
+  </options>
+  <others>
+    <articDef cmper="1">
+      <charMain>46</charMain>
+    </articDef>
+    <measSpec cmper="1"/>
+    <measSpec cmper="1" part="1" shared="true"/>
+    <measSpec cmper="1" part="2" shared="true"/>
+    <shapeData cmper="9">
+      <data>1</data>
+      <data>2</data>
+      <data>3</data>
+    </shapeData>
+  </others>
+  <details>
+    <gfhold cmper1="1" cmper2="2">
+      <val>PLACEHOLDER</val>
+    </gfhold>
+  </details>
+  <entries>
+    <entry entnum="1">
+      <dura>1024</dura>
+      <note id="1"/>
+      <note id="2"/>
+    </entry>
+  </entries>
+  <texts>
+    <expression number="3">
+      <text>PLACEHOLDER</text>
+    </expression>
+  </texts>
+</finale>

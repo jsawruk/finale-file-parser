@@ -26,10 +26,12 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
   (`ContainerEntry`, `CorruptContainerError`), `names.py` (member-name safety), `musx.py`
   (`open_musx`, `MusxContainer`). `version/musx.py` is a client of this module; nothing else
   opens archives directly.
-- `src/finale_file_parser/enigma/` — decodes a `.musx`'s `score.dat` into EnigmaXML. `crypt.py`
-  (the cipher, pure — no I/O), `models.py` (`CorruptScoreError`), `score.py` (`score_xml`,
-  composing `container.open_musx` with the cipher and a capped inflate). See "Known format facts
-  — score.dat" below.
+- `src/finale_file_parser/enigma/` — decodes a `.musx`'s `score.dat` into EnigmaXML and parses that
+  EnigmaXML into a navigable document. `crypt.py` (the cipher, pure — no I/O), `models.py`
+  (`CorruptScoreError`), `score.py` (`score_xml`, composing `container.open_musx` with the cipher
+  and a capped inflate), `document.py` (`parse_enigma`, `EnigmaDocument`, `Pool`, `Record` — the
+  uniform record/pool model). See "Known format facts — score.dat" and "Known format facts —
+  EnigmaXML structure" below.
 
 ### Known format facts — version
 
@@ -124,6 +126,37 @@ every 128 KiB; the decrypted plaintext is a gzip stream that inflates roughly 28
 Verified against all 401 corpus archives: 401/401 decode, every result is schema `version="18.0"`.
 The cipher parameters are not this project's discovery — see the attribution in
 `docs/REFERENCES.md` and the DECIDED entry in `docs/DECISIONS.md`.
+
+### Known format facts — EnigmaXML structure
+
+Full reference and derivation: `docs/superpowers/specs/2026-07-22-enigma-document-design.md`.
+Verified against all 401 corpus archives (`tests/enigma/test_document_corpus_sweep.py`).
+
+- The `<finale>` root holds seven pools, always in this order when present: `header`, `mappings`,
+  `options`, `others`, `details`, `entries`, `texts`. Any pool may be absent or empty; `parse_enigma`
+  models an absent pool the same as an empty one.
+- Records are recursive, not typed: `Record` has `tag`, `attrs` (all attributes, verbatim), `text`
+  (the element's own direct text), and `fields` (child elements, keyed by local name — a scalar
+  `str`, a nested `Record`, or a tuple of either when the tag repeats). A chord's notes are nested
+  `note` fields inside an `entry` record — the same recursive rule reaches the musical core with no
+  special-cased "note" type.
+- Fields nest arbitrarily deep; the corpus and the fixtures both exercise nesting 4 levels deep
+  (e.g. `others/widget/layerTwo/layerThree/leafValue`).
+- `EnigmaDocument.version` is the **schema** version reported on the `<finale>` root (`"18.0"`
+  across the entire corpus), not the writing application's version — that lives in
+  `.musx`'s `NotationMetadata.xml`, read separately by `finale_file_parser.version`.
+- The `texts` pool carries copyright, title, and composer text (`<fileInfo type="title">…`,
+  `<expression>`, `<verse>`). Because of this, **no decoded corpus EnigmaXML is ever committed**;
+  `tests/fixtures/enigma/*.xml` are hand-written synthetic documents with invented placeholder
+  values, and `tests/enigma/test_fixtures.py` mechanically asserts no committed fixture contains a
+  `fileInfo` element at all.
+- **No fixed key set uniquely identifies a record.** `cmper=1` alone spans 54 distinct tags across
+  the corpus, and `measSpec` additionally has per-`part` variants that share a `cmper` with the
+  score-level record and with each other, distinguished only by the `part` attribute. Dropping any
+  attribute to build a key would silently lose data (verified by mutation: removing `part` from the
+  model fails a test). This is why this slice preserves every record uniformly (`Pool.of_tag`
+  linear lookup, all attributes kept verbatim) rather than indexing by a derived key — keyed lookup
+  is deferred until the full key-attribute set per tag is mapped.
 
 ## Data flow
 
