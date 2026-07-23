@@ -150,13 +150,54 @@ Verified against all 401 corpus archives (`tests/enigma/test_document_corpus_swe
   `tests/fixtures/enigma/*.xml` are hand-written synthetic documents with invented placeholder
   values, and `tests/enigma/test_fixtures.py` mechanically asserts no committed fixture contains a
   `fileInfo` element at all.
-- **No fixed key set uniquely identifies a record.** `cmper=1` alone spans 54 distinct tags across
-  the corpus, and `measSpec` additionally has per-`part` variants that share a `cmper` with the
-  score-level record and with each other, distinguished only by the `part` attribute. Dropping any
-  attribute to build a key would silently lose data (verified by mutation: removing `part` from the
-  model fails a test). This is why this slice preserves every record uniformly (`Pool.of_tag`
-  linear lookup, all attributes kept verbatim) rather than indexing by a derived key — keyed lookup
-  is deferred until the full key-attribute set per tag is mapped.
+- **No fixed key set uniquely identifies a record** without also tracking `part`: `cmper=1` alone
+  spans 54 distinct tags across the corpus, and `measSpec` additionally has per-`part` variants
+  that share a `cmper` with the score-level record and with each other, distinguished only by the
+  `part` attribute. Dropping any attribute to build a key would silently lose data (verified by
+  mutation: removing `part` from the model fails a test). This is why the document model preserves
+  every record uniformly (`Pool.of_tag` linear lookup, all attributes kept verbatim) as its
+  baseline, with keyed lookup layered on top once the full key-attribute set per pool was mapped
+  (below).
+
+### Known format facts — keyed lookup
+
+Full reference and derivation: `docs/superpowers/specs/2026-07-23-enigma-keyed-lookup-design.md`.
+Verified against all 401 corpus archives — **3.1 million records, zero collisions**
+(`tests/enigma/test_keyed_lookup_corpus_sweep.py`).
+
+Five of the seven pools — `options`, `others`, `details`, `entries`, `texts` — are keyed
+subclasses of `Pool` (`OptionsPool`, `OthersPool`, `DetailsPool`, `EntriesPool`, `TextsPool`) that
+build an index at construction and add `get`/`all_with` (or `for_entry`) lookup on top of the
+inherited `.records`/`.of_tag`. `header`/`mappings` stay plain `Pool` (with a `.record` singleton
+convenience) — they hold exactly one record each, so there is nothing to key.
+
+Each pool's full identity, measured exact and unique over the whole corpus:
+
+| Pool | Identity | Records checked |
+|---|---|---|
+| `options` | tag alone (one record per option type) | 13,691 |
+| `others` | tag + `cmper` + `inci` + `part` | 1,739,819 |
+| `details` | tag + (`cmper1`+`cmper2` **or** `entnum`) + `inci` + `part` | 1,065,174 |
+| `entries` | `entnum` (single tag `entry`) | 228,957 |
+| `texts` | tag + `number` **xor** `type` | 67,438 |
+
+- **`part` is Finale's linked-parts discriminant**: a score record (no `part` attribute) plus
+  per-part variants (`part="1"`, `part="2"`, ...) share one `cmper` (or `cmper1`/`cmper2`, or
+  `entnum`). `get(...)` with `part` omitted addresses the score record; passing `part` addresses
+  that specific variant. `all_with(tag, cmper[, cmper2])` returns the whole linked set — score
+  record plus every part variant, in document order — so nothing is dropped even though `get`
+  itself returns a single record.
+- **`get` returns the one exact `Record | None`** for a full identity — safe only because that
+  identity is unique across all 3.1M corpus records. `inci` defaults to `0` (Finale's own default
+  when the attribute is absent); key arguments normalize to `str` so `get(t, 1)` and `get(t, "1")`
+  agree, matching how the model stores every attribute as a string.
+- **A duplicate full identity raises `MalformedEnigmaError`** at index-build time, for any of the
+  five keyed pools — the index build *is* the uniqueness check. The corpus has zero duplicates, so
+  a duplicate identity in a real file would indicate a malformed document; the pool does not
+  silently keep one of the colliding records.
+- **Cross-pool link resolution — what a `cmper` on one record *refers to* on another pool — is not
+  part of this slice.** `get`/`all_with` retrieve a record by its own identity only; following a
+  reference to another pool's record is deferred (see Roadmap).
 
 ## Data flow
 
