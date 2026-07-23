@@ -33,6 +33,15 @@ entry here that supports them.
 
 <!-- Note the license of anything with code. See DECISIONS.md — open question. -->
 
+**denigma**
+
+- https://github.com/chrisroode/denigma
+- MIT License
+- Source of the `score.dat` cipher parameters used in `enigma/crypt.py`: the fixed LCG seed, the
+  `(upper + upper // 255)` output function, and the 128 KiB keystream reset. denigma's own source
+  credits [Deguerre](https://github.com/Deguerre) for working out the cipher. See
+  `docs/formats/score-dat.md` and the 2026-07-22 DECIDED entry in `docs/DECISIONS.md`.
+
 **EnigmaXML documentation**
 
 - https://github.com/Project-Attacca/enigmaxml-documentation

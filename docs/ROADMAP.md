@@ -34,15 +34,23 @@ and pull a score stream of the declared length; adversarial tests prove that a t
 archive raises `NotFinaleFileError` or `CorruptContainerError` rather than crashing. Every safety
 limit is verified by mutation, because no real corpus archive trips one.
 
-## Next up — decode `score.dat`
+## `score.dat` decoding — done
 
-`score.dat` is the wall between this project and actual notes. Every remaining item in `Later` —
-pitches, rhythms, staves, measures, score structure, and the MusicXML exporter — sits behind it:
-nothing there can start until the byte stream is turned into records. Community EnigmaXML
-reverse-engineering documentation may be read as reference for what the format is (DECIDED — see
-`docs/DECISIONS.md`), but the decoder is written independently, not ported from it.
+- [x] Decode `score.dat` (extracted by the Phase 1 container reader) into EnigmaXML
+      (`finale_file_parser.enigma.score_xml`). Verified against all 401 corpus archives: 401/401
+      decode, every result schema `version="18.0"`. See `docs/formats/score-dat.md` and
+      `docs/ARCHITECTURE.md`.
 
-- [ ] Decode `score.dat` (extracted by the Phase 1 container reader) into records/chunks.
+## Next up — parse EnigmaXML into a model
+
+`score_xml` hands back a raw EnigmaXML document; nothing yet turns it into structured data. The
+`<finale>` document carries `mappings`, `header`, `options`, `others`, `details`, `entries`, and
+`texts` pools, described by the community
+[EnigmaXML documentation](https://github.com/Project-Attacca/enigmaxml-documentation). Inflated
+documents run 2.5-10.8 MB, so parsing strategy (streaming vs. whole-document) is a real design
+question, not an obvious one.
+
+- [ ] Parse EnigmaXML into a Python data model covering the pools above.
 
 ## Later
 
