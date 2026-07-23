@@ -1,4 +1,4 @@
-"""Decoding score.dat into EnigmaXML."""
+"""Decoding score.dat into EnigmaXML, and parsing it into a document model."""
 
 from __future__ import annotations
 
