@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-written synthetic EnigmaXML fixture exercising 4-deep field nesting
+  and a repeated nested field (an entry with several notes). Every value is
+  an invented placeholder, no corpus content. Deliberately contains NO
+  <fileInfo> element.
+-->
+<finale version="18.0" xmlns="http://www.makemusic.com/2012/finale">
+  <others>
+    <widget cmper="1">
+      <layerTwo>
+        <layerThree>
+          <leafValue>NESTED-PLACEHOLDER-DEPTH-4</leafValue>
+        </layerThree>
+      </layerTwo>
+    </widget>
+  </others>
+  <entries>
+    <entry entnum="1">
+      <dura>1024</dura>
+      <note id="1"/>
+      <note id="2"/>
+      <note id="3"/>
+    </entry>
+  </entries>
+</finale>
