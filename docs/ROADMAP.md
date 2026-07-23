@@ -49,18 +49,25 @@ limit is verified by mutation, because no real corpus archive trips one.
       archives. See `docs/ARCHITECTURE.md` and
       `docs/superpowers/specs/2026-07-22-enigma-document-design.md`.
 
-## Next up — keyed lookup
+## Keyed lookup — done
 
-`Pool.of_tag` is a linear, tag-only lookup; nothing yet indexes records by their identifying
-attributes. The survey found no fixed key set is unique — `cmper` alone spans 54 tags, and
-`measSpec` needs `part` alongside `cmper` to disambiguate its per-part variants — so keyed lookup
-is deferred until the full key-attribute set per tag is mapped.
+- [x] Map the key-attribute set each record tag actually needs (`cmper`, `part`, the `details`
+      pool's compound `cmper1`/`cmper2` keys, or `entnum`) and add keyed lookup once it is unique.
+      Five keyed `Pool` subclasses (`OptionsPool`, `OthersPool`, `DetailsPool`, `EntriesPool`,
+      `TextsPool`) add `get`/`all_with`/`for_entry`, verified unique across all 401 corpus
+      archives — 3.1 million records, zero collisions. A duplicate identity raises
+      `MalformedEnigmaError` rather than silently keeping one. See `docs/ARCHITECTURE.md` and
+      `docs/superpowers/specs/2026-07-23-enigma-keyed-lookup-design.md`.
 
-- [ ] Map the key-attribute set each record tag actually needs (starting from `cmper`, `part`, and
-      the `details` pool's compound `cmper1`/`cmper2` keys) and add keyed lookup once it is unique.
-- [ ] Typed record models, starting with `entries`/`note` (the musical core the recursive model
-      already reaches) — converting from the generic `Record` shape to per-tag Python types once
-      keyed lookup exists to build them from.
+## Next up — typed record models
+
+- [ ] Typed record models, starting with `entries`/`note` (pitches, durations) — the musical core
+      the recursive model already reaches. The model now supports both walking (`Pool.of_tag`) and
+      direct access (`get`/`for_entry`), so this converts from the generic `Record` shape to
+      per-tag Python types built from that keyed access.
+- [ ] Cross-pool link resolution — what a `cmper` on one record *refers to* on another pool (e.g. a
+      `measSpec`'s reference into `others`) — is a separate, later slice from keyed lookup, which
+      only retrieves a record by its own identity.
 
 ## Later
 
