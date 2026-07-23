@@ -30,8 +30,9 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
   EnigmaXML into a navigable document. `crypt.py` (the cipher, pure — no I/O), `models.py`
   (`CorruptScoreError`), `score.py` (`score_xml`, composing `container.open_musx` with the cipher
   and a capped inflate), `document.py` (`parse_enigma`, `EnigmaDocument`, `Pool`, `Record` — the
-  uniform record/pool model). See "Known format facts — score.dat" and "Known format facts —
-  EnigmaXML structure" below.
+  uniform record/pool model), `music.py` (`read_entry`, `Entry`, `Note`, `Duration` — the first
+  typed layer over the generic `entry`/`note` records). See "Known format facts — score.dat",
+  "Known format facts — EnigmaXML structure", and "Known format facts — entries and pitch" below.
 
 ### Known format facts — version
 
@@ -198,6 +199,31 @@ Each pool's full identity, measured exact and unique over the whole corpus:
 - **Cross-pool link resolution — what a `cmper` on one record *refers to* on another pool — is not
   part of this slice.** `get`/`all_with` retrieve a record by its own identity only; following a
   reference to another pool's record is deferred (see Roadmap).
+
+### Known format facts — entries and pitch
+
+Full reference and derivation: `docs/eeppd.txt` (the Enigma Entry Pool description). Verified
+against all 401 corpus archives (`tests/enigma/test_music_corpus_sweep.py`): every `entry` in the
+corpus reads through `read_entry` without raising.
+
+- `dura` is the entry's **written** note value in Enigma Duration Units (EDU); a whole note is
+  4096. It decodes to a base power-of-two `NoteValue` plus a count of augmentation dots — the same
+  decomposition notated on the page (e.g. `1536` is a dotted quarter: `1024 + 512`). **Tuplet
+  scaling is a separate detail, not modelled here**: a tuplet's written `dura` is the undivided
+  note value, not the sounded duration after the tuplet ratio is applied.
+- An entry is a **rest** exactly when `numNotes == 0`; `read_entry` raises `MalformedEntryError` if
+  `numNotes` disagrees with the actual number of nested `note` fields, so `is_rest ⟺ notes == ()`
+  holds by construction rather than by convention.
+- Pitch is **not** absolute in the record: `harmLev` is a diatonic displacement from the current
+  key's tonic (0 at the tonic's octave, ±7 per octave), and `harmAlt` is an alteration relative to
+  that key (0 natural, ±1 sharp/flat), not the accidental actually printed. Recovering an absolute
+  spelled pitch (e.g. "F#4") needs the key in force at that point in the score — `harmLev`/`harmAlt`
+  alone are key-independent. See `docs/eeppd.txt`'s Note Record section for the bit-level source of
+  this fact.
+- **This model stops at the cross-pool boundary.** `read_entry` only reads the `entries` pool's own
+  fields; it does not resolve the key (which lives elsewhere, reached via
+  `gfhold → frameSpec → measSpec` linkage — see Roadmap) needed to spell a pitch absolutely, or the
+  tuplet ratio needed to scale a written duration to its sounded length.
 
 ## Data flow
 

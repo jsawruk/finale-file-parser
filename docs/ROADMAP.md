@@ -59,15 +59,28 @@ limit is verified by mutation, because no real corpus archive trips one.
       `MalformedEnigmaError` rather than silently keeping one. See `docs/ARCHITECTURE.md` and
       `docs/superpowers/specs/2026-07-23-enigma-keyed-lookup-design.md`.
 
-## Next up — typed record models
+## Typed entries — done
 
-- [ ] Typed record models, starting with `entries`/`note` (pitches, durations) — the musical core
-      the recursive model already reaches. The model now supports both walking (`Pool.of_tag`) and
-      direct access (`get`/`for_entry`), so this converts from the generic `Record` shape to
-      per-tag Python types built from that keyed access.
-- [ ] Cross-pool link resolution — what a `cmper` on one record *refers to* on another pool (e.g. a
-      `measSpec`'s reference into `others`) — is a separate, later slice from keyed lookup, which
-      only retrieves a record by its own identity.
+- [x] `read_entry` converts a generic `entry` `Record` into a typed `Entry`/`Note`/`Duration`: the
+      written duration (base note value + dots, decoded from `dura` in EDU), whether the entry is
+      a rest (`numNotes == 0`), and its notes (`harmLev`/`harmAlt`, tie flags) — the musical core
+      the recursive model already reaches. Pitch stays key-relative (spelling is the next slice);
+      tuplet scaling of the written duration is also deferred. Verified against all 401 corpus
+      archives: every entry reads without raising
+      (`tests/enigma/test_music_corpus_sweep.py`). See `docs/ARCHITECTURE.md` and
+      `docs/superpowers/specs/2026-07-23-typed-entries-design.md`.
+
+## Next up — pitch spelling
+
+- [ ] **Pitch spelling** — resolve `harmLev`/`harmAlt` plus the key in force (via minimal
+      `gfhold → frameSpec → measSpec` linkage) into absolute spelled pitches. This is the first
+      slice that needs cross-pool link resolution — what a `cmper` on one record *refers to* on
+      another pool (e.g. a `measSpec`'s reference into `others`) — rather than only retrieving a
+      record by its own identity.
+- [ ] Tuplet duration scaling — the written `dura`/`Duration` needs a tuplet ratio applied to reach
+      the sounded duration.
+- [ ] The detail records: beams, stems, articulations, lyrics — the remaining steps toward a
+      MusicXML exporter (see `## Later`).
 
 ## Later
 
