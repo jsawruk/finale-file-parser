@@ -154,3 +154,27 @@ def test_rejects_entity_expansion() -> None:
 
 def test_malformed_error_is_a_finale_file_error() -> None:
     assert issubclass(MalformedEnigmaError, FinaleFileError)
+
+
+def test_record_with_attribute_preserves_its_own_text() -> None:
+    doc = parse_enigma(
+        _doc('<texts><expression number="1">^fontMus(...)cresc.</expression></texts>')
+    )
+    expr = doc.texts.of_tag("expression")[0]
+    assert expr.text == "^fontMus(...)cresc."
+
+
+def test_record_with_text_and_nested_fields_preserves_both() -> None:
+    doc = parse_enigma(_doc("<others><x cmper='1'>LEAD<b>1</b></x></others>"))
+    x = doc.others.of_tag("x")[0]
+    assert x.text == "LEAD"
+    assert x.fields == {"b": "1"}
+
+
+def test_pure_scalar_field_is_still_a_bare_str_not_a_record() -> None:
+    # No attributes, no children -> stays a scalar str; the classification
+    # rule for what becomes a Record did not change.
+    artic = parse_enigma(FULL).others.of_tag("articDef")[0]
+    assert artic.fields["charMain"] == "46"
+    assert isinstance(artic.fields["charMain"], str)
+    assert not isinstance(artic.fields["charMain"], Record)

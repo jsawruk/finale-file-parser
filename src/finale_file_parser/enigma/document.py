@@ -27,7 +27,12 @@ class MalformedEnigmaError(FinaleFileError):
 
 @dataclass(frozen=True)
 class Record:
-    """One record: its tag, all its attributes verbatim, and its fields.
+    """One record: its tag, all its attributes verbatim, its own text, and its fields.
+
+    `text` is the element's own direct text, verbatim (e.g. `^fontMus(...)`
+    markup is preserved as-is), or "" when it has none. Note: a child
+    element's `tail` (text trailing it, before the next sibling) is
+    intentionally not modelled — it is empty everywhere in the corpus.
 
     `fields` maps a child element's local name to its value — a str (scalar
     text) or a Record (nested), and a tuple of either when the tag repeats.
@@ -36,6 +41,7 @@ class Record:
 
     tag: str
     attrs: Mapping[str, str]
+    text: str
     fields: Mapping[str, str | tuple[str, ...] | Record | tuple[Record, ...]]
 
 
@@ -85,7 +91,9 @@ def _record_from_element(element: Element) -> Record:
         name: (values[0] if len(values) == 1 else tuple(values))  # type: ignore[misc]
         for name, values in grouped.items()
     }
-    return Record(tag=_local(element), attrs=dict(element.attrib), fields=fields)
+    return Record(
+        tag=_local(element), attrs=dict(element.attrib), text=element.text or "", fields=fields
+    )
 
 
 def parse_enigma(xml: bytes) -> EnigmaDocument:
