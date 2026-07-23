@@ -80,9 +80,10 @@ class TextsPool(Pool):
   `get("articDef", "1")` are equivalent.
 
 `EnigmaDocument.others`, `.details`, `.entries`, `.texts`, `.options` are now typed as the
-corresponding subclass; `.header`/`.mappings` stay `Pool`. This is source-compatible — the shipped
-`.records`/`.of_tag` still work, and no shipped attribute changes type in a way that breaks a
-reader.
+corresponding subclass; `.header`/`.mappings` stay `Pool`. Reading a pool is source-compatible — the
+shipped `.records`/`.of_tag` still resolve, and the narrowed types are subtypes so a `Pool`
+annotation still holds. The one thing that changes is `EnigmaDocument`'s own construction signature
+(it now takes the typed pools), but only `parse_enigma` constructs it, so no reader breaks.
 
 ## Indexes
 

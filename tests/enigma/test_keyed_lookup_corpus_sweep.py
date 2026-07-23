@@ -88,8 +88,14 @@ def test_all_archives_parse_with_unique_identities_and_round_trip_lookup() -> No
                     continue
                 cmper = meas_spec.attrs["cmper"]
                 assert doc.others.get("measSpec", cmper, part=part) is meas_spec, path
-                variants = doc.others.all_with("measSpec", cmper)
-                assert any(r is meas_spec for r in variants), path
+                # all_with must return EVERY measSpec sharing this cmper (the score
+                # record plus all part variants), not just the exact-part match.
+                # Assert the full set, or a regression to exact-match-only passes.
+                expected = tuple(
+                    r for r in doc.others.of_tag("measSpec") if r.attrs["cmper"] == cmper
+                )
+                assert len(expected) > 1, path  # this cmper has a score record + variant(s)
+                assert doc.others.all_with("measSpec", cmper) == expected, path
                 meas_spec_part_round_tripped = True
                 break
 
