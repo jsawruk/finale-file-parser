@@ -26,21 +26,42 @@ Measured over decoded EnigmaXML from the corpus.
 **Root:** `<finale version="18.0">` in every file — the *schema* version, not the writing
 application's (those span majors 15-18). Namespace `http://www.makemusic.com/2012/finale`.
 
-**Seven pools, each with its own keying:**
+**Seven pools.** Records carry key-like attributes (`cmper`, `cmper1`/`cmper2`, `entnum`, `inci`,
+`number`, `type`, and others such as `part`), but **this slice does not build keyed lookup** — see
+"Keying deferred" below. This layer preserves every record in document order, addressable by tag.
 
-| Pool | Keyed by | Notes |
+| Pool | Typical record identity | Notes |
 |---|---|---|
-| `header` | — | singleton (one `headerData` record) |
-| `mappings` | — | singleton (one `mapGroup` record) |
-| `options` | record tag name | one record per option type (`beamOptions`, `chordOptions`, …) |
-| `others` | `cmper` (+ optional `inci`) | the largest pool; `cmper` is a 16-bit id |
-| `details` | `cmper1`+`cmper2` (+ optional `inci`), **or** `entnum` (+ optional `inci`) | mixed keying — see below |
-| `entries` | `entnum` | notes/chords/rests; `entnum` is a signed 32-bit id |
-| `texts` | `number` (or `type` for `fileInfo`) | community docs: texts calls its cmpers "numbers" |
+| `header` | — | one `headerData` record |
+| `mappings` | — | one `mapGroup` record |
+| `options` | record tag | one record per option type (`beamOptions`, …) |
+| `others` | tag + `cmper` (+ `inci`, `part`, …) | the largest pool |
+| `details` | tag + `cmper1`+`cmper2`, or + `entnum` (+ `inci`) | mixed |
+| `entries` | `entnum` | notes/chords/rests |
+| `texts` | tag + `number` (or `type` for `fileInfo`) | community docs call its cmpers "numbers" |
 
-`details` key signatures observed: `cmper1+cmper2` (79457), `entnum+inci` (16391),
-`cmper1+cmper2+inci` (9875), `entnum` alone (1288). Both the pair-keyed and entry-keyed forms are
-real and common.
+### Keying deferred — why this slice does not offer `get(cmper)`
+
+The corpus survey disproved the simple "each record has a key appropriate to its pool" premise, in
+two stages:
+
+- **`cmper` is not a key.** In one file, `cmper=1` appears across **54 different record types** in
+  `others`. Identity requires the tag: `articDef cmper=1` and `measSpec cmper=1` are different
+  records.
+- **Even `(tag, cmper, inci)` is not unique.** `measSpec` carries a `part` attribute that the first
+  survey missed — a score version plus per-linked-part variants share one cmper:
+  ```
+  <measSpec cmper="1"/>
+  <measSpec cmper="1" part="1" shared="true"/>
+  <measSpec cmper="1" part="2" shared="true"/>
+  ```
+  So more key attributes exist than an initial pass reveals, and there is no confidence that all of
+  them have been found across 191 record types.
+
+A dict keyed by a fixed tuple would **silently drop** whichever variant lost the collision — the
+exact data-loss failure this project guards against. So keyed lookup is its own later slice, taken
+once the key attributes are fully mapped. This slice preserves everything and lets a caller
+navigate by tag and read raw attributes; nothing is dropped.
 
 **Fields nest up to 4 deep.** A field is a child element that is either scalar text
 (`<charMain>46</charMain>`) or contains nested records (`<fretboard><cell>…</cell></fretboard>`).
@@ -78,33 +99,41 @@ same way `enigma/score.py` consumes `container/` without owning it.
 @dataclass(frozen=True)
 class Record:
     tag: str                              # "articDef", "entry", "note", …
-    keys: Mapping[str, str]               # e.g. {"cmper": "1"} or {"entnum": "5", "inci": "0"}
-    fields: Mapping[str, str | Record | tuple[Record, ...]]
+    attrs: Mapping[str, str]              # ALL attributes, verbatim — no key/non-key distinction
+    fields: Mapping[str, str | tuple[str, ...] | Record | tuple[Record, ...]]
+
+@dataclass(frozen=True)
+class Pool:
+    records: tuple[Record, ...]           # every record, in document order
+    def of_tag(self, tag: str) -> tuple[Record, ...]: ...   # all records with this tag
 
 class EnigmaDocument:
     version: str
-    header: Record | None                 # singletons
-    mappings: Record | None
-    options: PoolByTag                    # options.get("beamOptions") -> Record | None
-    others: PoolByCmper                   # others.get(cmper, inci=0)  -> Record | None
-    details: PoolByCmperPair              # details.get(cmper1, cmper2, inci=0), and
-                                          # details.for_entry(entnum, inci=0)
-    entries: PoolByEntnum                 # entries.get(entnum) -> Record | None
-    texts: PoolByNumber                   # texts.get(number) -> Record | None
+    header: Pool                          # one uniform Pool type for all seven;
+    mappings: Pool                        # header/mappings simply hold one record
+    options: Pool
+    others: Pool
+    details: Pool
+    entries: Pool
+    texts: Pool
 ```
 
-Each pool offers exactly the lookup its keying supports — `entries` cannot be asked for a `cmper1`,
-and a missing record returns `None`, not an error. `details` exposes both its keying forms
-explicitly (`get` for the pair-keyed records, `for_entry` for the entnum-keyed ones) rather than
-pretending one scheme fits.
+One uniform `Pool` type for all seven pools. Records are preserved in document order and nothing is
+dropped. `Record.attrs` holds *all* attributes verbatim rather than a curated `keys` subset,
+because this slice does not yet decide which attributes are keys — a consumer reads `attrs["cmper"]`
+directly. `of_tag` is the one navigation primitive: "every `measSpec` in `others`, in order,"
+which the caller can then filter by `part`/`cmper` itself until the keyed-lookup slice lands.
 
-**Field values.** A field's value is:
-- a `str` (verbatim text, possibly empty) when the element has no child elements;
-- a `Record` when it contains a single nested record;
-- a `tuple[Record, ...]` when it contains repeated nested records (e.g. an entry's `note` children).
+**Field values.** Group a record's child elements by tag name. A field's value is:
+- a `str` (verbatim text, possibly empty) — no child elements, appears once;
+- a `tuple[str, ...]` — no child elements, appears more than once (e.g. `shapeData/data`);
+- a `Record` — has child elements, appears once;
+- a `tuple[Record, ...]` — has child elements, appears more than once (e.g. an entry's `note`).
 
-Values are **not coerced** — `"46"` stays a string. Knowing a field is an int, enum, or flag needs
-the per-type schemas this slice deliberately omits; coercion belongs to the future typed layer.
+Verified across the corpus: no tag is scalar in one record and nested in another, so a tag's value
+type is consistent. Values are **not coerced** — `"46"` stays a string. Knowing a field is an int,
+enum, or flag needs the per-type schemas this slice deliberately omits; coercion belongs to the
+future typed layer.
 
 ## Safety
 
@@ -126,26 +155,29 @@ build the model in a single pass without copying subtrees repeatedly.
 
 ## Testing
 
-- Synthetic EnigmaXML documents, hand-written in-test, exercising: each pool's keying; `others` with
-  and without `inci`; both `details` keying forms; a repeated nested field (chord notes); a
-  4-deep nested field; a missing lookup returning `None`; an absent pool.
+- Synthetic EnigmaXML documents, hand-written in-test, exercising: all seven pools; `of_tag`
+  returning records in document order; a record's raw `attrs`; a repeated scalar field
+  (`tuple[str, ...]`); a repeated nested field (chord notes → `tuple[Record, ...]`); a 4-deep nested
+  field; the `measSpec`-style collision (score record plus per-`part` variants sharing a cmper) all
+  preserved in `of_tag`; an absent pool yielding an empty `Pool`.
 - Malformed input: not XML; wrong root element; an entity-expansion payload that `defusedxml` must
   refuse.
 - Corpus sweep (local only, skipped in CI): every one of the 401 archives parses; the seven pools
-  are present; record counts are within observed ranges; and **no committed fixture carries a
-  `fileInfo` copyright or title** (a content-safety assertion, not a corpus one).
+  are present across the sweep; an `entry` with a nested `note` field is reached. **No committed
+  fixture carries a `fileInfo`** (content-safety, not a corpus assertion).
 - Every parsing rule verified by mutation, per project practice.
 
 ## Out of scope
 
-Typed record models (notes, staves, options as structured data). Coercing field values. Anything
-`.mus`. MusicXML export. This slice is the generic structural layer only.
+**Keyed lookup** (`get(cmper)`, etc.) — deferred to its own slice once the full key-attribute set is
+mapped. Typed record models. Coercing field values. Anything `.mus`. MusicXML export.
 
 ## Consequences
 
-- New `src/finale_file_parser/enigma/document.py`; `parse_enigma`, `EnigmaDocument`, `Record`, the
-  pool types, and `MalformedEnigmaError` exported from `finale_file_parser.enigma` and the root.
-- `docs/ARCHITECTURE.md` gains the EnigmaXML structure facts and the seven-pool keying table.
-- The roadmap's "parse EnigmaXML into a model" item becomes: generic structure (this slice) →
-  typed records (next), starting with `entries`/`note` since the recursive model already reaches
-  them.
+- New `src/finale_file_parser/enigma/document.py`; `parse_enigma`, `EnigmaDocument`, `Pool`,
+  `Record`, and `MalformedEnigmaError` exported from `finale_file_parser.enigma` and the root.
+- `docs/ARCHITECTURE.md` gains the EnigmaXML structure facts, the seven pools, and the finding that
+  no fixed key set uniquely identifies a record (the `measSpec`/`part` case).
+- The roadmap's "parse EnigmaXML into a model" item becomes: generic structure preserving all
+  records (this slice) → **keyed lookup** once key attributes are mapped → typed records. The
+  recursive model already reaches `entry`/`note`, so typed entries can follow either.
