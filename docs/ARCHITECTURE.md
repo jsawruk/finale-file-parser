@@ -26,6 +26,10 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
   (`ContainerEntry`, `CorruptContainerError`), `names.py` (member-name safety), `musx.py`
   (`open_musx`, `MusxContainer`). `version/musx.py` is a client of this module; nothing else
   opens archives directly.
+- `src/finale_file_parser/enigma/` — decodes a `.musx`'s `score.dat` into EnigmaXML. `crypt.py`
+  (the cipher, pure — no I/O), `models.py` (`CorruptScoreError`), `score.py` (`score_xml`,
+  composing `container.open_musx` with the cipher and a capped inflate). See "Known format facts
+  — score.dat" below.
 
 ### Known format facts — version
 
@@ -111,6 +115,15 @@ Evidence: all 401 corpus archives, surveyed 2026-07-21. See
   interpreted, at this layer.
 - No corpus archive has duplicate or unsafe member names, so the reader's safety checks cannot be
   exercised by real files — they are covered by synthetic hostile input and verified by mutation.
+
+### Known format facts — score.dat
+
+Full reference, evidence, and derivation: `docs/formats/score-dat.md`. Headline: `score.dat` is
+encrypted with a keystream from a fixed-seed BSD `rand()` linear congruential generator that resets
+every 128 KiB; the decrypted plaintext is a gzip stream that inflates roughly 28× into EnigmaXML.
+Verified against all 401 corpus archives: 401/401 decode, every result is schema `version="18.0"`.
+The cipher parameters are not this project's discovery — see the attribution in
+`docs/REFERENCES.md` and the DECIDED entry in `docs/DECISIONS.md`.
 
 ## Data flow
 

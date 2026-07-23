@@ -10,6 +10,22 @@ and resolved ones **DECIDED**.
 
 ---
 
+## 2026-07-22 — DECIDED: cipher parameters taken as facts from MIT-licensed source
+
+The `score.dat` cipher — seed `0x28006D45`, the BSD `rand()` LCG, the
+`(upper + upper // 255)` output function, and the 128 KiB keystream reset — was read from
+denigma's source (MIT), which credits Deguerre for the discovery. The implementation here is
+written independently; the parameters are not.
+
+Reason: the earlier decision was to use published *documentation* as reference and write
+implementations independently. That proved insufficient — the transform is documented nowhere in
+prose, only in code. An algorithm choice and a seed value are facts rather than creative
+expression, and MIT would permit outright porting with attribution in any case.
+
+Consequence: attribution to both denigma and Deguerre is required in `docs/REFERENCES.md` and in
+`enigma/crypt.py`. `docs/formats/score-dat.md` records precisely what this project derived from the
+corpus and what it did not.
+
 ## 2026-07-22 — DECIDED: one provenance type for both formats
 
 `ProvenanceStamp` (renamed from `MusStamp`) carries date, application, and platform for both `.mus`
