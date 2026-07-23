@@ -1,0 +1,60 @@
+#!/bin/sh
+# Reject direct pushes to a protected branch. Every change goes through a pull request.
+#
+# Enabled by `make hooks` (which `make install` runs for you), which points core.hooksPath at
+# .githooks/. Git does not enable committed hooks automatically — a fresh clone has no protection
+# until someone runs it.
+#
+# This is a CLIENT-side check. It is bypassable with `git push --no-verify`, and it does not
+# constrain anyone who has not enabled it. It exists to catch the accidental push, not a determined
+# one. Server-side branch protection is the real control; this repo is private on a plan that does
+# not offer it (see docs/DECISIONS.md).
+#
+# Git passes each ref being pushed on stdin as: <local ref> <local sha> <remote ref> <remote sha>
+
+PROTECTED="main master"
+
+blocked=""
+
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+	# Only branch refs matter; ignore tags and anything else.
+	case "$remote_ref" in
+	refs/heads/*) branch=${remote_ref#refs/heads/} ;;
+	*) continue ;;
+	esac
+
+	for protected in $PROTECTED; do
+		if [ "$branch" = "$protected" ]; then
+			blocked="$blocked $branch"
+		fi
+	done
+done
+
+if [ -n "$blocked" ]; then
+	cat >&2 <<EOF
+
+  Push rejected: this repo requires a pull request.
+
+  You tried to push directly to:$blocked
+
+  Instead:
+
+    git switch -c my-branch          # branch the work
+    git push -u origin my-branch     # push the branch
+    gh pr create                     # open the PR
+
+  If the commits are already sitting on your local main, move them across without
+  a destructive reset:
+
+    git switch -c my-branch          # keeps the commits, on a new branch
+    git branch -f main origin/main   # rewinds only the local main pointer
+
+  To bypass deliberately (merging a release, repairing history):
+
+    git push --no-verify
+
+EOF
+	exit 1
+fi
+
+exit 0
