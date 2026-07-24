@@ -97,3 +97,18 @@ def transpose_key(key: KeySignature, interval: int, adjust: int) -> KeySignature
             f"transposed key out of range: {key.fifths} + {adjust} = {fifths} fifths"
         )
     return KeySignature(fifths=fifths, mode=key.mode, tonic=tonic_for(fifths, key.mode))
+
+
+def transpose_pitch(pitch: SpelledPitch, interval: int, adjust: int) -> SpelledPitch:
+    """Transpose a written pitch down to its concert (sounding) pitch.
+
+    The concert pitch is `interval` diatonic steps and T semitones below the written
+    pitch, where T = ((7 * adjust) % 12) + 12 * (interval // _OCTAVE). For a concert
+    staff (interval 0, adjust 0) this is the identity.
+    """
+    semitones = (7 * adjust) % 12 + 12 * (interval // _OCTAVE)
+    dpos = pitch.octave * _OCTAVE + _LETTERS.index(pitch.letter) - interval
+    letter = _LETTERS[dpos % _OCTAVE]
+    octave = dpos // _OCTAVE
+    alteration = _midi(pitch) - semitones - _natural_midi(letter, octave)
+    return SpelledPitch(letter=letter, alteration=alteration, octave=octave)

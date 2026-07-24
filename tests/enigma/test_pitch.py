@@ -4,7 +4,12 @@ import pytest
 
 from finale_file_parser.enigma.key import KeySignature, Mode, UnsupportedKeyError
 from finale_file_parser.enigma.music import Note
-from finale_file_parser.enigma.pitch import SpelledPitch, spell_pitch, transpose_key
+from finale_file_parser.enigma.pitch import (
+    SpelledPitch,
+    spell_pitch,
+    transpose_key,
+    transpose_pitch,
+)
 
 
 def _note(harm_lev: int, harm_alt: int = 0) -> Note:
@@ -90,3 +95,27 @@ def test_transpose_key_identity_for_concert() -> None:
 def test_transpose_key_out_of_range_raises() -> None:
     with pytest.raises(UnsupportedKeyError):
         transpose_key(_key(6, Mode.MAJOR, "F#"), interval=1, adjust=2)  # 6 + 2 = 8 fifths
+
+
+def test_transpose_pitch_bb_down_major_second() -> None:
+    # B-flat instrument (interval 1, adjust 2): written C5 sounds Bb4.
+    assert transpose_pitch(SpelledPitch("C", 0, 5), interval=1, adjust=2).name == "Bb4"
+
+
+def test_transpose_pitch_octave_down() -> None:
+    # interval 7, adjust 0 => T = 12: written C4 sounds C3, same letter.
+    assert transpose_pitch(SpelledPitch("C", 0, 4), interval=7, adjust=0).name == "C3"
+
+
+def test_transpose_pitch_octave_up() -> None:
+    # interval -7 => T = -12: written C4 sounds C5.
+    assert transpose_pitch(SpelledPitch("C", 0, 4), interval=-7, adjust=0).name == "C5"
+
+
+def test_transpose_pitch_octave_borrow_on_letter_wrap() -> None:
+    # written C4 down a major second sounds Bb3 (octave borrow across the C boundary).
+    assert transpose_pitch(SpelledPitch("C", 0, 4), interval=1, adjust=2).name == "Bb3"
+
+
+def test_transpose_pitch_identity_for_concert() -> None:
+    assert transpose_pitch(SpelledPitch("F", 1, 4), interval=0, adjust=0).name == "F#4"
