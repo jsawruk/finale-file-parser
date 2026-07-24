@@ -6,7 +6,10 @@ material and is gitignored; these assertions are the only check against real arc
 The core assertion is a genuine invariant, not the spelling definition: a key
 transposition must preserve scale degree, so each concert pitch's printed accidental
 (alteration minus the concert key's accidental for its letter) must equal the note's
-original harm_alt. This was verified to hold with 0 violations over 50,024
+original harm_alt. For a concert (non-transposing) staff this is trivially true, so
+the assertion is a real check only on the transposing-staff subset (~50,024 of the
+~234,000 notes swept); every note, transposing or not, is still checked to spell
+without raising. This was verified to hold with 0 violations over those
 transposing-staff notes during design; any mismatch here is a real defect in
 transpose_key/transpose_pitch, not a reason to loosen the assertion.
 
@@ -57,6 +60,7 @@ def test_every_corpus_note_spells_and_preserves_scale_degree() -> None:
     assert len(paths) == EXPECTED_ARCHIVES
 
     notes_spelled = 0
+    transposing_notes_checked = 0
     for path in paths:
         doc = parse_enigma(score_xml(path))
         location = locate_entries(doc)
@@ -79,5 +83,8 @@ def test_every_corpus_note_spells_and_preserves_scale_degree() -> None:
                 )
                 assert printed == note.harm_alt
                 notes_spelled += 1
+                if not transposition.is_concert:
+                    transposing_notes_checked += 1
 
     assert notes_spelled > 0
+    assert transposing_notes_checked > 0

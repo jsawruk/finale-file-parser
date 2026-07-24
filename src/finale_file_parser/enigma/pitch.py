@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from finale_file_parser.enigma.document import Record
 from finale_file_parser.enigma.key import (
+    _MAX_FIFTHS,
     KeySignature,
     UnsupportedKeyError,
     tonic_for,
@@ -24,7 +25,6 @@ _FLAT_ORDER = "BEADGCF"
 _LETTER_SEMITONE = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 _OCTAVE = 7  # diatonic steps per octave
 _MIDDLE_C_OCTAVE = 4  # harm_lev = 0 tonic sits in octave 4 (middle C region)
-_MAX_FIFTHS = 7
 
 
 def _key_accidental(letter: str, fifths: int) -> int:

@@ -72,8 +72,7 @@ class Mode(Enum):
 
 
 def tonic_for(fifths: int, mode: Mode) -> str:
-    """The tonic note name for a standard (fifths, mode) key, via the circle of
-    fifths."""
+    """The tonic note name for a standard (fifths, mode) key, via the circle of fifths."""
     return (_MAJOR_TONIC if mode is Mode.MAJOR else _MINOR_TONIC)[fifths]
 
 
