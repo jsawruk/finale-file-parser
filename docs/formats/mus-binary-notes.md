@@ -82,12 +82,58 @@ Two things this still unlocks:
   exactly the `mode << 8 | signed-fifths` layout `enigma/key.py` already derived from the corpus —
   independent confirmation of shipped code.
 
-## HEADLINE: the payload is a bit-packed record stream — there is no codec
+## HEADLINE: 2001/2005 is a bit-packed record stream. 2011/2012 may well be COMPRESSED.
 
-> **Correction (stride).** An earlier version of this section claimed a **49-bit stride** as the
-> format's constant. That is **refuted** — 49 is specific to one file. The bit-packing model itself
-> survives intact and is directly verified; only the universality of the number was wrong. See
-> "The stride is not universal" below, which supersedes the 49-bit framing wherever it appears.
+> ### ⚠️ MAJOR CORRECTION — the "no codec anywhere" claim was built on a broken control
+>
+> This document previously asserted that the payload is **not compressed in any cohort**, on the
+> grounds that it contains long exact repeats and "random/compressed data has **zero** repeated
+> 16-grams". **That control was wrong.** It compared against `os.urandom`. Compressed output is *not*
+> random bytes — it carries Huffman and block structure that repeats. Measured on the *same document*,
+> equal 52,601-byte samples:
+>
+> | sample | entropy | rep 8-gram | rep 16-gram | rep 24-gram |
+> | --- | --- | --- | --- | --- |
+> | `.mus` payload (2011) | 7.985 | 621 | 424 | 338 |
+> | **gzip of the same document** | 7.992 | **271** | **105** | **63** |
+>
+> Real gzip has *hundreds* of repeated 16- and 24-grams. The `.mus` has more, but the same order of
+> magnitude — not the "167 versus 0" contrast this document claimed. **The repeat argument therefore
+> does not exclude compression, and every conclusion that rested on it is withdrawn**, including
+> "stop testing LZ variants". For the 2011/2012 cohort the earlier codec searches (LZSS, LZH, PKWARE
+> DCL — all run on 2012-era files) should be treated as **live again**, not settled.
+>
+> **Do not use `os.urandom` as a stand-in for compressed data.** Compress a real file and compare
+> against that.
+
+### What survives, and for which cohort
+
+The bit-packing model holds for **2001/2005 only**, where it rests on direct evidence rather than the
+broken repeat argument:
+
+| evidence | 2001/2005 | 2011/2012 | gzip control |
+| --- | --- | --- | --- |
+| payload entropy | 7.748 | 7.985 | 7.992 |
+| per-8 KiB 1-bit density spread | **0.1909** | 0.0175 | 0.0599 |
+| counter fields (validated, shuffle-controlled) | **256** at S=392 | **0** at every stride tried | — |
+| counter readable directly in a hexdump | yes (5-byte record, +0x20/record) | not found | — |
+| doubling ladder 2,4,8,16,32,64,128,0 | yes, exact modular wraparound | not found | — |
+
+The 2005 bit-density spread is **three times** the gzip control's, and no compressor emits bit density
+varying from 0.447 to 0.638 across a file — that reflects plaintext statistics showing through. Add
+the counters and the doubling ladder and the 2001/2005 case is solid.
+
+The 2011/2012 case is the opposite. Its entropy, bit density and per-region density spread are all
+**statistically indistinguishable from — indeed tighter than — real gzip**, and it yields no counter
+fields at any stride tried. This cohort is plausibly compressed, and the format may simply have
+changed between eras. That also re-explains the cohort split recorded further down, which was
+attributed merely to "packing harder".
+
+**Caveat on the 2011/2012 counter scan:** one anchor, six strides. Suggestive, not exhaustive.
+
+> **Correction (stride).** An earlier version claimed a **49-bit stride** as the format's constant.
+> That is **refuted** — 49 is specific to one file, and the group is 49 *bytes* with 8 sub-units 49
+> bits apart. See "The stride is not universal" below.
 
 Everything below this section was written while assuming the payload was *transformed* somehow. It is
 not. It is **dense bit-packed structured records**, and the reason no decompressor ever worked is that
