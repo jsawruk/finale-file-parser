@@ -257,3 +257,45 @@ def test_empty_and_zero_frame_slots_are_skipped_not_errors() -> None:
     )
     loc = locate_entries(parse_enigma(doc))
     assert loc[1].measure == 1
+
+
+def test_measure_with_entries_but_no_measspec_key_raises() -> None:
+    """A measure holding entries but defining no key is malformed: this is the
+    foundation later slices read the key from, so it raises rather than
+    fabricating C major (key 0)."""
+    doc = _doc(
+        _entries("1:0")
+        + """
+        <others>
+          <frameSpec cmper="10" inci="0">
+            <startEntry>1</startEntry><endEntry>1</endEntry>
+          </frameSpec>
+        </others>
+        <details><gfhold cmper1="1" cmper2="1"><frame1>10</frame1></gfhold></details>
+        """
+    )
+    with pytest.raises(MalformedScoreError, match="no measSpec key"):
+        locate_entries(parse_enigma(doc))
+
+
+def test_part_variant_framespec_is_ignored() -> None:
+    """A linked-part frameSpec incidence must not re-place the score's entries.
+    all_with returns part variants; resolution filters them out."""
+    doc = _doc(
+        _entries("1:0")
+        + """
+        <others>
+          <frameSpec cmper="10" inci="0">
+            <startEntry>1</startEntry><endEntry>1</endEntry>
+          </frameSpec>
+          <frameSpec cmper="10" part="1">
+            <startEntry>1</startEntry><endEntry>1</endEntry>
+          </frameSpec>
+          <measSpec cmper="1"><keySig><key>0</key></keySig></measSpec>
+        </others>
+        <details><gfhold cmper1="1" cmper2="1"><frame1>10</frame1></gfhold></details>
+        """
+    )
+    # without the part filter, the part-variant frameSpec would double-place entry 1
+    loc = locate_entries(parse_enigma(doc))
+    assert loc[1].measure == 1

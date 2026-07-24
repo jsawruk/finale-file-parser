@@ -87,9 +87,22 @@ def locate_entries(doc: EnigmaDocument) -> dict[int, EntryLocation]:
 
     location: dict[int, EntryLocation] = {}
     for gfhold in doc.details.of_tag("gfhold"):
+        # Score records only. A linked-part gfhold would place the same entries
+        # a second time and trip the double-place check; the score placement is
+        # authoritative. (No part-variant gfhold occurs in the corpus, but this
+        # keeps resolution correct by construction rather than by that accident.)
+        if "part" in gfhold.attrs:
+            continue
         staff = _int(gfhold.attrs.get("cmper1"), "gfhold cmper1")
         measure = _int(gfhold.attrs.get("cmper2"), "gfhold cmper2")
-        key_signature = key_by_measure.get(measure, 0)
+        if measure not in key_by_measure:
+            # A measure that holds entries but defines no key is malformed: this
+            # is the foundation every later slice reads its key from, so fabricate
+            # nothing — raise rather than silently return C major.
+            raise MalformedScoreError(
+                f"gfhold places entries in measure {measure}, which has no measSpec key"
+            )
+        key_signature = key_by_measure[measure]
         for field_name in _FRAME_FIELDS:
             frame_value = gfhold.fields.get(field_name)
             if not isinstance(frame_value, str) or frame_value in ("", "0"):
@@ -140,7 +153,13 @@ def _place_frame_entries(
     entries_by_num: dict[int, Record],
     location: dict[int, EntryLocation],
 ) -> None:
-    frame_specs = doc.others.all_with("frameSpec", frame_cmper)
+    # Every incidence sharing this cmper (a frame cmper can carry two, where the
+    # first is empty and the second holds the entry chain — see module docstring),
+    # but score records only: a linked-part frameSpec would re-place the same
+    # entries. all_with returns part variants too, so filter them out here.
+    frame_specs = tuple(
+        f for f in doc.others.all_with("frameSpec", frame_cmper) if "part" not in f.attrs
+    )
     if not frame_specs:
         raise MalformedScoreError(
             f"gfhold staff={staff} measure={measure} frame {frame_cmper} has no matching frameSpec"
