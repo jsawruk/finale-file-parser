@@ -12,7 +12,6 @@ Report counts only -- never a corpus filename, record value, pitch, or lyric.
 
 from __future__ import annotations
 
-from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -52,7 +51,15 @@ def test_every_corpus_entry_reads_as_a_typed_entry() -> None:
             entries_read += 1
 
             assert entry.is_rest == (len(entry.notes) == 0), path
-            assert entry.duration.whole_notes == Fraction(entry.duration.edu, WHOLE_NOTE_EDU), path
+            # Validate the base+dots decode against real durations, not the
+            # tautology whole_notes == edu/4096 (whole_notes IS that fraction).
+            # base + each successive halved dot must reconstruct edu exactly.
+            reconstructed = entry.duration.base.value
+            addend = entry.duration.base.value
+            for _ in range(entry.duration.dots):
+                addend //= 2
+                reconstructed += addend
+            assert reconstructed == entry.duration.edu, path
 
             note_count = len(entry.notes)
             if note_count == 0:
