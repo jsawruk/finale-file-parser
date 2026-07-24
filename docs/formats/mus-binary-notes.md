@@ -198,7 +198,55 @@ integers — worth confirming.)
 bit-shifts, complement, bit-reversal, and all 7 byte rotations. Best printable-ASCII fraction 35.7%,
 *below* the ~37% a random buffer scores. So no single global byte transform exposes the text.
 
-### The encoding is byte-oriented, static and context-free
+### Known-plaintext isomorph attack — the text is genuinely compressed
+
+The paired `.musx` files give **exact lyric text** for `.mus` files we hold. `Angels We Have
+Heard.mus` (51,674 B, banner 2012/MAC) has a confirmed pair whose EnigmaXML yields the verse
+syllable-hyphenated exactly as Finale stores it (189 B). That is byte-level known plaintext, and it
+supports an attack that does not require guessing the transform.
+
+**Method (`scratchpad/isomorph.py`).** If the text is stored under *any* fixed byte substitution, the
+**equality pattern** survives: wherever the plaintext repeats a character, the stored bytes repeat at
+the same relative offsets. Signature = for each position, the distance back to the previous occurrence
+of that byte. Match signatures instead of bytes, and a hit yields the substitution map for free.
+
+**The method is validated by controls, which is what makes the negative usable:**
+
+| control | score |
+| --- | --- |
+| plaintext planted in random bytes | **40/40** |
+| plaintext planted after a **random bijection** | **40/40** |
+| pure random, no plaintext present | 21/40 (noise floor) |
+| **actual `.mus`** | **28/40**, located at `0x000D7` |
+
+The second row is the important one: the method recovers text under a substitution it was never told
+about. The real file scores barely above noise, and its best window sits at `0x000D7` — inside the
+**plaintext title metadata**, which is text-like and therefore shares equality statistics with English.
+That is not the lyric pool.
+
+Extended to cover bit-level packing (which the 2005 counter fields hinted at): all 8 global bit-shifts
+of the file score 22–28/40, and a 7-bit unpacking scores 22/40. All noise.
+
+**Conclusion: the lyric text is not stored as characters under any substitution, bit alignment, or
+7-bit packing. It is compressed.**
+
+### Where that leaves the model — and an open tension
+
+Everything measured now points at one surviving model: a **static, context-free, byte-aligned,
+variable-length code** — a codebook/static-dictionary compressor. That fits every constraint
+simultaneously: repeats survive (same input substring → same output bytes), position-independence
+holds, output is byte-aligned, entropy is high, and the code is not 1:1 so isomorph correctly fails.
+Note this is *not* the same as adaptive LZW, which was ruled out earlier — a **static** dictionary is
+still open.
+
+**Honest tension to resolve:** this sits awkwardly with the 2005 cohort's clean monotone counter
+fields, since compressors do not usually emit tidy counters. Three ways it could reconcile — (a) the
+code is order-preserving, so monotone source values stay monotone through it; (b) the payload is
+mixed, with record scaffolding coded more literally than text; (c) the counter reading was
+over-interpreted from 14 samples. **Do not treat either the "structured record stream" reading or the
+"compressed" reading as settled until this is resolved.** Deciding it is the next real step: extract
+the same counter fields from many more records and check whether the increments stay locally
+consistent, which (a) and (b) predict and (c) does not.
 
 Two further measurements narrow it sharply.
 
