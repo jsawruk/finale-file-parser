@@ -82,7 +82,62 @@ Two things this still unlocks:
   exactly the `mode << 8 | signed-fifths` layout `enigma/key.py` already derived from the corpus —
   independent confirmation of shipped code.
 
-## HEADLINE: 2001/2005 is a bit-packed record stream. 2011/2012 may well be COMPRESSED.
+## ✅ SOLVED (2011/2012 cohort): the payload is a chain of RAW DEFLATE streams at `0x218`
+
+**The 2011/2012 `.mus` payload is a sequence of consecutive raw-DEFLATE streams (zlib `wbits=-15`,
+no zlib/gzip header), the first beginning at a constant offset `0x218`.**
+
+Verified on `01 Overture - Acc.mus` (2011), walking stream by stream:
+
+| stream | offset | compressed | inflated | entropy |
+| --- | --- | --- | --- | --- |
+| 1 | `0x00218` | 29,270 | 170,998 | 3.12 |
+| 2 | `0x0747E` | 15,632 | 118,274 | 2.67 |
+| 3 | `0x0B19E` | 4,637 | 22,534 | 3.06 |
+| 4 | `0x0C3CB` | 1,770 | 8,734 | 5.14 |
+
+**320,540 bytes inflated from a 53,113-byte file.** The output is unambiguously real: it contains
+**166 of 306 known strings** from the paired `.musx` — against a measured false-positive floor of
+**0 hits in ~12,300 decodes** — plus readable Finale vocabulary ("Orchestral Percussion", "Concert
+Snare Drum", "Times New Roman", "Broadway Copyist", "Expressive Text").
+
+Offset `0x218` held across all 8 confirmed pairs tested, inflating 3.2–3.5×:
+
+| file | `.mus` | offset | inflated | tail |
+| --- | --- | --- | --- | --- |
+| 01 Overture - Acc | 53,113 | `0x218` | 170,998 | 23,307 |
+| 01 Overture - Bass | 44,924 | `0x218` | 154,308 | 17,857 |
+| 01 Overture - Bb Sax | 44,869 | `0x218` | 154,372 | 17,792 |
+| … 5 more, all `0x218` | | | 150,586–154,372 | 17,250–17,857 |
+
+### Why this took the whole investigation
+
+**This document previously recorded "raw DEFLATE (no offset inflates)" as ruled out.** That was a
+false negative, and it survived because every later result was interpreted in its light. Three
+compounding mistakes:
+
+1. **The early raw-DEFLATE test was wrong** and never re-run, because it had been written down as
+   settled fact.
+2. **A broken control** (`os.urandom` as a stand-in for compressed data) produced the "long exact
+   repeats ⇒ not compressed" argument, which then *retired the entire compression search space* —
+   see the correction above.
+3. **Cohort blindness.** The structural findings (bit-packing, counters, the doubling ladder) are
+   real but come from **2001/2005** files, and were generalised to a format that had changed.
+
+The lesson worth keeping: **a negative result recorded as fact is more dangerous than an open
+question.** Re-test cheap negatives when later evidence shifts, and never build a sweeping exclusion
+on a control you have not measured.
+
+### Practical notes for the reader
+
+- Use `zlib.decompressobj(-15)` and walk the streams: inflate, advance by the consumed length
+  (`len(data) - p - len(obj.unused_data)`), repeat.
+- **Guard against the stored-block artifact.** A raw inflate at an arbitrary offset can hit a DEFLATE
+  *stored* block and return a verbatim copy of its input, which looks like a large successful decode.
+  Check `out[:64] == data[p+5:p+69]` and reject.
+- Observed inflation is 3.2–3.5× here, but cap allocations anyway — this is untrusted input.
+
+## The 2001/2005 cohort is a different format: a bit-packed record stream
 
 > ### ⚠️ MAJOR CORRECTION — the "no codec anywhere" claim was built on a broken control
 >
