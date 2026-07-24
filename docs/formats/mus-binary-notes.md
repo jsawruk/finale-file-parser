@@ -36,12 +36,43 @@ Use only these in-repo copies. Other copies exist elsewhere on the machine and a
 
 | Finding derived here | What the vendor docs say |
 | --- | --- |
-| Monotone +1 counter fields, validated with shuffle controls | **Entry prev/next links.** `eeppd.txt`: fields 1–2 are 32-bit links to the previous/next entry. The ETF example runs `^eE(1) 0 2`, `^eE(2) 1 3`, `^eE(3) 2 4` — sequential by construction. The counters are the entry linked list. |
+| Monotone +1 counter fields, validated with shuffle controls | *Hypothesis, **NOT** confirmed — see the failed test below.* `eeppd.txt` fields 1–2 are 32-bit prev/next entry links, sequential by construction, which looked like an obvious match. A direct test does not support it. |
 | Systematic 1-bit excess (0.535–0.555 in every cohort); histogram dominated by runs of 1s | **`SETBIT 0x80000000` — "always set (indicates a legal entry)"**, on *both* entry and note flags. A mandatory set high bit in every record, smeared across bit offsets by the packing. Not an "all-ones sentinel" as guessed here. |
 | The 1,022-byte lyrics-only block holds counters, not text | **Confirmed.** `etfspec.pdf`: "Lyrics are stored as entry details which give a **syllable offset into a raw text record**." The block is `^ve` detail records; the text lives in a separate raw-text section. |
 | Isomorph attack found no lyric text | Consistent — the raw text is a separate section, and it is evidently packed rather than stored as characters. |
 
-Two things this unlocks immediately:
+### ⚠️ ETF documents SEMANTICS, not the binary layout — two failed attempts prove it
+
+Both attempts to carry ETF field layout across to the binary failed. Record this before trying again.
+
+**1. The `^MS` counting attack found nothing.** `etfspec.pdf` gives MS as
+`measpace key beats divbeat auxflag meflag`, one record per measure. From the paired `.musx` for
+`01 Overture - Acc`: 41 measures, `key`=253 and `beats`=2 and `divbeat`=1024 constant throughout,
+`width` varying per measure (305, 334, 262, 261, 305, …) — a 41-value fingerprint.
+
+Searched at **bit** granularity (not just byte-aligned), across the whole file:
+
+| search | result |
+| --- | --- |
+| width sequence (41 varying 16-bit values) | `width[0]`=305 occurs at only 5 bit positions, `width[1]`=334 at 2 — chance level (~6 expected). **No run.** |
+| `divbeat`=1024 as a repeated constant | 15 positions in the whole file, not 41. Longest arithmetic progression: **2**. |
+| `key`=253 | 2 positions. |
+| same, on spec-era files (2005 Blues, 2005 Gifts, 2001 Bach Concerto), incl. byte-swapped | longest progression **2–3**, i.e. nothing. |
+
+So measure specs are **not** stored as flat arrays of 16-bit fields in any cohort.
+
+**2. The entry linked-list prediction failed.** `eeppd.txt` says entries are a doubly linked list, so
+entry *k* carries prev=*k*−1 and next=*k*+1 — predicting **two counter fields in one record with a
+constant delta of 2**. Testing every counter-like field at the confirmed stride: 70 such fields found,
+and **zero pairs with any constant small delta**. The counters are therefore *not* prev/next links.
+
+**The lesson:** the ETF spec is the *transportable text* format at **v98c.0 (Finale 97)**, while the
+corpus runs 2001–2012. Its field **order and widths do not transfer** to the binary. What the docs
+reliably give is **semantics**: what records exist, what the flag bits mean, enumerations, and the key
+encoding. Binary field layout still has to come from the bit-level work in this document — the docs
+then supply the meaning once a field is located. Do not treat an ETF field list as a binary struct.
+
+Two things this still unlocks:
 
 - **Counting attack is now well-founded.** `etfspec.pdf`: "There is exactly **one MS record for every
   measure** in the piece." So a record count in a `.mus` can be matched against the measure count read
