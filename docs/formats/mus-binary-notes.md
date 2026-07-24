@@ -82,10 +82,36 @@ Two things this still unlocks:
   exactly the `mode << 8 | signed-fifths` layout `enigma/key.py` already derived from the corpus —
   independent confirmation of shipped code.
 
-## ✅ SOLVED (2011/2012 cohort): the payload is a chain of RAW DEFLATE streams at `0x218`
+## ✅ SOLVED (2011/2012 cohort): the payload is a chain of ZLIB streams, found by `78 9c`
 
-**The 2011/2012 `.mus` payload is a sequence of consecutive raw-DEFLATE streams (zlib `wbits=-15`,
-no zlib/gzip header), the first beginning at a constant offset `0x218`.**
+**The 2011/2012 `.mus` payload is a sequence of consecutive zlib streams with ordinary `78 9c`
+headers. Locate them by scanning for the magic — do NOT hardcode an offset.**
+
+> **Corrected from the first write-up of this section**, which described it as *raw* DEFLATE at a
+> constant `0x218`. `0x218` is simply `0x216 + 2`: the two header bytes skipped. Reading it as
+> headerless deflate worked but hid the real structure, and hardcoding the offset breaks on files
+> whose preamble is a different length. Note this also means the earlier note *"zlib — no magic
+> anywhere"* was **another false negative**: `78 9c` is present, at `0x216`.
+
+### Corpus-wide verification (all 238 files)
+
+| cohort | files | files with zlib streams | total streams |
+| --- | --- | --- | --- |
+| 2001 | 102 | **0** | 0 |
+| 2004 | 1 | **0** | 0 |
+| 2005 | 36 | **0** | 0 |
+| 2011 | 89 | **89** | 354 |
+| 2012 | 10 | **10** | 40 |
+
+**99 of 99 files in the 2011/2012 cohort decode; 0 of 139 in the 2001/2004/2005 cohort do** — at any
+offset in `0x80`–`0x4000`, not just `0x216`. That is decisive confirmation of the two-era split: the
+older cohort is a genuinely different, uncompressed format, and the bit-packed record findings in this
+document belong to it.
+
+First-stream header offsets: **`0x216` in 97 files, `0x20A` in 2** (`Ode to Joy.mus`,
+`Ode to Joy - Opt. C Inst.mus`). The offset moves because the preamble ahead of it is variable-length —
+in the common case it ends with the ASCII fragment `ext inserts\0` then a short binary run. Roughly
+4 streams per file (394 across 99 files).
 
 Verified on `01 Overture - Acc.mus` (2011), walking stream by stream:
 
