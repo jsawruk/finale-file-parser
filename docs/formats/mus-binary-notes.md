@@ -148,6 +148,54 @@ non-byte-aligned record types**, consistent with the dominant period varying by 
 This is the best starting point for field-layout work: a short, byte-aligned record with an
 unambiguous counter, at a known offset, in a file already characterised.
 
+### Byte histogram: strongly non-uniform, and dominated by runs of 1-bits
+
+Measured on the 2005 payload (`Blues_BB_Score.mus`, 122,253 bytes). Earlier histogram work looked only
+at a 2012 file, which is nearly flat — that masked this.
+
+- **chi-square vs uniform = 56,784** against df = 255. Overwhelmingly non-uniform.
+- Most/least common byte ratio **19.8×** (2,634 vs 133).
+- Top bytes: `FF` 2.15%, `7F` 1.50%, `3F` 1.49%, `FE` 1.24%, `E2`, `F8`, `FC`, `F1`, `9F`, `7E`, `FD`,
+  `1F`, `7C` — against 0.39% uniform.
+
+Nearly all of the leaders are **runs of consecutive 1-bits at different alignments**: `FF`=11111111,
+`7F`=01111111, `3F`=00111111, `FE`=11111110, `F8`=11111000, `1F`=00011111, `7C`=01111100. Both the low
+and high nibble show `0xF` at ~14% against 6.25% uniform.
+
+This is exactly the fingerprint of **all-ones fields smeared across bit offsets by the packing** — a
+16- or 24-bit field of `1`s lands at each of the 8 alignments and produces precisely this family of
+byte values. Corroborated directly:
+
+| file | cohort | fraction of 1-bits | longest run of 1s |
+| --- | --- | --- | --- |
+| Blues_BB_Score.mus | 2005 | 0.5349 | 22 bits |
+| 9_Gifts.mus | 2005 | 0.5436 | 26 bits |
+| Bach Concerto.MUS | 2001 | 0.5548 | 23 bits |
+
+1-bits are over-represented in every cohort, with runs of ~3 bytes of solid 1s. **The natural reading
+is that unset/default fields are stored as all-ones (`-1` / `0xFFFF` "none" sentinels)** — a very
+common convention — rather than as zeros. Note the complement is *not* a fix-all: inverting makes
+`0x00` the top byte at only 2.15%, far below the 10–30% zero rate typical of plain record data, so the
+all-ones fields are localised rather than pervasive.
+
+### Per-column histograms confirm the 5-byte field structure
+
+Splitting the 5-byte record region (`0x215`, 160 records) by column position:
+
+| column | distinct values | entropy | most common |
+| --- | --- | --- | --- |
+| 0 | 74 | **5.11** | `E4` 22%, `BF` 11%, `3F` 9% |
+| 1 | 82 | 6.02 | `8F` 4%, `0F` 4%, `4F` 4% |
+| 2 | 74 | **5.38** | `E4` 18%, `EA` 6%, `E9` 6% |
+| 3 | 78 | 5.65 | `3F` 11%, `BF` 11% |
+| 4 | 92 | 6.18 | `E8` 6%, `E6` 4%, `E9` 4% |
+
+**Every column sits at 5.1–6.2 bits against 7.75 for the payload as a whole.** Slicing on the 5-byte
+period recovers ~2 bits per byte of structure, which only happens if the period genuinely aligns to
+fields. Columns 0 and 2 are the most constrained (tag-like); 1 and 4 look like value fields; column 3
+carries the `3f`/`bf` flag already noted. This is independent confirmation of the record layout and a
+concrete handle for naming fields.
+
 ### Methodological note: always put a known-positive in the sweep
 
 The first run of this sweep returned **zero for every file and every stride, including
