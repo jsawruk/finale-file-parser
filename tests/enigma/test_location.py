@@ -161,3 +161,29 @@ def test_next_chain_cycle_raises() -> None:
     )
     with pytest.raises(MalformedScoreError):
         locate_entries(parse_enigma(doc))
+
+
+def test_empty_and_zero_frame_slots_are_skipped_not_errors() -> None:
+    """An unused layer slot (empty or "0") is skipped, not a broken frame.
+
+    Finale omits unused slots, but Enigma may write frameN=0; either must not
+    raise, and the real frames must still resolve.
+    """
+    doc = _doc(
+        _entries("1:0")
+        + """
+        <others>
+          <frameSpec cmper="10" inci="0">
+            <startEntry>1</startEntry><endEntry>1</endEntry>
+          </frameSpec>
+          <measSpec cmper="1"><keySig><key>0</key></keySig></measSpec>
+        </others>
+        <details>
+          <gfhold cmper1="1" cmper2="1">
+            <frame1>10</frame1><frame2>0</frame2><frame3></frame3>
+          </gfhold>
+        </details>
+        """
+    )
+    loc = locate_entries(parse_enigma(doc))
+    assert loc[1].measure == 1

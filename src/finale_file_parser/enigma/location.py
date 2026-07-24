@@ -78,7 +78,10 @@ def locate_entries(doc: EnigmaDocument) -> dict[int, EntryLocation]:
         key_signature = key_by_measure.get(measure, 0)
         for field_name in _FRAME_FIELDS:
             frame_value = gfhold.fields.get(field_name)
-            if not isinstance(frame_value, str):
+            if not isinstance(frame_value, str) or frame_value in ("", "0"):
+                # An absent, empty, or "0" frame slot is an unused layer, not a
+                # frame — skip it. Real files omit unused slots, but Enigma may
+                # also write 0; either way it names no frameSpec.
                 continue
             frame_cmper = _int(frame_value, field_name)
             _place_frame_entries(
