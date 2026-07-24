@@ -163,7 +163,61 @@ on a control you have not measured.
   Check `out[:64] == data[p+5:p+69]` and reject.
 - Observed inflation is 3.2–3.5× here, but cap allocations anyway — this is untrusted input.
 
-## The 2001/2005 cohort is a different format: a bit-packed record stream
+## How the two eras relate: shared container, entirely different payload
+
+Now that the newer payload decompresses, the two eras can be compared directly.
+
+### What they DO share
+
+- **The container header is identical in structure.** `ENIGMA BINARY FILE` magic, the version banner
+  at `0x20`, and the provenance stamps at `0x66`–`0x9D` — already decoded by `version/mus.py` for all
+  238 files, both eras.
+- **The payload begins at ~`0x200`** in both.
+- **The same logical Enigma data model**, per the vendored docs: the same record types conceptually
+  (entries, measure specs, staff specs, …) whatever the physical encoding.
+
+### What they do NOT share — the payload encoding is unrelated
+
+| | 2001/2005 (raw) | 2011/2012 (decompressed) |
+| --- | --- | --- |
+| compression | **none found** | chain of zlib streams |
+| entropy | 7.748 | 3.257 |
+| 1-bit density | 0.5349 | 0.1327 |
+| bytes inside ASCII runs ≥6 | 0.46% | 4.21% |
+| `Times New Roman`, `Maestro`, `Percussion`, `Broadway Copyist` | **absent** | **all present** |
+
+**The old format is not a compressed anything.** Exhaustive inflate at *every* offset in the file,
+with both `wbits=15` and `wbits=-15`, on three files across both old cohorts: **nothing**. (Stray
+`78 01`/`78 9c`/`1f 8b` byte pairs occur a handful of times per file, at chance frequency, and none
+inflates.) Combined with the corpus scan — 0 of 139 old-cohort files versus 99 of 99 new — the old
+format is definitively not deflate-based.
+
+**But it is not plainly readable either.** Searching all 8 bit-shifts of the payload for generic font
+probes (`Times`, `Maestro`, `Font`, `Roman`) finds nothing in any 2001 or 2005 file, while the same
+strings are trivially present in decompressed 2011 data. Every Finale document must reference fonts,
+so the old format evidently does not store them as literal strings at any bit alignment — plausibly as
+numeric IDs (Mac font IDs were the era's convention), but that is untested.
+
+So the two eras share a container and a data model, and nothing else. **Findings from one era must not
+be carried to the other** — the mistake that cost this investigation most of its time.
+
+### Open: what the old payload actually is
+
+It is neither deflate-compressed nor plaintext. Constraints any answer must satisfy:
+
+- bit density varies **0.447–0.638** across 8 KiB windows — three times the spread of a gzip control,
+  which no compressor produces (see the cohort table above)
+- it carries **counter fields** that survive a shuffle control, and a **doubling ladder**
+  (2, 4, 8, 16, 32, 64, 128, 0) with exact byte-modular wraparound
+- no readable text at any bit alignment
+
+**Inconclusive test, recorded so it is not mistaken for a result:** 6-bit and 7-bit packed-text
+unpacking was tried across all bit offsets, scored by a "word-like run" regex. It is worthless — the
+detector fires on any letter sequence, returning 2,119 gibberish "words" from the old payload while
+scoring genuine decompressed English at only 715. **Re-run with a real dictionary before drawing any
+conclusion about packed text.**
+
+## The 2001/2005 cohort in detail: a bit-packed record stream
 
 > ### ⚠️ MAJOR CORRECTION — the "no codec anywhere" claim was built on a broken control
 >
