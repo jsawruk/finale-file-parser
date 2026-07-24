@@ -7,6 +7,51 @@
 All findings below are from **structural analysis of the curated corpus (238 `.mus`, 401 `.musx`)**
 plus permitted community documentation. Report counts/structure only — never corpus record values.
 
+## HEADLINE: the payload is a bit-packed record stream with a 49-bit stride — there is no codec
+
+Everything below this section was written while assuming the payload was *transformed* somehow. It is
+not. It is **dense bit-packed structured records**, and the reason no decompressor ever worked is that
+there is nothing to decompress.
+
+### The evidence
+
+In `Blues_BB_Score.mus` (2005/MAC), the 4-byte anchor `fe fc e7 7e` occurs 93 times, and **76 of its
+92 gaps are exactly 49 bytes**. Taking the byte at fixed offsets from each anchor and measuring the
+increment per anchor occurrence:
+
+| byte offset from anchor | −8 | −2 | +4 | +10 | +16 | +22 | +28 | +34 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| increment per record | **+2** | **+4** | **+8** | **+16** | **+32** | **+64** | **+128** | **0** |
+
+That is one logical counter incrementing by 1, observed at eight successive **bit** positions:
+2¹, 2², 2³, 2⁴, 2⁵, 2⁶, 2⁷, 2⁸≡0. The wraparounds are exact byte-modular arithmetic (−224 = 32−256,
+−192 = 64−256, ±128), and the final column is 0 because the field has shifted entirely out of that
+byte. Dividing each column by its power of two yields increments of **exactly 1.0** with identical
+reset behaviour across all columns.
+
+Each successive field sits **+6 bytes and +1 bit** from the previous one — a stride of **49 bits**.
+Eight strides = 392 bits = **49 bytes**, which is precisely the observed byte-level super-period: byte
+patterns recur every 49 bytes because that is when the bit phase realigns to a byte boundary.
+
+### Why this explains the entire investigation
+
+- **Why every codec failed** — LZSS, LZH, LZW, DEFLATE, bzip2, lzma, PKWARE DCL. There is no codec.
+- **Why entropy is ~7.6–7.98** — densely packed fields with no wasted bits look near-random.
+- **Why long exact repeats exist** — identical record content at the same bit phase produces identical
+  bytes. No compressor would have left them.
+- **Why repeats are byte-aligned** — they can only recur at multiples of 49 bytes, where phase realigns.
+- **Why cross-file identical runs appear at arbitrary byte shifts** — same content, same phase.
+- **Why the isomorph attack found no text** — text fields sit at varying bit offsets, so no global byte
+  substitution or single global bit-shift can expose them.
+
+### Scope of the claim
+
+Confirmed on `Blues_BB_Score.mus` for anchors `fefce77e` and `f7e73ff7`, and counter-like fields with a
+collapsing shuffle control were also found in `9_Gifts.mus` (anchors `ff31f511`, `47fc63fc`, …). The
+49-bit stride itself is so far established on one file. **Next: confirm the stride on more files and
+across cohorts, and check whether 49 bits is universal or per-record-type.** Do not assume it is
+universal yet.
+
 ## Headline finding
 
 **The payload is transformed (not plaintext) at ~7.98 bits/byte, but it is neither LZ-family
