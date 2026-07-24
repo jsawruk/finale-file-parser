@@ -7,6 +7,53 @@
 All findings below are from **structural analysis of the curated corpus (238 `.mus`, 401 `.musx`)**
 plus permitted community documentation. Report counts/structure only — never corpus record values.
 
+## ✅✅ SOLVED — BOTH ERAS. 238 of 238 corpus files decode.
+
+| cohort | files | payload encoding | offset | decodes |
+| --- | --- | --- | --- | --- |
+| 2001 / 2004 / 2005 | 139 | **PKWARE DCL "implode"** (`lit=0`, `dict=4`) | `0x20A` | **139/139** |
+| 2011 / 2012 | 99 | **chain of zlib streams** (`78 9c`) | `0x216` (2 files `0x20A`) | **99/99** |
+
+Both offsets and the DCL header are constant across every file in their cohort. DCL inflation runs
+0.82×–2.75× (median 2.35×); zlib 3.2×–3.5×. Decoded output is unambiguously real Finale data —
+"General MIDI", "Entry & Playback", "Agogo Bells", "Wood Blocks", "Bookmark" in the old cohort;
+"Orchestral Percussion", "Times New Roman", "Broadway Copyist" in the new.
+
+Use `scratchpad/blast.py` (validated against zlib's own `contrib/blast` test vector) for the old
+cohort, and `zlib.decompressobj()` walking the `78 9c` chain for the new.
+
+### ⚠️ RETRACTED: the "bit-packed record stream" model for 2001/2005
+
+**Everything this document said about the old cohort being an uncompressed bit-packed record stream
+was analysis of *compressed* data.** The 49-byte groups, the 49-bit sub-units, the counter fields, the
+doubling ladder, the "5-byte record" — all artifacts. Retained below only as a cautionary record.
+
+The irony is that they were *real* patterns with a mundane cause. **DCL with `lit=0` emits raw 8-bit
+literals into a bit-packed stream interleaved with 1-bit literal/match flags.** So plaintext bytes
+pass through verbatim but at bit offsets that drift as flags and match tokens accumulate. That single
+fact explains every "discovery":
+
+| observed | actual cause |
+| --- | --- |
+| counter at successive **bit** offsets; ladder 2,4,8,16,32,64,128,0 | a plaintext counter array passing through as raw literals, its bit offset drifting one bit per flag |
+| "byte-oriented, not a bitstream" | literals are whole bytes — just not byte-*aligned* |
+| no readable text at any fixed bit shift | the drift means no single global shift aligns them |
+| bit density varying 0.447–0.638 | plaintext statistics showing through the raw literals |
+| long exact repeats | repeated literal runs in the source |
+
+### The mistake that hid this for the whole investigation
+
+**PKWARE DCL was tested, with a correctly validated decoder, and recorded as "RULED OUT" — but the
+test ran against `confirmed_pairs()`, which are 2011/2012 files.** Those are zlib, so of course DCL
+found nothing. The negative was then written down as settled and never revisited.
+
+Every codec test in this investigation — LZSS, LZH, DCL — ran on 2011/2012 files, because that is
+where the `.musx` oracle exists. The old cohort was never searched at all until the very end.
+
+**The rule this earns:** a codec negative is only meaningful *for the cohort it was run on*. Record
+the cohort with every result. Two false negatives (raw DEFLATE, and DCL) each cost this investigation
+more than every positive finding gained.
+
 ## READ `docs/eeppd.txt` AND `docs/etfspec.pdf` FIRST
 
 **Process failure worth recording:** most of this document was derived by reverse engineering while
