@@ -7,6 +7,50 @@
 All findings below are from **structural analysis of the curated corpus (238 `.mus`, 401 `.musx`)**
 plus permitted community documentation. Report counts/structure only — never corpus record values.
 
+## READ `docs/eeppd.txt` AND `docs/etfspec.pdf` FIRST
+
+**Process failure worth recording:** most of this document was derived by reverse engineering while
+Coda's own documentation sat in this repo, git-tracked. `CLAUDE.md` requires reading the relevant
+`docs/` file before working in an area; that was skipped because `corpus/` was searched for `.etf`
+files and `docs/` was never listed. Read these before touching the format:
+
+- **`docs/eeppd.txt`** — Coda's Enigma **Entry Pool** documentation (1996). Entry/note field layout
+  and every flag bit.
+- **`docs/etfspec.pdf`** — official Coda **ETF Specification v98c.0**. A superset of `eeppd.txt`:
+  same entry-pool material plus ~22 record types. Extract with `pdftotext -layout` (available here).
+- `docs/lilypond-etf-format.html` — self-described incomplete; corroborate before relying on it.
+- `docs/cahill-enigma-cpnview-thesis.pdf` — covers **ETF (the text format)**, not the binary layout.
+  `REFERENCES.md` describes it as treating the legacy binary format, which overstates it.
+
+Use only these in-repo copies. Other copies exist elsewhere on the machine and are out of scope.
+
+### The record vocabulary (from `etfspec.pdf`)
+
+22 tags: `^eE` entry · `^MS` measure spec · `^IS` staff spec · `^NG` group spec · `^PS` page spec ·
+`^SS` staff system spec · `^IU` instrument used · `^TX` text block · `^pT` page text block ·
+`^mt` measure text block · `^ve` lyrics · `^CL` clef · `^CH`/`^hC` chord · `^CN` notehead mods ·
+`^IM` articulation · `^IV` chord suffix · `^IK` chord playback · `^ME` MIDI expression ·
+`^ac` performance data · `^CD` cross staffing · `^LP` staff enduction.
+
+### What the docs settle about findings in this document
+
+| Finding derived here | What the vendor docs say |
+| --- | --- |
+| Monotone +1 counter fields, validated with shuffle controls | **Entry prev/next links.** `eeppd.txt`: fields 1–2 are 32-bit links to the previous/next entry. The ETF example runs `^eE(1) 0 2`, `^eE(2) 1 3`, `^eE(3) 2 4` — sequential by construction. The counters are the entry linked list. |
+| Systematic 1-bit excess (0.535–0.555 in every cohort); histogram dominated by runs of 1s | **`SETBIT 0x80000000` — "always set (indicates a legal entry)"**, on *both* entry and note flags. A mandatory set high bit in every record, smeared across bit offsets by the packing. Not an "all-ones sentinel" as guessed here. |
+| The 1,022-byte lyrics-only block holds counters, not text | **Confirmed.** `etfspec.pdf`: "Lyrics are stored as entry details which give a **syllable offset into a raw text record**." The block is `^ve` detail records; the text lives in a separate raw-text section. |
+| Isomorph attack found no lyric text | Consistent — the raw text is a separate section, and it is evidently packed rather than stored as characters. |
+
+Two things this unlocks immediately:
+
+- **Counting attack is now well-founded.** `etfspec.pdf`: "There is exactly **one MS record for every
+  measure** in the piece." So a record count in a `.mus` can be matched against the measure count read
+  from a paired `.musx` to identify record types by fingerprint.
+- **Key encoding is confirmed vendor-side.** Linear keys are `< 16384`: top two bits 0, next six a
+  bank number (0–63), bottom eight the accidentals (−128…127); bank 0 = major, bank 1 = minor. That is
+  exactly the `mode << 8 | signed-fifths` layout `enigma/key.py` already derived from the corpus —
+  independent confirmation of shipped code.
+
 ## HEADLINE: the payload is a bit-packed record stream — there is no codec
 
 > **Correction (stride).** An earlier version of this section claimed a **49-bit stride** as the
