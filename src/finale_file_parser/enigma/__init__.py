@@ -15,6 +15,11 @@ from finale_file_parser.enigma.document import (
     TextsPool,
     parse_enigma,
 )
+from finale_file_parser.enigma.location import (
+    EntryLocation,
+    MalformedScoreError,
+    locate_entries,
+)
 from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.music import (
     Duration,
@@ -34,8 +39,10 @@ __all__ = [
     "EnigmaDocument",
     "EntriesPool",
     "Entry",
+    "EntryLocation",
     "MalformedEnigmaError",
     "MalformedEntryError",
+    "MalformedScoreError",
     "Note",
     "NoteValue",
     "OptionsPool",
@@ -44,6 +51,7 @@ __all__ = [
     "Record",
     "TextsPool",
     "decrypt",
+    "locate_entries",
     "parse_enigma",
     "read_entry",
     "score_xml",
