@@ -118,6 +118,36 @@ family shows no counter fields at 7 or 56 bits (or anything else tried). What ca
 **unexplained** — plausibly byte-aligned 7-byte structures carrying no counters, but that is untested.
 Caveat: those files were probed from one anchor each, and Petrushka's anchor had only 19 occurrences.
 
+### A directly readable record: 5-byte, byte-aligned, with a visible counter
+
+The payload of `Blues_BB_Score.mus` opens at `0x200` with structure legible in the raw bytes — no
+analysis needed. From `0x215`, in 5-byte rows:
+
+```
+0x0021A  e4 4f e6 bf 8a     counter 0xE64F
+0x0021F  e4 6f e6 3f 8b            0xE66F   +0x20
+0x00224  e4 8f e6 bf 8b            0xE68F   +0x20
+0x00229  e4 af e6 3f 8c            0xE6AF   +0x20
+0x0022E  e4 cf e6 3f 8e            0xE6CF   +0x20
+0x00233  e4 ef e6 bf 8e            0xE6EF   +0x20
+0x00238  e4 0f e7 3f 8f            0xE70F   +0x20   <- carries into the high byte
+0x0023D  e4 2f e7 3f 91            0xE72F   +0x20
+0x00242  e4 2f e8 3f 81            0xE82F   +0x100  <- discontinuity, new group
+```
+
+**5-byte records with a 16-bit counter incrementing by exactly `0x20`.** `0x20` = 2⁵, so the underlying
+value increments by **1** and sits 5 bits up in the field — the same signature the doubling ladder
+established, but here visible without any tooling. Byte 3 alternates `3f`/`bf` (a single `0x80` flag);
+byte 4 drifts `8a 8a 8b 8b 8c 8e 8e 8f 91`, plausibly a staff or pitch index.
+
+Note this region is **byte-aligned**: 5 bytes = 40 bits, a multiple of 8, so there is no bit-phase
+drift and the counter's scale stays fixed at ×32. That contrasts with the 49-byte region, whose
+sub-units are 49 bits and whose phase walks one bit per record. **The format mixes byte-aligned and
+non-byte-aligned record types**, consistent with the dominant period varying by document.
+
+This is the best starting point for field-layout work: a short, byte-aligned record with an
+unambiguous counter, at a known offset, in a file already characterised.
+
 ### Methodological note: always put a known-positive in the sweep
 
 The first run of this sweep returned **zero for every file and every stride, including
@@ -455,11 +485,14 @@ floor of **0 hits across ~12,300 successful decodes**, so any nonzero hit is rea
   (`0x66`–`0x9D`). Already decoded by `version/mus.py`.
 - `0xA0`–`0xA6` — small fixed marker (`04 01 0A …`, same in ~36/50 files).
 - `0xA6`–~`0xD6` — run of `0x00`.
-- ~`0xD8`–~`0x200` — a **variable-length, lower-entropy structured preamble** holding **plain-ASCII
+- ~`0xD8`–~`0x200` — a **fixed-size metadata block** which, *when populated*, holds **plain-ASCII
   document metadata**, NUL-terminated: title at `0xD8`, then composer, copyright line, and the
   document-style description. Confirmed by diffing two `.mus` files from the same collection: they are
-  byte-identical up to `0xD8` and diverge exactly at the first character of the title. This region can
-  be byte-identical across different pieces (shared Finale defaults).
+  byte-identical up to `0xD8` and diverge exactly at the first character of the title.
+  **It is frequently empty.** `Blues_BB_Score.mus` is all `0x00` from `0xA6` straight through `0x1FF` —
+  the Berklee exercise files simply carry no title/composer. So `0xD8` is where the title *goes*, not
+  where one is always found; a reader must not assume text is present. The block can also be
+  byte-identical across different pieces (shared Finale defaults).
 - ~`0x200` — the **high-entropy payload begins**, at a *data-dependent* offset with no constant magic.
   (A 1024-byte entropy profile saturates by `0x180`, but a window that wide cannot localise a
   transition to better than its own width, and plain ASCII metadata is still present at `0x1BE`. So
