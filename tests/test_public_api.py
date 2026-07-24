@@ -61,6 +61,9 @@ EXPECTED_PUBLIC_NAMES = {
     "Pool",
     "ProvenanceStamp",
     "Record",
+    "SpelledNote",
+    "SpelledPitch",
+    "StaffTransposition",
     "TextsPool",
     "UnsupportedKeyError",
     "decode_key",
@@ -70,7 +73,12 @@ EXPECTED_PUBLIC_NAMES = {
     "open_musx",
     "parse_enigma",
     "read_entry",
+    "read_transposition",
     "score_xml",
+    "spell_note",
+    "spell_pitch",
+    "transpose_key",
+    "transpose_pitch",
 }
 
 

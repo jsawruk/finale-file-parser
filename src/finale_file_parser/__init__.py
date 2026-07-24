@@ -26,6 +26,9 @@ from finale_file_parser.enigma import (
     OthersPool,
     Pool,
     Record,
+    SpelledNote,
+    SpelledPitch,
+    StaffTransposition,
     TextsPool,
     UnsupportedKeyError,
     decode_key,
@@ -33,7 +36,12 @@ from finale_file_parser.enigma import (
     locate_entries,
     parse_enigma,
     read_entry,
+    read_transposition,
     score_xml,
+    spell_note,
+    spell_pitch,
+    transpose_key,
+    transpose_pitch,
 )
 from finale_file_parser.version.detect import detect_version
 from finale_file_parser.version.models import (
@@ -80,6 +88,9 @@ __all__ = [
     "Pool",
     "ProvenanceStamp",
     "Record",
+    "SpelledNote",
+    "SpelledPitch",
+    "StaffTransposition",
     "TextsPool",
     "UnsupportedKeyError",
     "decode_key",
@@ -89,5 +100,10 @@ __all__ = [
     "open_musx",
     "parse_enigma",
     "read_entry",
+    "read_transposition",
     "score_xml",
+    "spell_note",
+    "spell_pitch",
+    "transpose_key",
+    "transpose_pitch",
 ]
