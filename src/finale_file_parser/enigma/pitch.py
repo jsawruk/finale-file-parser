@@ -131,11 +131,26 @@ class StaffTransposition:
         return self.interval == 0 and self.adjust == 0
 
 
+def _transposition_int(
+    value: str | tuple[str, ...] | Record | tuple[Record, ...] | None,
+) -> int:
+    """A transposition field as an int; absent/empty is 0, malformed raises ValueError."""
+    if value is None or value == "":
+        return 0
+    if not isinstance(value, str):
+        raise ValueError(
+            f"malformed transposition field: expected an integer string, got {type(value).__name__}"
+        )
+    return int(value)
+
+
 def read_transposition(staff_spec: Record) -> StaffTransposition:
     """Read a staffSpec's transposition, defaulting to concert pitch when absent.
 
-    Raises ValueError if a present interval/adjust field is not an integer (malformed
-    input fails loudly rather than silently spelling the wrong pitch).
+    Raises ValueError if a present interval/adjust field is not an integer string
+    (malformed input fails loudly rather than silently spelling the wrong pitch). A
+    whole absent `transposition`/`keysig` sub-record, or an absent/empty field within
+    it, defaults to concert pitch (interval=0, adjust=0).
     """
     transposition = staff_spec.fields.get("transposition")
     if not isinstance(transposition, Record):
@@ -143,11 +158,9 @@ def read_transposition(staff_spec: Record) -> StaffTransposition:
     keysig = transposition.fields.get("keysig")
     if not isinstance(keysig, Record):
         return StaffTransposition(interval=0, adjust=0)
-    interval = keysig.fields.get("interval")
-    adjust = keysig.fields.get("adjust")
     return StaffTransposition(
-        interval=int(interval) if isinstance(interval, str) and interval else 0,
-        adjust=int(adjust) if isinstance(adjust, str) and adjust else 0,
+        interval=_transposition_int(keysig.fields.get("interval")),
+        adjust=_transposition_int(keysig.fields.get("adjust")),
     )
 
 

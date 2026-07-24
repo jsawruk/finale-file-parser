@@ -158,6 +158,63 @@ def test_read_transposition_absent_defaults_to_concert() -> None:
     assert read_transposition(_staff_spec(None)) == StaffTransposition(0, 0)
 
 
+def test_read_transposition_empty_string_defaults_to_concert() -> None:
+    got = read_transposition(_staff_spec(_transposition("", "")))
+    assert got == StaffTransposition(0, 0)
+
+
+def test_read_transposition_repeated_interval_tag_raises() -> None:
+    keysig = Record(
+        tag="keysig",
+        attrs={},
+        text="",
+        fields={"interval": ("1", "2"), "adjust": "0"},
+    )
+    transposition = Record(
+        tag="transposition",
+        attrs={},
+        text="",
+        fields={"keysig": keysig},
+    )
+    with pytest.raises(ValueError, match="malformed transposition field"):
+        read_transposition(_staff_spec(transposition))
+
+
+def test_read_transposition_repeated_adjust_tag_raises() -> None:
+    keysig = Record(
+        tag="keysig",
+        attrs={},
+        text="",
+        fields={"interval": "0", "adjust": ("1", "2")},
+    )
+    transposition = Record(
+        tag="transposition",
+        attrs={},
+        text="",
+        fields={"keysig": keysig},
+    )
+    with pytest.raises(ValueError, match="malformed transposition field"):
+        read_transposition(_staff_spec(transposition))
+
+
+def test_read_transposition_nested_record_interval_raises() -> None:
+    nested = Record(tag="interval", attrs={}, text="1", fields={})
+    keysig = Record(
+        tag="keysig",
+        attrs={},
+        text="",
+        fields={"interval": nested, "adjust": "0"},
+    )
+    transposition = Record(
+        tag="transposition",
+        attrs={},
+        text="",
+        fields={"keysig": keysig},
+    )
+    with pytest.raises(ValueError, match="malformed transposition field"):
+        read_transposition(_staff_spec(transposition))
+
+
 def test_is_concert_false_when_transposing() -> None:
     assert StaffTransposition(1, 2).is_concert is False
 
