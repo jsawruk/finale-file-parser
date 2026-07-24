@@ -15,6 +15,12 @@ from finale_file_parser.enigma.document import (
     TextsPool,
     parse_enigma,
 )
+from finale_file_parser.enigma.key import (
+    KeySignature,
+    Mode,
+    UnsupportedKeyError,
+    decode_key,
+)
 from finale_file_parser.enigma.location import (
     EntryLocation,
     MalformedScoreError,
@@ -40,9 +46,11 @@ __all__ = [
     "EntriesPool",
     "Entry",
     "EntryLocation",
+    "KeySignature",
     "MalformedEnigmaError",
     "MalformedEntryError",
     "MalformedScoreError",
+    "Mode",
     "Note",
     "NoteValue",
     "OptionsPool",
@@ -50,6 +58,8 @@ __all__ = [
     "Pool",
     "Record",
     "TextsPool",
+    "UnsupportedKeyError",
+    "decode_key",
     "decrypt",
     "locate_entries",
     "parse_enigma",
