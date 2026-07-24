@@ -2,9 +2,9 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from finale_file_parser.enigma.key import KeySignature, Mode
+from finale_file_parser.enigma.key import KeySignature, Mode, UnsupportedKeyError
 from finale_file_parser.enigma.music import Note
-from finale_file_parser.enigma.pitch import SpelledPitch, spell_pitch
+from finale_file_parser.enigma.pitch import SpelledPitch, spell_pitch, transpose_key
 
 
 def _note(harm_lev: int, harm_alt: int = 0) -> Note:
@@ -60,3 +60,33 @@ def test_double_accidental_names() -> None:
 def test_spelled_pitch_is_frozen() -> None:
     with pytest.raises(FrozenInstanceError):
         SpelledPitch("C", 0, 4).letter = "D"  # type: ignore[misc]
+
+
+def test_transpose_key_bb_instrument_c_to_d() -> None:
+    written = transpose_key(C_MAJOR, interval=1, adjust=2)
+    assert (written.fifths, written.mode, written.tonic) == (2, Mode.MAJOR, "D")
+
+
+def test_transpose_key_f_horn_c_to_g() -> None:
+    written = transpose_key(C_MAJOR, interval=4, adjust=1)
+    assert (written.fifths, written.tonic) == (1, "G")
+
+
+def test_transpose_key_eb_alto_c_to_a() -> None:
+    written = transpose_key(C_MAJOR, interval=5, adjust=3)
+    assert (written.fifths, written.tonic) == (3, "A")
+
+
+def test_transpose_key_preserves_minor_mode() -> None:
+    written = transpose_key(A_MINOR, interval=1, adjust=2)
+    assert (written.fifths, written.mode, written.tonic) == (2, Mode.MINOR, "B")
+
+
+def test_transpose_key_identity_for_concert() -> None:
+    written = transpose_key(D_MAJOR, interval=0, adjust=0)
+    assert (written.fifths, written.mode, written.tonic) == (2, Mode.MAJOR, "D")
+
+
+def test_transpose_key_out_of_range_raises() -> None:
+    with pytest.raises(UnsupportedKeyError):
+        transpose_key(_key(6, Mode.MAJOR, "F#"), interval=1, adjust=2)  # 6 + 2 = 8 fifths
