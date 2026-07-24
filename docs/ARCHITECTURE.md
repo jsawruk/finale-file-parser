@@ -299,6 +299,60 @@ all 401 archives (`tests/enigma/test_key_corpus_sweep.py`), decoded by `enigma/k
   than guess, since a wrong key would silently misspell every pitch that resolves through it. The
   corpus has 0 such values.
 
+### Known format facts — pitch spelling and transposition
+
+Full reference and derivation: `docs/superpowers/specs/2026-07-24-pitch-spelling-design.md`. Turns
+`decode_key` (tonic + fifths), `read_entry`'s `harm_lev`/`harm_alt`, and a staff's transposition into
+an absolute spelled pitch (letter + accidental + octave), for both the **written** (what a player
+reads) and **concert** (sounding) pitch. Implemented in `enigma/pitch.py`; verified against all 401
+corpus archives, and against the 50,024 transposing-staff notes surveyed during design (every one
+spells with 0 invariant violations — see below).
+
+- **`harm_lev` is a diatonic scale degree** from the key's tonic, octaves included (`harm_lev = 0` is
+  the tonic nearest middle C; `+7` is one octave up). **`harm_alt` is a chromatic alteration**
+  relative to what the key signature already dictates for that letter (`0` = follow the key; e.g.
+  F♮ in D major is `harm_lev = 2, harm_alt = −1`).
+- **Spelling rule:** tonic letter + `harm_lev` → letter and octave (`LETTERS = "CDEFGAB"`, C-indexed
+  so the octave boundary falls at C, as scientific pitch requires); the key's accidental for that
+  letter (from the sharp order `F C G D A E B` or flat order `B E A D G C F`) + `harm_alt` →
+  alteration.
+- **Transposition is stored on `staffSpec.transposition.keysig`** as two signed integers:
+  `interval` — diatonic steps the **written** pitch sits above concert (`0` = unison, `7` = an
+  octave) — and `adjust` — the **written** key signature's shift on the circle of fifths (sharps
+  positive). The written key is the concert key with `fifths += adjust` (mode unchanged, tonic
+  re-derived). The concert pitch is the written pitch dropped `interval` diatonic steps and
+  `T = ((7 · adjust) mod 12) + 12 · (interval ÷ 7)` semitones (a key-signature shift of `adjust`
+  fifths moves the tonic `(7 · adjust) mod 12` semitones; the `12 · (interval ÷ 7)` term accounts
+  for whole-octave transpositions). For a concert (non-transposing) staff (`interval = 0, adjust =
+  0`) this is the identity.
+- **Corroboration** (the `interval`/`adjust` decode is inferred, so the evidence matters): six
+  distinct non-zero corpus signatures all reproduce a textbook instrument's transposition exactly —
+
+  | `interval` | `adjust` | interval above concert | instrument |
+  |---|---|---|---|
+  | 1 | 2 | major 2nd (+2 sharps) | B♭ trumpet / clarinet |
+  | 4 | 1 | perfect 5th (+1 sharp) | F horn |
+  | 5 | 3 | major 6th (+3 sharps) | E♭ alto sax |
+  | 8 | 2 | major 9th (+2 sharps) | B♭ tenor sax |
+  | 12 | 3 | major 13th (+3 sharps) | E♭ baritone sax |
+  | ±7 | 0 | octave (`noKeyOpt`) | bass / piccolo family |
+
+  The octave rows (`interval = ±7, adjust = 0`) anchor `interval` as diatonic steps (7 = an octave)
+  and `adjust` as a key shift that is 0 for a pure octave; "each added sharp is a perfect fifth" (a
+  key shift of `adjust` fifths moves the tonic `(7 · adjust) mod 12` semitones) then reproduces every
+  other row. The written-storage argument: `measSpec` carries a single **concert** key per measure
+  (keyed by measure only, shared across every staff), so the written key is never stored directly —
+  it must be derived by transposing the concert key, which is only meaningful if the stored
+  `harm_lev`/`harm_alt` are the written pitch relative to the written key.
+- **Inferred vs proven:** as with `mode = 1 ⇒ minor` in `decode_key`, **the instrument decode and the
+  written-storage claim are inferred but strongly corroborated, not proven** — no corpus file's
+  instrument or stored-pitch convention is independently known; the confidence rests on six distinct
+  signatures all landing on real instruments, the octave anchor, the fifths-to-semitones law, and
+  Finale's documented behaviour of storing written pitch.
+- **`noKeyOpt` appears only on octave transpositions** (where `adjust = 0` already leaves the key
+  signature unchanged) and **`setToClef` is display-only**; `read_transposition` does not consume
+  either flag.
+
 ## Data flow
 
 <!-- Describe the path of the core operation, input to output, naming the key types. -->

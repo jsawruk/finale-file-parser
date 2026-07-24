@@ -5,7 +5,16 @@ from finale_file_parser.enigma.key import (
     Mode,
     UnsupportedKeyError,
     decode_key,
+    tonic_for,
 )
+
+
+def test_tonic_for_major_and_minor() -> None:
+    assert tonic_for(0, Mode.MAJOR) == "C"
+    assert tonic_for(2, Mode.MAJOR) == "D"
+    assert tonic_for(-2, Mode.MAJOR) == "Bb"
+    assert tonic_for(0, Mode.MINOR) == "A"
+    assert tonic_for(-1, Mode.MINOR) == "D"
 
 
 @pytest.mark.parametrize(

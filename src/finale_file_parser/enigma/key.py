@@ -71,6 +71,11 @@ class Mode(Enum):
     MINOR = 1
 
 
+def tonic_for(fifths: int, mode: Mode) -> str:
+    """The tonic note name for a standard (fifths, mode) key, via the circle of fifths."""
+    return (_MAJOR_TONIC if mode is Mode.MAJOR else _MINOR_TONIC)[fifths]
+
+
 @dataclass(frozen=True)
 class KeySignature:
     """A decoded key signature."""
@@ -101,5 +106,5 @@ def decode_key(raw: int) -> KeySignature:
             f"unsupported key value {raw} (mode={mode_value}, fifths={fifths})"
         )
     mode = Mode(mode_value)
-    tonic = (_MAJOR_TONIC if mode is Mode.MAJOR else _MINOR_TONIC)[fifths]
+    tonic = tonic_for(fifths, mode)
     return KeySignature(fifths=fifths, mode=mode, tonic=tonic)

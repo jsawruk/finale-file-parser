@@ -35,6 +35,16 @@ from finale_file_parser.enigma.music import (
     NoteValue,
     read_entry,
 )
+from finale_file_parser.enigma.pitch import (
+    SpelledNote,
+    SpelledPitch,
+    StaffTransposition,
+    read_transposition,
+    spell_note,
+    spell_pitch,
+    transpose_key,
+    transpose_pitch,
+)
 from finale_file_parser.enigma.score import MAX_INFLATED, score_xml
 
 __all__ = [
@@ -57,6 +67,9 @@ __all__ = [
     "OthersPool",
     "Pool",
     "Record",
+    "SpelledNote",
+    "SpelledPitch",
+    "StaffTransposition",
     "TextsPool",
     "UnsupportedKeyError",
     "decode_key",
@@ -64,5 +77,10 @@ __all__ = [
     "locate_entries",
     "parse_enigma",
     "read_entry",
+    "read_transposition",
     "score_xml",
+    "spell_note",
+    "spell_pitch",
+    "transpose_key",
+    "transpose_pitch",
 ]
