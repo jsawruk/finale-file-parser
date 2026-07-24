@@ -31,8 +31,11 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
   (`CorruptScoreError`), `score.py` (`score_xml`, composing `container.open_musx` with the cipher
   and a capped inflate), `document.py` (`parse_enigma`, `EnigmaDocument`, `Pool`, `Record` — the
   uniform record/pool model), `music.py` (`read_entry`, `Entry`, `Note`, `Duration` — the first
-  typed layer over the generic `entry`/`note` records). See "Known format facts — score.dat",
-  "Known format facts — EnigmaXML structure", and "Known format facts — entries and pitch" below.
+  typed layer over the generic `entry`/`note` records), `location.py` (`locate_entries`,
+  `EntryLocation`, `MalformedScoreError` — the first cross-pool link resolution, placing every
+  entry in its staff/measure and computing the raw key signature in force). See "Known format
+  facts — score.dat", "Known format facts — EnigmaXML structure", "Known format facts — entries and
+  pitch", and "Known format facts — score linkage" below.
 
 ### Known format facts — version
 
@@ -222,8 +225,53 @@ corpus reads through `read_entry` without raising.
   this fact.
 - **This model stops at the cross-pool boundary.** `read_entry` only reads the `entries` pool's own
   fields; it does not resolve the key (which lives elsewhere, reached via
-  `gfhold → frameSpec → measSpec` linkage — see Roadmap) needed to spell a pitch absolutely, or the
-  tuplet ratio needed to scale a written duration to its sounded length.
+  `gfhold → frameSpec → measSpec` linkage, now done by `location.py` — see "Known format facts —
+  score linkage" above and Roadmap) needed to spell a pitch absolutely, or the tuplet ratio needed
+  to scale a written duration to its sounded length.
+
+### Known format facts — score linkage
+
+Full reference and derivation: `docs/superpowers/specs/2026-07-23-entry-location-design.md` and
+`docs/superpowers/plans/2026-07-23-entry-location.md`. Verified against all 401 corpus archives
+(`tests/enigma/test_location_corpus_sweep.py`): every entry in the corpus is located exactly once.
+
+- **An entry names no staff, measure, or key of its own.** Reaching them needs a chain across three
+  pools: a `details` `gfhold` (`cmper1` = staff, `cmper2` = measure) holds up to four frame fields
+  `frame1`..`frame4` — Finale's layers/voices; each present field is a `frameSpec` (`others`)
+  `cmper`. A `frameSpec`'s `startEntry` begins the `entries` pool's own `next`-chain (each entry's
+  `next` **attribute**, not a field) that walks forward to `endEntry`, and that chain *is* the
+  entry's placement — the entry never carries its own staff/measure. An `others` `measSpec`
+  (`cmper` = measure) carries the `keySig` (a nested `{key: <int>}` record) in force for that
+  measure.
+- **All four frame slots must be resolved**, not only `frame1` — 299 of 6,332 corpus `gfholds` carry
+  `frame2`/`frame3`, and skipping them leaves layer-2+ entries unlocated. An absent, empty, or `"0"`
+  frame slot is an unused layer, not a broken link — Finale usually omits it, but Enigma may also
+  write `"0"`; either way it names no `frameSpec` and is skipped.
+- **A frame `cmper` can resolve to more than one `frameSpec` *incidence*.** `others`' identity is
+  `tag + cmper + inci + part`, and 73 of 67,558 corpus frame cmpers (20 of 401 files) carry two
+  incidences — `inci="0"` and `inci="1"` — where exactly one carries `startEntry`/`endEntry` and
+  the other has neither (only unrelated fields, e.g. `startTime`). `OthersPool.get` defaults to
+  `inci=0`, which for these 73 is the *empty* incidence — resolving a frame must use
+  `all_with(tag, cmper)` (every incidence sharing that cmper) and walk whichever one(s) actually
+  carry a chain, not just the default. An incidence with neither `startEntry` nor `endEntry` is a
+  legitimate empty layer; one with only one of the two is still malformed.
+- **The key is per measure, and inherited**: not every measure carries a `keySig` (449 of 2,622
+  omit it in the corpus survey) — a measure without one inherits the effective key of the prior
+  measure, computed by walking measures in `cmper` order and carrying the last seen `keySig.key`
+  forward (a measure before the first `keySig` defaults to `0`).
+- **The key is exposed RAW (an `int`), not decoded — decoding it is a separate slice.** The
+  standard scheme is fifths-style: a signed accidental count, e.g. `-1` = F major (one flat), `+2`
+  = D major (two sharps). Decode hints and traps to carry into that slice: enharmonic equivalents
+  (e.g. C# major vs. Db major) are **distinct** key values, not the same one spelled two ways; a
+  raw signature alone does **not** fix major vs. minor (relative major/minor share a signature);
+  and a transposing instrument's written key differs from concert pitch — the raw value is
+  whatever is written for that staff/part, not necessarily concert.
+- **This is the first cross-pool link resolution** — earlier slices (keyed lookup, typed entries)
+  only retrieve a record by its own identity; `locate_entries` is the first to follow what a
+  `cmper` on one record *refers to* on another pool. `MalformedScoreError` (distinct from
+  `MalformedEnigmaError`) covers a broken chain: an entry no frame places (an orphan), a frame
+  pointing at a missing `frameSpec`, a non-integer `keySig.key`/`startEntry`/`endEntry`, an entry
+  placed by more than one frame, or a `next`-chain that exceeds a cycle guard.
 
 ## Data flow
 

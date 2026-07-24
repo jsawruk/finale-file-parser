@@ -70,17 +70,30 @@ limit is verified by mutation, because no real corpus archive trips one.
       (`tests/enigma/test_music_corpus_sweep.py`). See `docs/ARCHITECTURE.md` and
       `docs/superpowers/specs/2026-07-23-typed-entries-design.md`.
 
-## Next up — pitch spelling
+## Cross-pool link resolution — done
 
-- [ ] **Pitch spelling** — resolve `harmLev`/`harmAlt` plus the key in force (via minimal
-      `gfhold → frameSpec → measSpec` linkage) into absolute spelled pitches. This is the first
-      slice that needs cross-pool link resolution — what a `cmper` on one record *refers to* on
-      another pool (e.g. a `measSpec`'s reference into `others`) — rather than only retrieving a
-      record by its own identity.
-- [ ] Tuplet duration scaling — the written `dura`/`Duration` needs a tuplet ratio applied to reach
-      the sounded duration.
-- [ ] The detail records: beams, stems, articulations, lyrics — the remaining steps toward a
-      MusicXML exporter (see `## Later`).
+- [x] `locate_entries` resolves every entry to its (staff, measure) and the effective raw key
+      signature in force, walking `gfhold → frameSpec → entry next-chain` and `measSpec` (with
+      per-measure key inheritance). The first cross-pool link resolution — what a `cmper` on one
+      record *refers to* on another pool, rather than only retrieving a record by its own
+      identity. `MalformedScoreError` on an orphan entry or a broken link, rather than degrading.
+      Verified against all 401 corpus archives, 0 orphans (`tests/enigma/test_location_corpus_sweep.py`).
+      The key is exposed **raw** (undecoded) — decoding it is the next slice. See
+      `docs/ARCHITECTURE.md` ("Known format facts — score linkage") and
+      `docs/superpowers/specs/2026-07-23-entry-location-design.md`.
+
+## Next up — key signature decoding, then pitch spelling
+
+- [ ] **Decode the key signature** — turn the raw `int` `locate_entries` exposes into a
+      tonic/mode/accidentals per the recorded decode hints (fifths-style signed accidental count,
+      e.g. `-1` = F major, `+2` = D major), minding the traps: enharmonic equivalents are distinct
+      key values, a signature alone does not fix major vs. minor, and a transposing instrument's
+      written key differs from concert pitch.
+- [ ] **Pitch spelling** — combine the decoded key with `harmLev`/`harmAlt` to resolve absolute
+      spelled pitches.
+- [ ] Clefs, time signatures, tuplet duration scaling (the written `dura`/`Duration` needs a
+      tuplet ratio applied to reach the sounded duration), and the remaining detail records
+      (beams, stems, articulations, lyrics) — toward a MusicXML exporter (see `## Later`).
 
 ## Later
 
