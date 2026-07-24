@@ -163,6 +163,76 @@ def test_next_chain_cycle_raises() -> None:
         locate_entries(parse_enigma(doc))
 
 
+def test_frame_with_no_entries_is_skipped_not_malformed() -> None:
+    """A `frameSpec` may exist (with other fields, e.g. startTime) but hold no
+
+    entries at all: no `startEntry` and no `endEntry`. A legitimate empty
+    layer, not a broken link.
+    """
+    doc = _doc(
+        _entries("1:0")
+        + """
+        <others>
+          <frameSpec cmper="10" inci="0">
+            <startEntry>1</startEntry><endEntry>1</endEntry>
+          </frameSpec>
+          <frameSpec cmper="20" inci="0">
+            <startTime>0</startTime>
+          </frameSpec>
+          <measSpec cmper="1"><keySig><key>0</key></keySig></measSpec>
+        </others>
+        <details>
+          <gfhold cmper1="1" cmper2="1"><frame1>10</frame1><frame2>20</frame2></gfhold>
+        </details>
+        """
+    )
+    loc = locate_entries(parse_enigma(doc))
+    assert loc[1].measure == 1
+    assert len(loc) == 1
+
+
+def test_frame_cmper_with_a_second_empty_incidence_still_resolves() -> None:
+    """A frame cmper can carry two `frameSpec` incidences (`inci="0"` and
+
+    `inci="1"`) where the default (`inci="0"`) is empty and the real entry
+    chain lives on the other incidence. `others.get` defaults to `inci=0`
+    alone, which would silently miss the entries -- resolution must check
+    every incidence sharing the cmper. Observed on 73 of 67,558 corpus
+    frame cmpers (20 of 401 files).
+    """
+    doc = _doc(
+        _entries("1:0")
+        + """
+        <others>
+          <frameSpec cmper="10" inci="0"><startTime>0</startTime></frameSpec>
+          <frameSpec cmper="10" inci="1">
+            <startEntry>1</startEntry><endEntry>1</endEntry>
+          </frameSpec>
+          <measSpec cmper="1"><keySig><key>0</key></keySig></measSpec>
+        </others>
+        <details><gfhold cmper1="1" cmper2="1"><frame1>10</frame1></gfhold></details>
+        """
+    )
+    loc = locate_entries(parse_enigma(doc))
+    assert loc[1] == EntryLocation(entnum=1, staff=1, measure=1, key_signature=0)
+
+
+def test_frame_with_only_start_entry_still_raises() -> None:
+    """Asymmetric -- only one of startEntry/endEntry present -- is still malformed."""
+    doc = _doc(
+        _entries("1:0")
+        + """
+        <others>
+          <frameSpec cmper="10" inci="0"><startEntry>1</startEntry></frameSpec>
+          <measSpec cmper="1"><keySig><key>0</key></keySig></measSpec>
+        </others>
+        <details><gfhold cmper1="1" cmper2="1"><frame1>10</frame1></gfhold></details>
+        """
+    )
+    with pytest.raises(MalformedScoreError):
+        locate_entries(parse_enigma(doc))
+
+
 def test_empty_and_zero_frame_slots_are_skipped_not_errors() -> None:
     """An unused layer slot (empty or "0") is skipped, not a broken frame.
 

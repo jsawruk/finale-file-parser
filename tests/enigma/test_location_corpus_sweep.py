@@ -1,0 +1,74 @@
+"""Sweep the full local corpus through locate_entries, resolving every entry to its
+
+staff, measure, and raw key via the gfhold -> frameSpec -> entry link chain.
+
+Skipped wherever corpus/ is absent (e.g. CI). The corpus is copyrighted third-party
+material and is gitignored; these assertions are the only check against real archives.
+
+The core assertion is that every entry is located exactly once and locate_entries does
+not raise -- the survey found 0 orphans over 24,159 entries, so any MalformedScoreError
+here is a real finding, not a reason to loosen an assertion.
+
+Report counts only -- never a corpus filename, record value, pitch, lyric, or text.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from finale_file_parser.enigma.document import parse_enigma
+from finale_file_parser.enigma.location import locate_entries
+from finale_file_parser.enigma.score import score_xml
+
+CORPUS = Path(__file__).parent.parent.parent / "corpus"
+
+pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
+
+EXPECTED_ARCHIVES = 401
+
+
+def _archives() -> list[Path]:
+    return [p for p in CORPUS.rglob("*") if p.is_file() and p.suffix.lower() == ".musx"]
+
+
+def test_every_corpus_entry_is_located_exactly_once() -> None:
+    paths = _archives()
+    assert len(paths) == EXPECTED_ARCHIVES
+
+    archives_read = 0
+    entries_located = 0
+    seen_multi_layer_measure = False
+
+    for path in paths:
+        doc = parse_enigma(score_xml(path))
+        archives_read += 1
+
+        entry_records = list(doc.entries.of_tag("entry"))
+        locations = locate_entries(doc)
+
+        assert len(locations) == len(entry_records), path
+
+        staff_cmpers = {
+            int(record.attrs["cmper"])
+            for record in doc.others.of_tag("staffSpec")
+            if "cmper" in record.attrs
+        }
+
+        for location in locations.values():
+            assert isinstance(location.key_signature, int), path
+            assert location.staff in staff_cmpers, path
+
+        entries_located += len(locations)
+
+        if not seen_multi_layer_measure:
+            for gfhold in doc.details.of_tag("gfhold"):
+                frame2 = gfhold.fields.get("frame2")
+                if isinstance(frame2, str) and frame2 not in ("", "0"):
+                    seen_multi_layer_measure = True
+                    break
+
+    assert archives_read == EXPECTED_ARCHIVES
+    assert entries_located > 0, "no entries were located across the sweep"
+    assert seen_multi_layer_measure, "no multi-layer (frame2) measure was seen across the sweep"

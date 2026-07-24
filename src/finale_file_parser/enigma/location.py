@@ -18,6 +18,17 @@ present frames must be resolved, or layer-2+ entries go unlocated (299 of
 `keySig` (449 of 2622 omit it); a measure without one inherits the previous
 measure's effective key, computed by walking measures in cmper order. The
 key is exposed raw (undecoded) -- decoding it is a later slice.
+
+A frame number (`gfhold`'s `frame1..4`) can name more than one `frameSpec`
+*incidence* sharing that `cmper`: 73 of 67,558 corpus frame cmpers carry two
+incidences (`inci="0"` and `inci="1"`) rather than the usual one, and in
+every such pair exactly one incidence carries `startEntry`/`endEntry` -- the
+other has neither (only unrelated fields, e.g. `startTime`). `others.get`
+defaults to `inci=0`, which for these 73 is the *empty* incidence, so
+resolution must use `all_with(tag, cmper)` (every incidence sharing that
+cmper) and walk whichever incidence(s) actually carry an entry chain, not
+just the default. Full corpus sweep:
+docs/superpowers/plans/2026-07-23-entry-location.md.
 """
 
 from __future__ import annotations
@@ -36,7 +47,10 @@ class MalformedScoreError(FinaleFileError):
 
     Raised for an entry no frame places (an orphan), a `gfhold` frame
     pointing at a missing `frameSpec`, a `keySig.key`/`startEntry` that is
-    not an integer, or a `next`-chain that exceeds the guard (a cycle).
+    not an integer, a `frameSpec` incidence with only one of `startEntry`/
+    `endEntry` present (an incidence with neither is a legitimate empty
+    layer, not an error), an entry placed by more than one frame, or a
+    `next`-chain that exceeds the guard (a cycle).
     """
 
 
@@ -126,15 +140,37 @@ def _place_frame_entries(
     entries_by_num: dict[int, Record],
     location: dict[int, EntryLocation],
 ) -> None:
-    frame_spec = doc.others.get("frameSpec", frame_cmper)
-    if frame_spec is None:
+    frame_specs = doc.others.all_with("frameSpec", frame_cmper)
+    if not frame_specs:
         raise MalformedScoreError(
             f"gfhold staff={staff} measure={measure} frame {frame_cmper} has no matching frameSpec"
         )
-    start = frame_spec.fields.get("startEntry")
-    end = frame_spec.fields.get("endEntry")
-    if not isinstance(start, str) or not isinstance(end, str):
-        raise MalformedScoreError(f"frameSpec {frame_cmper} startEntry/endEntry missing")
+    for frame_spec in frame_specs:
+        start = frame_spec.fields.get("startEntry")
+        end = frame_spec.fields.get("endEntry")
+        if start is None and end is None:
+            # This incidence may legitimately hold zero entries -- it exists
+            # (with other fields, e.g. startTime) but never got an entry
+            # chain. A frame cmper can carry a second incidence that does
+            # (see module docstring); nothing to place from this one.
+            continue
+        if not isinstance(start, str) or not isinstance(end, str):
+            raise MalformedScoreError(f"frameSpec {frame_cmper} startEntry/endEntry missing")
+        _walk_entry_chain(
+            frame_cmper, start, end, staff, measure, key_signature, entries_by_num, location
+        )
+
+
+def _walk_entry_chain(
+    frame_cmper: int,
+    start: str,
+    end: str,
+    staff: int,
+    measure: int,
+    key_signature: int,
+    entries_by_num: dict[int, Record],
+    location: dict[int, EntryLocation],
+) -> None:
     entnum = _int(start, "startEntry")
     end_entnum = _int(end, "endEntry")
 
