@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from finale_file_parser.enigma.document import Record
 from finale_file_parser.enigma.key import (
     KeySignature,
     UnsupportedKeyError,
@@ -112,3 +113,60 @@ def transpose_pitch(pitch: SpelledPitch, interval: int, adjust: int) -> SpelledP
     octave = dpos // _OCTAVE
     alteration = _midi(pitch) - semitones - _natural_midi(letter, octave)
     return SpelledPitch(letter=letter, alteration=alteration, octave=octave)
+
+
+@dataclass(frozen=True)
+class StaffTransposition:
+    """A staff's transposition: how its written pitch sits above concert."""
+
+    interval: int
+    """Diatonic steps the written pitch sits above concert."""
+
+    adjust: int
+    """The written key signature's shift, in fifths."""
+
+    @property
+    def is_concert(self) -> bool:
+        """True when the staff is concert pitch (no transposition)."""
+        return self.interval == 0 and self.adjust == 0
+
+
+def read_transposition(staff_spec: Record) -> StaffTransposition:
+    """Read a staffSpec's transposition, defaulting to concert pitch when absent.
+
+    Raises ValueError if a present interval/adjust field is not an integer (malformed
+    input fails loudly rather than silently spelling the wrong pitch).
+    """
+    transposition = staff_spec.fields.get("transposition")
+    if not isinstance(transposition, Record):
+        return StaffTransposition(interval=0, adjust=0)
+    keysig = transposition.fields.get("keysig")
+    if not isinstance(keysig, Record):
+        return StaffTransposition(interval=0, adjust=0)
+    interval = keysig.fields.get("interval")
+    adjust = keysig.fields.get("adjust")
+    return StaffTransposition(
+        interval=int(interval) if isinstance(interval, str) and interval else 0,
+        adjust=int(adjust) if isinstance(adjust, str) and adjust else 0,
+    )
+
+
+@dataclass(frozen=True)
+class SpelledNote:
+    """A note spelled as both its written and its concert (sounding) pitch."""
+
+    written: SpelledPitch
+    """The pitch as printed on the (possibly transposing) staff."""
+
+    concert: SpelledPitch
+    """The sounding pitch."""
+
+
+def spell_note(
+    note: Note, concert_key: KeySignature, transposition: StaffTransposition
+) -> SpelledNote:
+    """Spell a note into both its written and concert (sounding) pitch."""
+    written_key = transpose_key(concert_key, transposition.interval, transposition.adjust)
+    written = spell_pitch(note, written_key)
+    concert = transpose_pitch(written, transposition.interval, transposition.adjust)
+    return SpelledNote(written=written, concert=concert)

@@ -2,10 +2,15 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
+from finale_file_parser.enigma.document import Record
 from finale_file_parser.enigma.key import KeySignature, Mode, UnsupportedKeyError
 from finale_file_parser.enigma.music import Note
 from finale_file_parser.enigma.pitch import (
+    SpelledNote,
     SpelledPitch,
+    StaffTransposition,
+    read_transposition,
+    spell_note,
     spell_pitch,
     transpose_key,
     transpose_pitch,
@@ -119,3 +124,59 @@ def test_transpose_pitch_octave_borrow_on_letter_wrap() -> None:
 
 def test_transpose_pitch_identity_for_concert() -> None:
     assert transpose_pitch(SpelledPitch("F", 1, 4), interval=0, adjust=0).name == "F#4"
+
+
+def _staff_spec(transposition: Record | None) -> Record:
+    fields: dict[str, object] = {}
+    if transposition is not None:
+        fields["transposition"] = transposition
+    return Record(tag="staffSpec", attrs={}, text=None, fields=fields)
+
+
+def _transposition(interval: str, adjust: str) -> Record:
+    keysig = Record(
+        tag="keysig",
+        attrs={},
+        text=None,
+        fields={"interval": interval, "adjust": adjust},
+    )
+    return Record(tag="transposition", attrs={}, text=None, fields={"keysig": keysig})
+
+
+def test_read_transposition_reads_interval_and_adjust() -> None:
+    got = read_transposition(_staff_spec(_transposition("1", "2")))
+    assert got == StaffTransposition(interval=1, adjust=2)
+
+
+def test_read_transposition_zero_is_concert() -> None:
+    got = read_transposition(_staff_spec(_transposition("0", "0")))
+    assert got == StaffTransposition(0, 0)
+    assert got.is_concert is True
+
+
+def test_read_transposition_absent_defaults_to_concert() -> None:
+    assert read_transposition(_staff_spec(None)) == StaffTransposition(0, 0)
+
+
+def test_is_concert_false_when_transposing() -> None:
+    assert StaffTransposition(1, 2).is_concert is False
+
+
+def test_spell_note_concert_staff_written_equals_concert() -> None:
+    result = spell_note(_note(6), D_MAJOR, StaffTransposition(0, 0))
+    assert result == SpelledNote(written=SpelledPitch("C", 1, 5), concert=SpelledPitch("C", 1, 5))
+    assert result.written.name == "C#5"
+
+
+def test_spell_note_bb_staff_written_and_concert() -> None:
+    # B-flat staff, concert C major. harm_lev 0 = written tonic D; sounds C.
+    result = spell_note(_note(0), C_MAJOR, StaffTransposition(interval=1, adjust=2))
+    assert result.written.name == "D4"
+    assert result.concert.name == "C4"
+
+
+def test_spelled_note_and_staff_transposition_are_frozen() -> None:
+    with pytest.raises(FrozenInstanceError):
+        StaffTransposition(0, 0).interval = 1  # type: ignore[misc]
+    with pytest.raises(FrozenInstanceError):
+        spell_note(_note(0), C_MAJOR, StaffTransposition(0, 0)).written = SpelledPitch("C", 0, 4)  # type: ignore[misc]
