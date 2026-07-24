@@ -127,20 +127,20 @@ def test_transpose_pitch_identity_for_concert() -> None:
 
 
 def _staff_spec(transposition: Record | None) -> Record:
-    fields: dict[str, object] = {}
+    fields: dict[str, Record] = {}
     if transposition is not None:
         fields["transposition"] = transposition
-    return Record(tag="staffSpec", attrs={}, text=None, fields=fields)
+    return Record(tag="staffSpec", attrs={}, text="", fields=fields)
 
 
 def _transposition(interval: str, adjust: str) -> Record:
     keysig = Record(
         tag="keysig",
         attrs={},
-        text=None,
+        text="",
         fields={"interval": interval, "adjust": adjust},
     )
-    return Record(tag="transposition", attrs={}, text=None, fields={"keysig": keysig})
+    return Record(tag="transposition", attrs={}, text="", fields={"keysig": keysig})
 
 
 def test_read_transposition_reads_interval_and_adjust() -> None:
