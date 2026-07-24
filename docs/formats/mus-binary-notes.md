@@ -154,6 +154,50 @@ entropy (7.640), the most repeats (median 2,037 repeated 16-grams over the whole
 files (median 70,686 bytes), and 36 files to cross-check against. More surviving structure means more
 to grip. Most of the analysis so far used a 2012-era file — the hardest case.
 
+### Working the 2005/MAC cohort: a differential oracle and the record template
+
+**The 85-pair `.musx` oracle does NOT cover this cohort — 0 of the 36 files has a stem-matched
+`.musx`.** That is the cost of switching targets: more surviving structure, no known-plaintext.
+
+**Replacement oracle: `9_Gifts.mus` vs `9_Gifts_No_Lyrics.mus`** (Chapter_9_Folder) — the same
+document with and without lyrics, 78,493 vs 76,896 bytes. They are **byte-identical for the first
+0x1182D (91% of the file)**, and every lyric-related difference sits in the tail from `0x11833` to
+EOF: 26 regions, 3,385 bytes present only in the lyrics version, the largest a contiguous **831-byte
+block**. So lyrics occupy their own pool at the tail, and an entire pool can be added without
+perturbing a single byte before it — an independent, very strong confirmation that the coding is
+local and context-free.
+
+Useful negative: `10_Bach_3`/`10_Bach_4` and `8_Entertainer_3`/`8_Entertainer_4` look like minimal
+pairs from the filenames but are **not** (15.2% and 29.3% identical, first difference at `0x57` and
+`0x204`). They are different exercise stages, not small edits. Don't use them as differentials.
+
+**Byte-orientation re-confirmed on this cohort, by a different method.** Within the homogeneous
+1,022-byte lyrics-only block: 282 distinct repeated 32-bit windows, and **99.8% of their gaps are
+byte-aligned** (a bitstream would give ~12.5%; random data gives no repeats at all). This is a
+within-file measurement on an independent cohort, so it does not lean on the earlier cross-file test.
+
+**The record template.** Records are built from 4-byte groups at *variable* spacing (motif gaps run
+33–98 bytes). Four groups recur as constants — `ee 27 90 fc`, `b8 9f 40 f2`, `e2 7e 02 c9`,
+`89 fb 09 24` — with no bit-rotation relationship between them (checked all 32 rotations pairwise).
+Aligning on `ee 27 90 fc` (14 occurrences) exposes **monotonically increasing counter fields**:
+
+| field position | observed sequence |
+| --- | --- |
+| byte before the motif | `23 23 24 24 25 25 26 27 27 28 28 29` |
+| +4 bytes after motif | `8d 8f 91 93 95 96 98 9a 9c 9e … a4` (steps of 1–2) |
+| +12 bytes after motif | `38 40 48 4e 5c 62 6a 74 …` |
+
+**Clean monotone counters are not something any compressor emits.** Together with the constant
+templates, this says the payload is a **structured record stream**, not compressed output — which
+finally reconciles the whole picture: high entropy and repeats coexist because this is *dense
+bit-packed record data*, not a codec's output. (The counters stepping by 1–2 and by 8 hint that
+fields sit at different bit offsets within their bytes, i.e. packed fields rather than byte-aligned
+integers — worth confirming.)
+
+**The lyric text is still not directly readable.** Tested against the lyrics-only block: all 8 global
+bit-shifts, complement, bit-reversal, and all 7 byte rotations. Best printable-ASCII fraction 35.7%,
+*below* the ~37% a random buffer scores. So no single global byte transform exposes the text.
+
 ### The encoding is byte-oriented, static and context-free
 
 Two further measurements narrow it sharply.
