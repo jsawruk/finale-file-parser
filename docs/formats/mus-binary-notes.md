@@ -9,8 +9,33 @@ plus permitted community documentation. Report counts/structure only — never c
 
 ## Headline finding
 
-**The payload is compressed or encrypted (not plaintext), and it is not any standard codec.** That
-much is solid. What the transform *is* remains open.
+**The payload is transformed (not plaintext) at ~7.98 bits/byte, but it is neither LZ-family
+compression nor encryption.** It carries long exactly-repeated substrings that both of those would
+destroy, and identical content encodes identically at arbitrary byte offsets. The transform is
+**byte-aligned, byte-oriented, static and context-free**. See "the payload contains long repeats"
+below — that section supersedes any older framing of this as "compressed or encrypted", and it
+explains why every standard codec tried so far has failed.
+
+Read this document top to bottom before running anything; several of the numbers it used to quote
+turned out to be measurement artifacts, and they are corrected in place.
+
+### Correction: the payload entropy is 7.985, not 7.50
+
+Measured over `0x200`→EOF on a confirmed-pair file: **7.985 bits/byte**, and *uniform* — 4 KiB
+windows run min 7.76 / median 7.89 / max 7.93 with none below 7.0, all 256 byte values present, and
+per-column entropy at strides 2, 3 and 4 flat at ~7.98 (so no field alignment or nibble structure).
+
+The older 7.50 figure evidently averaged in the plaintext header and low-entropy preamble. This
+matters because 7.50 would have been *anomalously low* for a codec — an interesting clue pointing
+away from compression. 7.985 is not anomalous at all: it is exactly what a well-compressed or
+encrypted stream looks like. **Do not build arguments on the 7.5 number.**
+
+### Beware window-size artifacts when measuring entropy
+
+A 96-byte window cannot exceed log2(96) = 6.58 bits, so it reads ~6.2 even for random data and shows
+a "plateau" that is purely an artifact of the window. Use a window of at least 1 KiB to resolve
+high-entropy data at all — and remember that a 1 KiB window cannot localise a transition to better
+than ~1 KiB, so it is the wrong tool for pinning the exact stream start.
 
 ### Plain LZSS — RULED OUT (on a reliable oracle)
 
@@ -22,12 +47,101 @@ known strings**. A correct or even partial LZSS decode would leak matching liter
 none. (An earlier apparent "entropy collapse to ~1.7" was the decoder desyncing into the ring
 buffer's `0x20` space-fill — an artifact, not a decode. Do not be fooled by low output entropy.)
 
-### What that implies — leading candidates now
+### Decoders are now validated before use — and how
 
-A decoder finding **no raw literal bytes** matching known text points to either:
-1. **LZH / LHA (LZSS + Huffman)** — the Okumura-lineage codec where literals are *Huffman-coded*, so
-   they never appear as raw bytes. Consistent with plain-LZSS finding nothing. **Top candidate.**
-2. **Encryption** — literals hidden by a cipher, not a codec.
+The previous round's LZH negative was untrustworthy because the decoder itself had never been tested.
+That is fixed, and the technique generalises: **fetch a real archive plus its known plaintext, and
+require byte-exact reproduction before believing any negative.**
+
+| Decoder | Test vector | Result |
+| --- | --- | --- |
+| LHA `-lh5-` (`scratchpad/lha.py`) | `fragglet/lhasa` `test/archives/lha_unix114i/h0_lh5.lzh` — 18,092 bytes of GPL-2 text, 6,996 compressed | **byte-exact, 18,092/18,092** |
+| PKWARE DCL (`scratchpad/blast.py`, port of zlib `contrib/blast`) | the vector in blast.c's own header comment: `00 04 82 24 25 8f 80 7f` → `AIAIAIAIAIAIA` | **exact** |
+
+Both vectors are fetchable from GitHub, which the sandbox allows. `7z` on this machine also reads
+LZH, giving an independent cross-check of the ground truth.
+
+### LZH / LHA — excluded, but by argument rather than by sweep
+
+Be precise about what was and was not run. The decoder is now validated (above), and a sweep over the
+entropy-transition window (`0x100`–`0x280` × 8 bit-shifts × `DICBIT` 12–16, 1,454 successful decodes)
+returned **0 crib hits**. The *full*-range sweep (`0xA0`–`0x900`, several confirmed pairs) was started
+repeatedly but never completed — background jobs kept being killed — so **no full-range empirical
+negative exists.**
+
+It does not matter: LZH is LZ-family, and the repeat evidence above excludes the entire family on
+structural grounds. Treat LZH as ruled out **by that argument**, and do not spend more time sweeping
+it.
+
+### PKWARE DCL "implode" — RULED OUT
+
+Plausible on era grounds (a widely licensed commercial compressor when `.mus` was designed) and not
+covered by any stdlib module. Its header is byte-aligned and tightly constrained — `lit ∈ {0,1}`,
+`dict ∈ {4,5,6}` — a 1-in-10,922 filter, so a whole-file scan is nearly free and *every* candidate
+can be tried in full rather than sampled. Real `.mus` files yield only **1–3 candidate offsets each**;
+none produces ≥256 bytes of output containing any crib, across the confirmed pairs tested. Noise
+floor 0.
+
+### ⚠️ The payload contains long repeats — so it is NOT LZ-compressed and NOT encrypted
+
+This is the most important result so far and it reframes everything above.
+
+Counting repeated n-grams in the high-entropy region (`0x200`→ start of the trailing plist, 51,200
+bytes) against random bytes of the same length:
+
+| n-gram | distinct repeated (`.mus`) | occurrences | distinct repeated (random) |
+| --- | --- | --- | --- |
+| 8 | 374 | 1,100 | **0** |
+| 16 | 167 | 475 | **0** |
+| 24 | 72 | 206 | **0** |
+| 32 | 16 | 52 | **0** |
+
+Random — and therefore any well-compressed or encrypted stream — contains **zero** repeated 8-grams
+at this scale, let alone 32-grams. The chance of even one is vanishingly small (n²/2 / 2⁶⁴).
+
+The repeats are predominantly **short-period tandem runs**. A representative example: a 4-byte group
+repeated six times back-to-back (24 bytes), where that 4-byte value occurs **nowhere else in the
+file**. The dominant repeat gaps are 4 (118×), 7 (27×), 41 (23×), then a long tail; the GCD of all
+gaps is 1, so this is not a repeating-key period. Neighbouring bytes show the same pattern one byte
+off (period-5 and period-6 near-repeats differing in a single byte).
+
+**Why this is decisive:**
+- **No LZ-family codec can emit this.** An LZ77/LZSS/LZH/DEFLATE/DCL/LZW coder encodes a tandem run
+  as a *match*; emitting the run literally is precisely what it exists to avoid.
+- **No stream cipher can emit this.** Ciphertext has no repeats.
+
+This explains the entire run of negatives at a stroke — LZSS, LZW, DEFLATE, bzip2, lzma, PKWARE DCL
+(and LZH) all failed because **the codec is not in that family at all**, not because of a decoder bug
+or a missed parameter.
+
+### The encoding is byte-oriented, static and context-free
+
+Two further measurements narrow it sharply.
+
+**Different pieces share long identical payload runs, at arbitrary byte shifts.** Comparing the
+payloads of two *different* carols from one collection: **81 common runs of ≥8 bytes, the longest 67
+bytes**, with the matches sitting at shifts of −356, −361 and −362 bytes. Identical source content
+(shared Finale default records) therefore encodes to identical output *regardless of its absolute
+position*. This independently re-confirms "not a cipher" — a keystream XOR is position-dependent, so
+identical plaintext at different offsets could never give identical ciphertext — and it also rules out
+**adaptive** coding (FGK/Vitter, adaptive arithmetic), whose coder state depends on everything
+preceding and so could not reproduce a 67-byte match after different history.
+
+**The alignment is byte, not bit.** Re-running that cross-file comparison with file B shifted by each
+of 0–7 bits: shift 0 gives 81 runs / 1,316 bytes / longest 67; **every other shift gives 0–2 runs of
+exactly 8 bytes** (noise). A static Huffman or arithmetic *bitstream* would scatter matches across all
+eight shifts, since identical symbols land on arbitrary bit boundaries. It does not. **So the earlier
+"order-0 Huffman/arithmetic bitstream" guess is refuted** — do not pursue it.
+
+So the transform is: **byte-aligned, byte-oriented, static, and context-free (position-independent),
+while still producing ~7.98 bits/byte.** Order-1 conditional entropy is 6.773 against 6.981 for random
+bytes and 6.898 for zlib output at the same sample size — a real but modest deficit, consistent with
+the localised repeats rather than with broad residual structure.
+
+That combination is genuinely constraining, and it is the thing to explain next. A plain byte→byte
+substitution fits every structural property but cannot produce 7.98 bits/byte from record data (a
+substitution preserves the histogram shape). Something that emits **whole bytes from a fixed table or
+dictionary** fits better. Resolving that tension is the open question.
 
 ### The oracle (key research asset)
 
@@ -52,8 +166,37 @@ The payload is **compressed, not plaintext and not simply encrypted**. Confirmed
 - Fixed-key stream XOR — modal-byte keystream recovery fails to decrypt; the elevated zero rate in
   file⊕file (3.3%) comes from **shared identical template regions** (one ~1185-byte run between two
   files), not a shared keystream (the rest of file⊕file is random, scattered length-1 zeros).
-- Not plaintext structured binary: known `.musx` title/lyric strings appear in **no** encoding
-  (Latin-1 / UTF-16 / Mac-Roman / CP1252) inside the raw `.mus`.
+- Not plaintext structured binary *in the payload region*: known `.musx` lyric strings appear in **no**
+  encoding (Latin-1 / UTF-16 / Mac-Roman / CP1252) there. **But note the correction below — document
+  title, composer and copyright ARE stored as plain ASCII in the preamble.**
+- **PKWARE DCL "implode"** — ruled out with a *validated* decoder (see below).
+- **A chain of length-prefixed records** — ruled out. If the payload were many small independently
+  compressed blocks, no single stream start would exist and every whole-stream negative would be
+  explained at a stroke. It is not: walking `length → jump → length` from every start in
+  `0x80`–`0x400`, over `u16`/`u32` × LE/BE × header extra 0/2/4 × length-inclusive/exclusive, the
+  **longest consistent chain in a real `.mus` is 6 hops — identical to the 6 hops random bytes
+  produce**, and none reaches EOF.
+- **The `score.dat` keystream at *any* alignment.** The earlier test applied MakeMusic's own cipher at
+  a single alignment; since the payload starts at a data-dependent offset, alignment was the whole
+  unknown. Searched properly: for each candidate offset `p` and each compressed-format magic `m`, the
+  keystream window that *would* be required is `data[p:p+n] XOR m`, so searching that string inside
+  the fixed 128 KiB keystream block settles every alignment in one pass. 40,533 raw magic
+  coincidences (expected — a 3-byte magic in 128 KiB hits by chance ~30× per file), of which 32,846
+  were then **actually fed to a decompressor**. Exactly one survivor produced output, and it was an
+  artifact: a raw-DEFLATE *stored* block, i.e. the "output" is a verbatim copy of the input
+  (confirmed `out[:200] == input[5:205]`, entropy 7.996). No alignment yields a decodable stream.
+
+### Two scoring traps that have already cost this investigation time
+
+**"The decoder ran without throwing" is not evidence.** Measured on the LHA decoder: **random bytes
+decode to the output cap in ~18% of trials** (591 of 3,200). Huffman tables built from noise are
+still valid tables. Score only on *content*.
+
+**Long cribs cannot falsify anything.** A 100-character known string can only match a decode that is
+perfectly synchronised for 100 characters, so scoring it at zero tells you nothing about a partially
+correct decode. Use **short cribs (6–16 chars)** — words from the paired `.musx` text pool plus
+standard font names. Calibrate on random input: the short-crib score has a measured false-positive
+floor of **0 hits across ~12,300 successful decodes**, so any nonzero hit is real signal.
 
 ## Structural map (offsets, little-endian)
 
@@ -61,37 +204,46 @@ The payload is **compressed, not plaintext and not simply encrypted**. Confirmed
   (`0x66`–`0x9D`). Already decoded by `version/mus.py`.
 - `0xA0`–`0xA6` — small fixed marker (`04 01 0A …`, same in ~36/50 files).
 - `0xA6`–~`0xD6` — run of `0x00`.
-- ~`0xD8`–~`0x200+` — a **variable-length, lower-entropy structured preamble**; can be byte-identical
-  across different pieces (shared Finale defaults). Contains some ASCII fragments (e.g. bytes at
-  `0x205` render as `…nserts…`), so parts are plaintext.
-- ~`0x209`–~`0x25F` — the **LZSS stream begins** here, at a *data-dependent* offset (no constant
-  magic at the start). The exact start per file is not yet determined from a header field.
+- ~`0xD8`–~`0x200` — a **variable-length, lower-entropy structured preamble** holding **plain-ASCII
+  document metadata**, NUL-terminated: title at `0xD8`, then composer, copyright line, and the
+  document-style description. Confirmed by diffing two `.mus` files from the same collection: they are
+  byte-identical up to `0xD8` and diverge exactly at the first character of the title. This region can
+  be byte-identical across different pieces (shared Finale defaults).
+- ~`0x200` — the **high-entropy payload begins**, at a *data-dependent* offset with no constant magic.
+  (A 1024-byte entropy profile saturates by `0x180`, but a window that wide cannot localise a
+  transition to better than its own width, and plain ASCII metadata is still present at `0x1BE`. So
+  treat `~0x200` as the estimate and do not quote the profile as if it were precise.)
 - End: 89/136 MAC files carry a trailing macOS plist (last 1–3%); trim it before decoding.
 
 ## Open problems / next steps (in priority order)
 
-The oracle is built (85 confirmed pairs). Plain LZSS is ruled out. Remaining work:
+The oracle is built (85 confirmed pairs). The repeat finding above says the codec is **not LZ-family
+and not a cipher**, so the search should move to entropy coders. **Stop testing LZ variants** — LZW,
+LZS, LZRW and friends are all excluded by the same argument, and testing them is wasted effort.
 
-1. **Test LZH / LHA (top candidate) — ATTEMPTED, INCONCLUSIVE.** A hand-written `-lh4-/-lh5-/-lh6-`
-   decoder (dynamic Huffman: pre-tree → c_len → position table, then the slide loop; in
-   `scratchpad/lha.py`) was scanned over start offsets `0xA0`–`0x900` × `DICBIT` 12/13/14 on a
-   confirmed pair: **0/113 known-plaintext hits** (only `DICBIT=14` decodes ran without throwing, and
-   those produced garbage to the length cap). **BUT this negative is untrustworthy** — the decoder is
-   complex and *unvalidated*, so a bug (canonical-code assignment, the `c==7` pre-tree run, the
-   position `(1<<(j-1))+getbits` step, or the MSB bit reader) is as likely as "not LHA."
-   **Before concluding, validate the LHA decoder against a known `-lh5-` test vector** (a real LHA
-   tool, or a crafted archive). Only a verified decoder makes a negative meaningful. Note the
-   compressed-stream start is a data-dependent offset after the structured preamble.
-2. **If LZH fails, test encryption.** Two-time-pad / crib-drag needs same-key + shared plaintext:
-   look for two `.mus` files that are the same document (duplicate `created` stamps *within* the
-   `.mus` set), then `A ⊕ B` cancels a fixed keystream. Or crib-drag a known plaintext string over one
-   ciphertext to recover a keystream and test for LCG structure.
-3. **Also worth trying** (cheap): LZW variants (Unix `compress` 9–16-bit with clear codes; TIFF/PDF
-   EarlyChange), LZS (Stac), LZRW1 — all scored on a confirmed pair.
+1. **Characterise the repeats properly.** Cheapest next step and it constrains everything else.
+   Measure the distribution of tandem-run periods and lengths across many files, and check whether run
+   period correlates with anything structural. If the source is an order-0 coder over fixed-size
+   records, the periods should cluster at a few values, not spread smoothly.
+2. **Test order-0 entropy coders.** Static Huffman with a stored table (look for the table in the
+   `0x180`–`0x200` preamble tail), adaptive/dynamic Huffman (FGK, Vitter), and arithmetic/range
+   coding. For a *static* table the preamble is the place to look; for *adaptive* coding there is no
+   table and the decode must start cold at the stream head.
+3. **Exploit the shared preamble.** Files from one collection are byte-identical up to `0xD8`. Check
+   how far into the *payload* two same-collection files stay identical: with an adaptive coder both
+   start in the same state, so a shared prefix persists until the first content difference, and its
+   length locates the true stream start precisely.
 4. **Once decoded:** identify the format (map its records onto the existing 7-pool `EnigmaDocument` so
    `read_entry`/`locate_entries`/`decode_key`/`spell_note` attach unchanged), validate across all 238
    files, and wire up `read_mus_payload(path) -> bytes` (mirrors `score_xml`), then a
    `.mus → EnigmaDocument` parser.
+
+### Validated-tool inventory (reuse these, don't rewrite them)
+
+Both live in the session scratchpad and both pass their reference vectors:
+`lha.py` (LHA `-lh4-/-lh5-/-lh6-/-lh7-`) and `blast.py` (PKWARE DCL). Keep the validation step
+attached to any future decoder — an unvalidated decoder's negative result is worth nothing, which is
+the single biggest time sink this investigation has hit.
 
 ## Method note
 
