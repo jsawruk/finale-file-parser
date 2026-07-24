@@ -114,6 +114,46 @@ This explains the entire run of negatives at a stroke — LZSS, LZW, DEFLATE, bz
 (and LZH) all failed because **the codec is not in that family at all**, not because of a decoder bug
 or a missed parameter.
 
+### The coding DOES vary by Finale version — and the corpus splits in two
+
+Surveyed across **all 238 `.mus` files** (note: 137 are lowercase `.mus`, 101 are uppercase `.MUS` —
+a case-sensitive glob silently drops the entire Windows cohort). Entropy and repeat counts measured on
+a **fixed 16 KiB payload sample**, because entropy estimates are size-biased and the cohorts have very
+different file sizes:
+
+| banner year / platform | n | entropy (16 KiB sample) | vendor in banner |
+| --- | --- | --- | --- |
+| 2001 / WIN | 101 | 7.645 | Coda Music |
+| 2004 / MAC | 1 | 7.667 | Coda Music |
+| 2005 / MAC | 36 | 7.640 | MakeMusic |
+| 2011 / MAC | 89 | 7.965 | MakeMusic |
+| 2012 / MAC | 10 | 7.960 | MakeMusic |
+| *(random reference)* | — | 7.989 | — |
+
+**Two regimes**, and the gap is not a sample-size artifact — it survives fixed-size sampling. The
+2001–2005 files are measurably *less dense* (7.64–7.67) than the 2011–2012 files (7.96), which sit
+close to random. So a decoder that works on one era should not be assumed to work on the other, and
+any future result must state which cohort it was established on.
+
+**What does generalise:** the long-exact-repeat signature appears in every cohort — only 2 files out
+of 238 show zero repeated 16-grams over the whole payload. So "not LZ-family, not a cipher" is a
+property of the format across all versions, not an artifact of the single 2012-era file the argument
+was first built on.
+
+### The payload is regionally heterogeneous, not one uniform stream
+
+Per-8 KiB windows through a large 2005/MAC payload: entropy swings between **6.816 and 7.791**, and
+repeated 16-grams cluster hard — 500 in one window, 0 in several others, 114–218 across a contiguous
+band. A single compressed stream would be statistically uniform end to end. This is not that.
+
+It reads as distinct record pools with very different internal redundancy, whose local statistics
+survive into the output — which is itself further evidence for static, context-free coding.
+
+**Practical consequence: attack the 2005/MAC cohort, not the 2011/2012 files.** It has the lowest
+entropy (7.640), the most repeats (median 2,037 repeated 16-grams over the whole payload), the largest
+files (median 70,686 bytes), and 36 files to cross-check against. More surviving structure means more
+to grip. Most of the analysis so far used a 2012-era file — the hardest case.
+
 ### The encoding is byte-oriented, static and context-free
 
 Two further measurements narrow it sharply.
