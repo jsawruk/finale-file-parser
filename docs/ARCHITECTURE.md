@@ -33,9 +33,11 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
   uniform record/pool model), `music.py` (`read_entry`, `Entry`, `Note`, `Duration` — the first
   typed layer over the generic `entry`/`note` records), `location.py` (`locate_entries`,
   `EntryLocation`, `MalformedScoreError` — the first cross-pool link resolution, placing every
-  entry in its staff/measure and computing the raw key signature in force). See "Known format
-  facts — score.dat", "Known format facts — EnigmaXML structure", "Known format facts — entries and
-  pitch", and "Known format facts — score linkage" below.
+  entry in its staff/measure and computing the raw key signature in force), `key.py` (`decode_key`,
+  `KeySignature`, `Mode`, `UnsupportedKeyError` — decodes the raw `keySig.key` integer into fifths,
+  mode, and tonic). See "Known format facts — score.dat", "Known format facts — EnigmaXML
+  structure", "Known format facts — entries and pitch", "Known format facts — score linkage", and
+  "Known format facts — key signatures" below.
 
 ### Known format facts — version
 
@@ -272,6 +274,30 @@ Full reference and derivation: `docs/superpowers/specs/2026-07-23-entry-location
   `MalformedEnigmaError`) covers a broken chain: an entry no frame places (an orphan), a frame
   pointing at a missing `frameSpec`, a non-integer `keySig.key`/`startEntry`/`endEntry`, an entry
   placed by more than one frame, or a `next`-chain that exceeds a cycle guard.
+
+### Known format facts — key signatures
+
+Full reference and derivation: `docs/superpowers/specs/2026-07-24-key-decode-design.md`. The
+encoding is documented nowhere read; it was reverse-engineered from the corpus and verified against
+all 401 archives (`tests/enigma/test_key_corpus_sweep.py`), decoded by `enigma/key.py`.
+
+- **Encoding:** `key = (mode << 8) | (fifths & 0xFF)`. The **low byte, signed**, is `fifths` — the
+  accidental count, sharps positive, flats negative, the MusicXML convention (`+2` = D major, `-1`
+  = F major). The **high byte** is `mode`: `0` = major, `1` = minor.
+- **Corroboration** (the encoding is inferred, so the evidence matters): all 13 distinct corpus raw
+  values decompose to `mode ∈ {0,1}` and `fifths ∈ [-7,7]` with no remainder; `keySig` carries no
+  field but `key`, so mode has nowhere to live but that integer; the scheme matches MusicXML, which
+  Finale exports; and deriving the tonic from (fifths, mode) via the circle of fifths reproduces
+  music theory for every value (`-3` major → E♭; raw `256` → A minor).
+- **Inferred vs proven:** `mode = 1` → minor is **inferred**, not proven — no corpus file's key is
+  independently known; the inference rests on the bit pattern, minor being the common second mode,
+  and the high-byte-1 values being ordinary minor keys. The `±6`/`±7` enharmonic keys are modelled
+  (the signed byte covers them, and `+6` = raw byte 6 vs `-6` = raw byte 250 stay distinct) but
+  **unseen** — the corpus exercises only fifths `-5…+3`.
+- **`decode_key` raises `UnsupportedKeyError`** on `mode ≥ 2` (a church mode or custom/linear key we
+  have not reverse-engineered) or `fifths` outside `-7…+7`, including a negative raw value — rather
+  than guess, since a wrong key would silently misspell every pitch that resolves through it. The
+  corpus has 0 such values.
 
 ## Data flow
 

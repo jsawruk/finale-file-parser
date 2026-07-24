@@ -82,15 +82,17 @@ limit is verified by mutation, because no real corpus archive trips one.
       `docs/ARCHITECTURE.md` ("Known format facts — score linkage") and
       `docs/superpowers/specs/2026-07-23-entry-location-design.md`.
 
-## Next up — key signature decoding, then pitch spelling
+## Next up — pitch spelling
 
-- [ ] **Decode the key signature** — turn the raw `int` `locate_entries` exposes into a
-      tonic/mode/accidentals per the recorded decode hints (fifths-style signed accidental count,
-      e.g. `-1` = F major, `+2` = D major), minding the traps: enharmonic equivalents are distinct
-      key values, a signature alone does not fix major vs. minor, and a transposing instrument's
-      written key differs from concert pitch.
-- [ ] **Pitch spelling** — combine the decoded key with `harmLev`/`harmAlt` to resolve absolute
-      spelled pitches.
+- [x] **Decode the key signature** — `decode_key` turns the raw `int` `locate_entries` exposes into
+      a `KeySignature` (fifths, mode, tonic). Encoding reverse-engineered: `(mode << 8) | signed
+      fifths byte`, mode 0=major/1=minor; enharmonic keys stay distinct by sign, and mode
+      distinguishes parallel major/minor. See `enigma/key.py`.
+- [ ] **Pitch spelling** — combine `decode_key` (tonic + fifths → the key's accidental pattern),
+      `read_entry`'s `harm_lev`/`harm_alt` (diatonic displacement from the tonic + alteration
+      relative to the key), and `locate_entries` (the key in force for each entry) into an absolute
+      spelled pitch (letter + octave + accidental). The first slice to combine all three typed
+      layers; a transposing staff still needs concert-vs-written reconciliation, deferred with it.
 - [ ] Clefs, time signatures, tuplet duration scaling (the written `dura`/`Duration` needs a
       tuplet ratio applied to reach the sounded duration), and the remaining detail records
       (beams, stems, articulations, lyrics) — toward a MusicXML exporter (see `## Later`).
