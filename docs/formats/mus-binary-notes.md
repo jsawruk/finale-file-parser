@@ -7,7 +7,12 @@
 All findings below are from **structural analysis of the curated corpus (238 `.mus`, 401 `.musx`)**
 plus permitted community documentation. Report counts/structure only — never corpus record values.
 
-## HEADLINE: the payload is a bit-packed record stream with a 49-bit stride — there is no codec
+## HEADLINE: the payload is a bit-packed record stream — there is no codec
+
+> **Correction (stride).** An earlier version of this section claimed a **49-bit stride** as the
+> format's constant. That is **refuted** — 49 is specific to one file. The bit-packing model itself
+> survives intact and is directly verified; only the universality of the number was wrong. See
+> "The stride is not universal" below, which supersedes the 49-bit framing wherever it appears.
 
 Everything below this section was written while assuming the payload was *transformed* somehow. It is
 not. It is **dense bit-packed structured records**, and the reason no decompressor ever worked is that
@@ -44,13 +49,40 @@ patterns recur every 49 bytes because that is when the bit phase realigns to a b
 - **Why the isomorph attack found no text** — text fields sit at varying bit offsets, so no global byte
   substitution or single global bit-shift can expose them.
 
-### Scope of the claim
+### The stride is NOT universal — 49 is one file's dominant record type
 
-Confirmed on `Blues_BB_Score.mus` for anchors `fefce77e` and `f7e73ff7`, and counter-like fields with a
-collapsing shuffle control were also found in `9_Gifts.mus` (anchors `ff31f511`, `47fc63fc`, …). The
-49-bit stride itself is so far established on one file. **Next: confirm the stride on more files and
-across cohorts, and check whether 49 bits is universal or per-record-type.** Do not assume it is
-universal yet.
+Tested anchor-free, via byte-match autocorrelation on the payload (a stride of S bits with S odd gives
+a byte super-period of exactly S bytes, so the dominant lag *is* the stride). Sampled across cohorts:
+
+| file | cohort | baseline | top lags |
+| --- | --- | --- | --- |
+| Bach Concerto.MUS | 2001 | 1.06% | **7** (3.99%), 14, 21, 28, 35 |
+| Twinkle Variations.MUS | 2001 | 1.04% | **7** (3.58%), 14, 28, 35, 21 |
+| 8_Entertainer_1.mus | 2004 | 1.13% | **22** (3.70%), 31, 9, 75 |
+| Blues_BB_Score.mus | 2005 | 1.10% | **49** (3.35%), 75, 98, 25, 50 |
+| 13_Petrushka_Score.mus | 2005 | 1.31% | **7** (3.42%), 14, 28, 21, 35 |
+| Bach_Fugue.mus | 2005 | 1.03% | **22** (2.91%), 31, 9 |
+| Jingle Bells.mus | 2012 | 0.63% | 7 (1.32%), 14, 33 |
+
+**49 appears in exactly one file.** The dominant period varies by document, which is what a
+variable-record-type format predicts: whichever record type is most abundant sets the observed period.
+A big-band score with many staves is dominated by a different record than a solo piano piece.
+
+Two things do generalise, and they matter more than the number:
+
+- **A period-7 family with clean harmonics at 14/21/28/35** recurs across 2001, 2005 and 2012 files.
+  Seven is odd, so this is a **7-bit stride**. That 7 keeps reappearing across cohorts suggests a 7-bit
+  unit is fundamental somewhere in the format. (Note the ladder test in `stride.py` cannot evaluate
+  S=7: the per-step byte offset is S//8 = 0, so successive instances share a byte. It needs a
+  bit-level formulation to test small strides — a gap in the tooling, not evidence against.)
+- **The 2011/2012 cohort has far weaker periodicity** — top lags reach only ~1.3% over a 0.6% baseline,
+  versus 3.35% over 1.10% for 2005. Consistent with the entropy split (7.96 vs 7.64) reported above:
+  the newer format packs harder, leaving less periodic structure exposed.
+
+**What survives from the 49-bit result:** the *bit-packing model*, which was verified directly and does
+not depend on the number. In `Blues_BB_Score.mus` the doubling ladder 2, 4, 8, 16, 32, 64, 128, 0 with
+exact byte-modular wraparound is unambiguous evidence of one counter field read at successive bit
+offsets. Stride is a per-record-type property; bit-packing is the format.
 
 ## Headline finding
 
