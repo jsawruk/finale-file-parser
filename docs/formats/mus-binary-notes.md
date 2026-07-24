@@ -72,11 +72,16 @@ The payload is **compressed, not plaintext and not simply encrypted**. Confirmed
 
 The oracle is built (85 confirmed pairs). Plain LZSS is ruled out. Remaining work:
 
-1. **Test LZH / LHA (top candidate).** Implement a `-lh5-`/`-lh4-`/`-lh1-` decoder (Okumura LZSS with
-   a Huffman entropy stage — dynamic Huffman for `-lh5-`). Score contiguous known-plaintext recovery
-   on a confirmed pair. If it syncs and recovers long text runs, that's the transform. Also worth: the
-   compressed-stream start is a data-dependent offset after the structured preamble — the preamble
-   likely holds a length/pointer; decode-to-exact-expected-length is a good constraint.
+1. **Test LZH / LHA (top candidate) — ATTEMPTED, INCONCLUSIVE.** A hand-written `-lh4-/-lh5-/-lh6-`
+   decoder (dynamic Huffman: pre-tree → c_len → position table, then the slide loop; in
+   `scratchpad/lha.py`) was scanned over start offsets `0xA0`–`0x900` × `DICBIT` 12/13/14 on a
+   confirmed pair: **0/113 known-plaintext hits** (only `DICBIT=14` decodes ran without throwing, and
+   those produced garbage to the length cap). **BUT this negative is untrustworthy** — the decoder is
+   complex and *unvalidated*, so a bug (canonical-code assignment, the `c==7` pre-tree run, the
+   position `(1<<(j-1))+getbits` step, or the MSB bit reader) is as likely as "not LHA."
+   **Before concluding, validate the LHA decoder against a known `-lh5-` test vector** (a real LHA
+   tool, or a crafted archive). Only a verified decoder makes a negative meaningful. Note the
+   compressed-stream start is a data-dependent offset after the structured preamble.
 2. **If LZH fails, test encryption.** Two-time-pad / crib-drag needs same-key + shared plaintext:
    look for two `.mus` files that are the same document (duplicate `created` stamps *within* the
    `.mus` set), then `A ⊕ B` cancels a fixed keystream. Or crib-drag a known plaintext string over one
