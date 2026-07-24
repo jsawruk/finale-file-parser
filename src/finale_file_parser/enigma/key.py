@@ -93,7 +93,10 @@ def decode_key(raw: int) -> KeySignature:
     mode_value = raw >> 8
     low = raw & 0xFF
     fifths = low - 256 if low > 127 else low
-    if mode_value >= len(Mode) or not (-_MAX_FIFTHS <= fifths <= _MAX_FIFTHS):
+    # `not (0 <= mode_value < len(Mode))` rejects a negative mode too: a negative
+    # `raw` arithmetic-shifts to a negative high byte, which would otherwise slip
+    # past a `>= len(Mode)` check and reach `Mode(mode_value)` as a bare ValueError.
+    if not (0 <= mode_value < len(Mode)) or not (-_MAX_FIFTHS <= fifths <= _MAX_FIFTHS):
         raise UnsupportedKeyError(
             f"unsupported key value {raw} (mode={mode_value}, fifths={fifths})"
         )

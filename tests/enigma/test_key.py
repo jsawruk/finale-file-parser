@@ -67,3 +67,12 @@ def test_error_is_a_finale_file_error() -> None:
     from finale_file_parser.errors import FinaleFileError
 
     assert issubclass(UnsupportedKeyError, FinaleFileError)
+
+
+@pytest.mark.parametrize("raw", [-1, -2, -256, -257, -512])
+def test_negative_raw_raises_unsupported_not_bare_valueerror(raw: int) -> None:
+    """A negative raw (a plausible XML-parsed integer) arithmetic-shifts to a
+    negative mode byte; it must raise UnsupportedKeyError, never a bare
+    ValueError leaked from Mode()."""
+    with pytest.raises(UnsupportedKeyError):
+        decode_key(raw)
