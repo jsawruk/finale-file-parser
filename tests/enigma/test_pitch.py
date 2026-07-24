@@ -1,0 +1,62 @@
+from dataclasses import FrozenInstanceError
+
+import pytest
+
+from finale_file_parser.enigma.key import KeySignature, Mode
+from finale_file_parser.enigma.music import Note
+from finale_file_parser.enigma.pitch import SpelledPitch, spell_pitch
+
+
+def _note(harm_lev: int, harm_alt: int = 0) -> Note:
+    return Note(harm_lev=harm_lev, harm_alt=harm_alt, tie_start=False, tie_end=False)
+
+
+def _key(fifths: int, mode: Mode, tonic: str) -> KeySignature:
+    return KeySignature(fifths=fifths, mode=mode, tonic=tonic)
+
+
+C_MAJOR = _key(0, Mode.MAJOR, "C")
+D_MAJOR = _key(2, Mode.MAJOR, "D")
+BB_MAJOR = _key(-2, Mode.MAJOR, "Bb")
+A_MINOR = _key(0, Mode.MINOR, "A")
+
+
+def test_c_major_scale_up() -> None:
+    got = [spell_pitch(_note(h), C_MAJOR).name for h in range(8)]
+    assert got == ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"]
+
+
+def test_c_major_scale_down_octave_boundary_at_c() -> None:
+    got = [spell_pitch(_note(h), C_MAJOR).name for h in range(-1, -8, -1)]
+    assert got == ["B3", "A3", "G3", "F3", "E3", "D3", "C3"]
+
+
+def test_d_major_applies_key_sharps() -> None:
+    got = [spell_pitch(_note(h), D_MAJOR).name for h in range(8)]
+    assert got == ["D4", "E4", "F#4", "G4", "A4", "B4", "C#5", "D5"]
+
+
+def test_bb_major_applies_key_flats() -> None:
+    got = [spell_pitch(_note(h), BB_MAJOR).name for h in range(8)]
+    assert got == ["Bb4", "C5", "D5", "Eb5", "F5", "G5", "A5", "Bb5"]
+
+
+def test_a_minor_relative_scale() -> None:
+    got = [spell_pitch(_note(h), A_MINOR).name for h in range(8)]
+    assert got == ["A4", "B4", "C5", "D5", "E5", "F5", "G5", "A5"]
+
+
+def test_harm_alt_lowers_and_raises_against_key() -> None:
+    assert spell_pitch(_note(2, harm_alt=-1), D_MAJOR).name == "F4"  # F# -> F natural
+    assert spell_pitch(_note(0, harm_alt=1), C_MAJOR).name == "C#4"  # C -> C#
+
+
+def test_double_accidental_names() -> None:
+    assert SpelledPitch("F", 2, 4).name == "F##4"
+    assert SpelledPitch("B", -2, 3).name == "Bbb3"
+    assert SpelledPitch("G", 0, 4).name == "G4"
+
+
+def test_spelled_pitch_is_frozen() -> None:
+    with pytest.raises(FrozenInstanceError):
+        SpelledPitch("C", 0, 4).letter = "D"  # type: ignore[misc]
