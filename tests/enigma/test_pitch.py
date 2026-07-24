@@ -215,6 +215,32 @@ def test_read_transposition_nested_record_interval_raises() -> None:
         read_transposition(_staff_spec(transposition))
 
 
+def test_read_transposition_non_numeric_string_raises() -> None:
+    with pytest.raises(ValueError):
+        read_transposition(_staff_spec(_transposition("abc", "0")))
+
+
+def test_read_transposition_repeated_transposition_tag_raises() -> None:
+    staff_spec = Record(
+        tag="staffSpec",
+        attrs={},
+        text="",
+        fields={"transposition": (_transposition("1", "2"), _transposition("3", "4"))},
+    )
+    with pytest.raises(ValueError, match="malformed transposition"):
+        read_transposition(staff_spec)
+
+
+def test_read_transposition_repeated_keysig_tag_raises() -> None:
+    keysig_a = Record(tag="keysig", attrs={}, text="", fields={"interval": "1", "adjust": "2"})
+    keysig_b = Record(tag="keysig", attrs={}, text="", fields={"interval": "3", "adjust": "4"})
+    transposition = Record(
+        tag="transposition", attrs={}, text="", fields={"keysig": (keysig_a, keysig_b)}
+    )
+    with pytest.raises(ValueError, match="malformed transposition"):
+        read_transposition(_staff_spec(transposition))
+
+
 def test_is_concert_false_when_transposing() -> None:
     assert StaffTransposition(1, 2).is_concert is False
 

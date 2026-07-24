@@ -144,19 +144,34 @@ def _transposition_int(
     return int(value)
 
 
+def _transposition_child(
+    value: str | tuple[str, ...] | Record | tuple[Record, ...] | None, name: str
+) -> Record | None:
+    """A transposition sub-record; absent is None, present-but-malformed raises ValueError."""
+    if value is None:
+        return None
+    if not isinstance(value, Record):
+        raise ValueError(
+            f"malformed transposition: expected a single <{name}> element, "
+            f"got {type(value).__name__}"
+        )
+    return value
+
+
 def read_transposition(staff_spec: Record) -> StaffTransposition:
     """Read a staffSpec's transposition, defaulting to concert pitch when absent.
 
-    Raises ValueError if a present interval/adjust field is not an integer string
-    (malformed input fails loudly rather than silently spelling the wrong pitch). A
-    whole absent `transposition`/`keysig` sub-record, or an absent/empty field within
-    it, defaults to concert pitch (interval=0, adjust=0).
+    Raises ValueError if a present `transposition`/`keysig` sub-record or
+    interval/adjust field is malformed (malformed input fails loudly rather than
+    silently spelling the wrong pitch). A wholly absent `transposition`/`keysig`
+    sub-record, or an absent/empty field within it, defaults to concert pitch
+    (interval=0, adjust=0).
     """
-    transposition = staff_spec.fields.get("transposition")
-    if not isinstance(transposition, Record):
+    transposition = _transposition_child(staff_spec.fields.get("transposition"), "transposition")
+    if transposition is None:
         return StaffTransposition(interval=0, adjust=0)
-    keysig = transposition.fields.get("keysig")
-    if not isinstance(keysig, Record):
+    keysig = _transposition_child(transposition.fields.get("keysig"), "keysig")
+    if keysig is None:
         return StaffTransposition(interval=0, adjust=0)
     return StaffTransposition(
         interval=_transposition_int(keysig.fields.get("interval")),
