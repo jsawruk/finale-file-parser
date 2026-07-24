@@ -84,6 +84,48 @@ not depend on the number. In `Blues_BB_Score.mus` the doubling ladder 2, 4, 8, 1
 exact byte-modular wraparound is unambiguous evidence of one counter field read at successive bit
 offsets. Stride is a per-record-type property; bit-packing is the format.
 
+### Second correction: the group is 49 BYTES, with 8 sub-units 49 BITS apart
+
+"49-bit stride" was wrong in a second way, caught by bit-level extraction. Sampling the known counter
+field at successive strides:
+
+| stride | extracted values | monotone |
+| --- | --- | --- |
+| **392 bits (= 49 bytes)** | 74, 76, 78, 80, 82, 84, 86, 88, 90, … | **0.91** |
+| 49 bits | 74, 43, 179, 215, 156, 113, 196, 147, … | 0.36 (noise) |
+
+The counter repeats every **392 bits = 49 bytes**. So the record *group* is 49 bytes, and it contains
+**8 sub-units spaced 49 bits apart** (8 × 49 = 392) — which is exactly what produced the 1-bit
+progressive shift and the doubling ladder. Note this relation is automatic: a byte-period of G always
+decomposes as 8 sub-units of G bits, since 8·G bits = G bytes.
+
+### The counter structure does NOT appear in the period-7 family
+
+Bit-granular search (`scratchpad/bitfields.py`), scanning every field offset `0..S-1` and widths
+6/8/10/12/16, scored by monotone fraction against a **shuffled-record-order control**:
+
+| file | S=7 | 14 | 28 | 49 | 56 | 98 | 196 | **392** |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Blues_BB_Score.mus *(positive control)* | 0 | 0 | 0 | 0 | 0 | 0 | 0 | **258** |
+| Bach Concerto.MUS | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 13_Petrushka_Score.mus | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+The tool is validated and *specific*: it finds 258 counter fields at the correct stride and **zero** at
+384 or 400 bits, so it is not a permissive test that fires on anything.
+
+**Conclusion: the lag-7 autocorrelation peak is not a counter-bearing record stride.** The period-7
+family shows no counter fields at 7 or 56 bits (or anything else tried). What causes that peak remains
+**unexplained** — plausibly byte-aligned 7-byte structures carrying no counters, but that is untested.
+Caveat: those files were probed from one anchor each, and Petrushka's anchor had only 19 occurrences.
+
+### Methodological note: always put a known-positive in the sweep
+
+The first run of this sweep returned **zero for every file and every stride, including
+`Blues_BB_Score` at S=392** — where 258 fields had been found minutes earlier. The cause was `K=300`
+records per scan: the counters reset periodically, so a long window drags the monotone fraction below
+threshold. The positive control is the only reason this was caught rather than written up as a clean
+negative. **Any sweep here must carry a case known to fire, and `K` must stay near 60.**
+
 ## Headline finding
 
 **The payload is transformed (not plaintext) at ~7.98 bits/byte, but it is neither LZ-family
