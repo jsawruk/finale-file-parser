@@ -76,3 +76,55 @@ def test_negative_raw_raises_unsupported_not_bare_valueerror(raw: int) -> None:
     ValueError leaked from Mode()."""
     with pytest.raises(UnsupportedKeyError):
         decode_key(raw)
+
+
+# Exhaustive coverage of the tonic tables: all 30 standard keys (major and minor
+# x fifths -7..+7). The tonic is the anchor every spelled pitch resolves through,
+# so a silent table regression must fail a test. Expected tonics are the circle
+# of fifths (major) and its relative minor.
+_ALL_MAJOR = {
+    0: "C",
+    1: "G",
+    2: "D",
+    3: "A",
+    4: "E",
+    5: "B",
+    6: "F#",
+    7: "C#",
+    -1: "F",
+    -2: "Bb",
+    -3: "Eb",
+    -4: "Ab",
+    -5: "Db",
+    -6: "Gb",
+    -7: "Cb",
+}
+_ALL_MINOR = {
+    0: "A",
+    1: "E",
+    2: "B",
+    3: "F#",
+    4: "C#",
+    5: "G#",
+    6: "D#",
+    7: "A#",
+    -1: "D",
+    -2: "G",
+    -3: "C",
+    -4: "F",
+    -5: "Bb",
+    -6: "Eb",
+    -7: "Ab",
+}
+
+
+@pytest.mark.parametrize("fifths", range(-7, 8))
+def test_every_major_tonic(fifths: int) -> None:
+    raw = fifths & 0xFF
+    assert decode_key(raw) == KeySignature(fifths, Mode.MAJOR, _ALL_MAJOR[fifths])
+
+
+@pytest.mark.parametrize("fifths", range(-7, 8))
+def test_every_minor_tonic(fifths: int) -> None:
+    raw = (1 << 8) | (fifths & 0xFF)
+    assert decode_key(raw) == KeySignature(fifths, Mode.MINOR, _ALL_MINOR[fifths])
