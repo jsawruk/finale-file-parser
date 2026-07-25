@@ -94,9 +94,26 @@ limit is verified by mutation, because no real corpus archive trips one.
       octave + accidental), for both written and concert (sounding) pitch. `SpelledNote` gives both
       in one call; see `enigma/pitch.py` and `docs/ARCHITECTURE.md` ("Known format facts — pitch
       spelling and transposition").
-- [ ] Clefs, time signatures, tuplet duration scaling (the written `dura`/`Duration` needs a
-      tuplet ratio applied to reach the sounded duration), and the remaining detail records
-      (beams, stems, articulations, lyrics) — toward a MusicXML exporter (see `## Later`).
+- [x] **Tuplet duration scaling** — `enigma/tuplet.py`. Container-agnostic over an `EntryChain`;
+      grace notes sound for zero time. Validated by measure balance: 1,420 of 1,423 layer-measures
+      sum to their time signature, against 1,136 using written durations.
+- [x] **Time signatures** — `enigma/timesig.py`. Enigma stores beats x divbeat, not a numerator over a
+      denominator, so 6/8 is two dotted-quarter divisions. `useDisplayTimesig` gates the display
+      signature.
+- [x] **Clefs** — `enigma/clef.py`. An 18-entry table referenced by index from `staffSpec.defaultClef`
+      and `gfhold.clefID`.
+- [x] **Layers** — `EntryLocation.layer`. Each layer fills its measure independently, so duration sums
+      must group by (staff, measure, layer).
+- [ ] The remaining detail records (beams, stems, articulations, lyrics).
+
+## MusicXML exporter — slice 1 done
+
+- [x] Format-neutral IR (`ir.py`), `.musx -> IR` (`enigma/to_ir.py`), `IR -> MusicXML`
+      (`export/musicxml.py`). Notes, rests, chords, ties, tuplets, grace notes, keys, time signatures,
+      clefs, layers as voices. Output validates against the **official W3C MusicXML 4.0 schema** —
+      opt-in via `MUSICXML_XSD`, see `tests/export/test_musicxml_corpus_sweep.py`.
+- [ ] Part names (`staffSpec.fullName` is a pointer into the texts pool; parts are currently
+      "Staff N"), beams, articulations, lyrics, repeats, part groups, `.mus` input.
 
 ## Later
 
