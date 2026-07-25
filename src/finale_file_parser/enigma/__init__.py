@@ -54,6 +54,14 @@ from finale_file_parser.enigma.pitch import (
     transpose_pitch,
 )
 from finale_file_parser.enigma.score import MAX_INFLATED, score_xml
+from finale_file_parser.enigma.tuplet import (
+    EntryChain,
+    Tuplet,
+    entry_chain,
+    read_tuplet,
+    sounded_durations,
+    tuplets_by_entry,
+)
 
 __all__ = [
     "MAX_INFLATED",
@@ -83,6 +91,12 @@ __all__ = [
     "TextsPool",
     "UnsupportedKeyError",
     "blast_decompress",
+    "EntryChain",
+    "Tuplet",
+    "entry_chain",
+    "read_tuplet",
+    "sounded_durations",
+    "tuplets_by_entry",
     "decode_key",
     "harm_lev_octave_shift",
     "duration_from_edu",
