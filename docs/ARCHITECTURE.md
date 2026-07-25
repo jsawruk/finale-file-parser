@@ -163,6 +163,24 @@ widths do not transfer to the binary layout — see the notes for the two experi
 The PKWARE DCL format knowledge is not this project's discovery — see the attribution in
 `docs/REFERENCES.md` and the DECIDED entry in `docs/DECISIONS.md`.
 
+### Known format facts — layers
+
+A `gfhold` holds up to four frames, which are Finale's **layers**. `EntryLocation.layer` records which
+slot placed an entry (1–4).
+
+**Each layer independently fills its measure**, so anything summing durations must group by
+`(staff, measure, layer)`. Grouping by `(staff, measure)` alone makes a two-layer measure appear to
+hold exactly twice its time signature — measured on the corpus, 78 measures at exactly 2× and 4 at
+exactly 3×, matching their layer counts.
+
+With layer grouping, **1,420 of 1,423 layer-measures sum to exactly their time signature** once tuplet
+scaling and grace notes are applied, against 1,248 of 1,333 without it. The 3 that remain sit *below*
+capacity (5/6, 1/2) — a layer holding fewer notes than the measure allows, which is ordinary notation.
+
+Layers are distinct from Finale's **voice 1 / voice 2** within a layer (`eeppd.txt`'s `CNTLRBIT`
+"V2 launch" and `CNTLBIT`). No voice-2 marker has been located in EnigmaXML entry records yet, and the
+measure sums above do not require one, so it remains unmodelled.
+
 ### Known format facts — the `.mus` entry pool
 
 `read_mus_entries(path)` returns the same `Entry`/`Note`/`Duration` objects the `.musx` path builds,

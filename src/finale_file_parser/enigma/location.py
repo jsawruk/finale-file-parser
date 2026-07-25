@@ -12,11 +12,15 @@ docs/superpowers/specs/2026-07-23-entry-location-design.md):
     gfhold (details, cmper1 = staff, cmper2 = measure) -- frame1..frame4
     measSpec (others, cmper = measure) -- keySig (nested Record {key: <int>})
 
-A `gfhold` holds up to four frames -- Finale's layers/voices -- and all
-present frames must be resolved, or layer-2+ entries go unlocated (299 of
-6332 corpus gfholds carry frame2/frame3). Not every measure carries a
-`keySig` (449 of 2622 omit it); a measure without one inherits the previous
-measure's effective key, computed by walking measures in cmper order. The
+A `gfhold` holds up to four frames -- Finale's layers -- and all present frames
+must be resolved, or layer-2+ entries go unlocated (299 of 6332 corpus gfholds
+carry frame2/frame3). Which slot placed an entry is recorded as `layer`, because
+each layer independently fills the measure: durations must be grouped by layer or
+a multi-layer measure appears to hold two or three times its time signature.
+
+Not every measure carries a `keySig` (449 of 2622 omit it); a measure without
+one inherits the previous measure's effective key, computed by walking measures
+in cmper order. The
 key is exposed raw (undecoded) -- decoding it is a later slice.
 
 A frame number (`gfhold`'s `frame1..4`) can name more than one `frameSpec`
@@ -68,6 +72,16 @@ class EntryLocation:
     key_signature: int
     """Effective raw measSpec keySig 'key' (inheritance applied; NOT decoded)."""
 
+    layer: int
+    """Which of the gfhold's four frame slots placed this entry, 1-4.
+
+    Finale's layers. Each layer independently fills the measure, so anything
+    that adds up durations must group by layer as well as by (staff, measure) --
+    summing a measure across layers double-counts its time. Measured: 78 corpus
+    measures sum to exactly twice their time signature, and 4 to exactly three
+    times, matching their layer count.
+    """
+
 
 def locate_entries(doc: EnigmaDocument) -> dict[int, EntryLocation]:
     """Resolve every entry to its (staff, measure) and the effective raw key.
@@ -103,7 +117,7 @@ def locate_entries(doc: EnigmaDocument) -> dict[int, EntryLocation]:
                 f"gfhold places entries in measure {measure}, which has no measSpec key"
             )
         key_signature = key_by_measure[measure]
-        for field_name in _FRAME_FIELDS:
+        for layer, field_name in enumerate(_FRAME_FIELDS, start=1):
             frame_value = gfhold.fields.get(field_name)
             if not isinstance(frame_value, str) or frame_value in ("", "0"):
                 # An absent, empty, or "0" frame slot is an unused layer, not a
@@ -112,7 +126,7 @@ def locate_entries(doc: EnigmaDocument) -> dict[int, EntryLocation]:
                 continue
             frame_cmper = _int(frame_value, field_name)
             _place_frame_entries(
-                doc, frame_cmper, staff, measure, key_signature, entries_by_num, location
+                doc, frame_cmper, staff, measure, layer, key_signature, entries_by_num, location
             )
 
     orphans = set(entries_by_num) - set(location)
@@ -149,6 +163,7 @@ def _place_frame_entries(
     frame_cmper: int,
     staff: int,
     measure: int,
+    layer: int,
     key_signature: int,
     entries_by_num: dict[int, Record],
     location: dict[int, EntryLocation],
@@ -176,7 +191,7 @@ def _place_frame_entries(
         if not isinstance(start, str) or not isinstance(end, str):
             raise MalformedScoreError(f"frameSpec {frame_cmper} startEntry/endEntry missing")
         _walk_entry_chain(
-            frame_cmper, start, end, staff, measure, key_signature, entries_by_num, location
+            frame_cmper, start, end, staff, measure, layer, key_signature, entries_by_num, location
         )
 
 
@@ -186,6 +201,7 @@ def _walk_entry_chain(
     end: str,
     staff: int,
     measure: int,
+    layer: int,
     key_signature: int,
     entries_by_num: dict[int, Record],
     location: dict[int, EntryLocation],
@@ -208,7 +224,11 @@ def _walk_entry_chain(
         if entnum in location:
             raise MalformedScoreError(f"entry {entnum} placed by more than one frame")
         location[entnum] = EntryLocation(
-            entnum=entnum, staff=staff, measure=measure, key_signature=key_signature
+            entnum=entnum,
+            staff=staff,
+            measure=measure,
+            layer=layer,
+            key_signature=key_signature,
         )
         if entnum == end_entnum:
             break

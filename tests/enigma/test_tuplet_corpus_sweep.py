@@ -28,20 +28,15 @@ CORPUS = Path(__file__).parent.parent.parent / "corpus"
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
 MIN_DOCUMENTS_WITH_TUPLETS = 5
-MIN_BALANCED_FRACTION = 0.93
-"""Measured: 1,248 of 1,333 measures balance once scaled (93.6%).
+MIN_BALANCED_FRACTION = 0.99
+"""Measured: 1,420 of 1,423 layer-measures balance once scaled (99.8%).
 
-The 85 that do not are accounted for, and none is a scaling error:
+Each layer independently fills its measure, so the grouping is
+(staff, measure, layer). Grouping by (staff, measure) alone scores only 1,248 of
+1,333, because a two-layer measure then sums to exactly twice its time signature.
 
-* 78 sum to exactly 2x their capacity and 4 to exactly 3x. An exact integer
-  multiple is the signature of a measure carrying that many voices, each
-  independently filling it. `EntryLocation` has no voice/layer yet, so summing a
-  (staff, measure) adds every voice together.
-* 3 sit at odd ratios (11/6, 5/2), consistent with a second voice that does not
-  fill the whole measure.
-
-Grace notes used to account for 4 more; `EntryChain.grace_notes` now handles them.
-Raise this threshold once voice/layer lands -- it should go to ~100%.
+The 3 that remain sit at ratios below 1 (5/6, 1/2) -- a layer holding fewer notes
+than the measure allows, which is ordinary notation rather than a decode problem.
 """
 
 
@@ -81,14 +76,17 @@ def test_scaling_makes_measures_balance() -> None:
         location = locate_entries(document)
         capacity = _measure_capacity(document)
 
-        by_measure: dict[tuple[int, int], Fraction] = defaultdict(Fraction)
-        written_by_measure: dict[tuple[int, int], int] = defaultdict(int)
+        # Grouped by layer as well as (staff, measure): layers fill the measure
+        # independently, so summing across them double-counts the time.
+        by_measure: dict[tuple[int, int, int], Fraction] = defaultdict(Fraction)
+        written_by_measure: dict[tuple[int, int, int], int] = defaultdict(int)
         for entnum, duration in sounded.items():
             here = location.get(entnum)
             if here is None:
                 continue
-            by_measure[(here.staff, here.measure)] += duration
-            written_by_measure[(here.staff, here.measure)] += chain.written_edu[entnum]
+            key = (here.staff, here.measure, here.layer)
+            by_measure[key] += duration
+            written_by_measure[key] += chain.written_edu[entnum]
 
         for key, total in by_measure.items():
             expected = capacity.get(key[1])
@@ -100,7 +98,7 @@ def test_scaling_makes_measures_balance() -> None:
 
     assert measures > 0
     assert balanced_sounded >= MIN_BALANCED_FRACTION * measures, (
-        f"only {balanced_sounded} of {measures} measures balance once scaled"
+        f"only {balanced_sounded} of {measures} layer-measures balance once scaled"
     )
     # The point of the whole module: written durations do not balance where a
     # tuplet occurs. If this ever stops holding, the sweep has stopped proving

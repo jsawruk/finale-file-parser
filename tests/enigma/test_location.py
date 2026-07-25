@@ -49,8 +49,8 @@ BASIC = _doc(
 
 def test_places_entries_in_staff_and_measure() -> None:
     loc = locate_entries(parse_enigma(BASIC))
-    assert loc[1] == EntryLocation(entnum=1, staff=1, measure=1, key_signature=2)
-    assert loc[2] == EntryLocation(entnum=2, staff=1, measure=1, key_signature=2)
+    assert loc[1] == EntryLocation(entnum=1, staff=1, measure=1, layer=1, key_signature=2)
+    assert loc[2] == EntryLocation(entnum=2, staff=1, measure=1, layer=1, key_signature=2)
     assert loc[3].measure == 2
 
 
@@ -214,7 +214,7 @@ def test_frame_cmper_with_a_second_empty_incidence_still_resolves() -> None:
         """
     )
     loc = locate_entries(parse_enigma(doc))
-    assert loc[1] == EntryLocation(entnum=1, staff=1, measure=1, key_signature=0)
+    assert loc[1] == EntryLocation(entnum=1, staff=1, measure=1, layer=1, key_signature=0)
 
 
 def test_frame_with_only_start_entry_still_raises() -> None:
