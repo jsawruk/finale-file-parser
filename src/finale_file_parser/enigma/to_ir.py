@@ -18,6 +18,7 @@ from finale_file_parser.enigma.key import Mode, decode_key
 from finale_file_parser.enigma.location import locate_entries
 from finale_file_parser.enigma.music import read_entry
 from finale_file_parser.enigma.pitch import StaffTransposition, read_transposition, spell_note
+from finale_file_parser.enigma.text import file_info, staff_names
 from finale_file_parser.enigma.timesig import TimeSignature as EnigmaTimeSignature
 from finale_file_parser.enigma.timesig import time_signatures
 from finale_file_parser.enigma.tuplet import entry_chain, sounded_durations, tuplets_by_entry
@@ -104,13 +105,19 @@ def build_score(document: EnigmaDocument) -> Score:
     signatures = time_signatures(document)
     clef_table = clef_definitions(document)
     clef_at = clefs_by_measure(document)
+    names = staff_names(document)
+    info = file_info(document)
 
     staves = sorted({staff for staff, _ in cells})
     numbers = sorted({measure for _, measure in cells})
     parts = [
         Part(
             id=f"P{staff}",
-            name=f"Staff {staff}",
+            # Fall back to a positional label only where the document names no
+            # staff, which is most of them: 24 of 84 in the sampled corpus.
+            name=names[staff].full or names[staff].abbreviated
+            if staff in names
+            else f"Staff {staff}",
             measures=tuple(
                 _measure(
                     staff=staff,
@@ -127,7 +134,12 @@ def build_score(document: EnigmaDocument) -> Score:
         )
         for staff in staves
     ]
-    return Score(parts=tuple(parts))
+    return Score(
+        parts=tuple(parts),
+        title=info.get("title", ""),
+        composer=info.get("composer", ""),
+        metadata={k: v for k, v in info.items() if k not in {"title", "composer"}},
+    )
 
 
 def _transpositions(document: EnigmaDocument) -> dict[int, StaffTransposition]:

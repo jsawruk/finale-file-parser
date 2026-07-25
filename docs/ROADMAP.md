@@ -112,8 +112,9 @@ limit is verified by mutation, because no real corpus archive trips one.
       (`export/musicxml.py`). Notes, rests, chords, ties, tuplets, grace notes, keys, time signatures,
       clefs, layers as voices. Output validates against the **official W3C MusicXML 4.0 schema** —
       opt-in via `MUSICXML_XSD`, see `tests/export/test_musicxml_corpus_sweep.py`.
-- [ ] Part names (`staffSpec.fullName` is a pointer into the texts pool; parts are currently
-      "Staff N"), beams, articulations, lyrics, repeats, part groups, `.mus` input.
+- [x] **Part names, title and composer** — `enigma/text.py`. `staffSpec.fullName` resolves through
+      `textBlock` → `textID` → `blockText`; `fileInfo` supplies title/composer/copyright.
+- [ ] Beams, articulations, lyrics, repeats, part groups, `.mus` input.
 
 ## Later
 

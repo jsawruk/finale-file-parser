@@ -61,6 +61,13 @@ from finale_file_parser.enigma.pitch import (
     transpose_pitch,
 )
 from finale_file_parser.enigma.score import MAX_INFLATED, score_xml
+from finale_file_parser.enigma.text import (
+    StaffNames,
+    file_info,
+    plain_text,
+    staff_names,
+    text_block,
+)
 from finale_file_parser.enigma.timesig import (
     TimeSignature,
     display_time_signature,
@@ -119,6 +126,11 @@ __all__ = [
     "clef_definitions",
     "clefs_by_measure",
     "default_clefs",
+    "StaffNames",
+    "file_info",
+    "plain_text",
+    "staff_names",
+    "text_block",
     "decode_key",
     "harm_lev_octave_shift",
     "duration_from_edu",
