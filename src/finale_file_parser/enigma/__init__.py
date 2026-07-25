@@ -3,6 +3,13 @@
 from __future__ import annotations
 
 from finale_file_parser.enigma.blast import CorruptDclStreamError, blast_decompress
+from finale_file_parser.enigma.clef import (
+    Clef,
+    ClefSign,
+    clef_definitions,
+    clefs_by_measure,
+    default_clefs,
+)
 from finale_file_parser.enigma.crypt import decrypt
 from finale_file_parser.enigma.document import (
     DetailsPool,
@@ -107,6 +114,11 @@ __all__ = [
     "display_time_signature",
     "read_time_signature",
     "time_signatures",
+    "Clef",
+    "ClefSign",
+    "clef_definitions",
+    "clefs_by_measure",
+    "default_clefs",
     "decode_key",
     "harm_lev_octave_shift",
     "duration_from_edu",

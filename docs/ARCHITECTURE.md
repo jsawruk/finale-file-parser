@@ -163,6 +163,26 @@ widths do not transfer to the binary layout — see the notes for the two experi
 The PKWARE DCL format knowledge is not this project's discovery — see the attribution in
 `docs/REFERENCES.md` and the DECIDED entry in `docs/DECISIONS.md`.
 
+### Known format facts — clefs
+
+Enigma keeps a document-wide table of clef definitions (`clefOptions.clefDef`, **18 entries in every
+corpus document**) and refers to them by index. Two things carry an index:
+
+- `staffSpec.defaultClef` — the staff's clef. **Omitted when it is 0**, so an absent field means
+  treble, not "missing"; skipping those staves would drop every treble-clef staff.
+- `gfhold.clefID` — the clef at that (staff, measure). Present on **every** corpus `gfhold`
+  (4,214/4,214), so it is the *effective* clef rather than only a change marker, and unlike the key
+  signature there is **no inheritance to apply**.
+
+A definition gives a Maestro font character plus placement, or — when `isShape` is set — a `shapeID`
+and no character. The two are mutually exclusive.
+
+`ClefSign` derives the kind from the character: 38 (`&`) → G and 63 (`?`) → F are **confirmed by
+use**; 66 (`B`) → C appears in the table but no corpus staff selects it, so it is inferred from the
+font. Shape clefs report `SHAPE` (percussion, in practice) rather than being guessed into a sign, and
+anything unrecognised stays `UNKNOWN`. Across the sampled corpus every measure resolves to G, F or
+SHAPE — no UNKNOWN — over clef indices 0, 3 and 16 only.
+
 ### Known format facts — time signatures
 
 Enigma stores no numerator and denominator. A `measSpec` carries **`beats`** (how many divisions the
