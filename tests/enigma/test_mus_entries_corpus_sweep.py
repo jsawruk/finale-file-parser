@@ -15,8 +15,9 @@ from pathlib import Path
 import pytest
 
 from finale_file_parser.enigma.document import EnigmaDocument, parse_enigma
+from finale_file_parser.enigma.location import locate_entries
 from finale_file_parser.enigma.models import CorruptScoreError
-from finale_file_parser.enigma.mus_entries import read_mus_entries
+from finale_file_parser.enigma.mus_entries import harm_lev_octave_shift, read_mus_entries
 from finale_file_parser.enigma.music import read_entry
 from finale_file_parser.enigma.pitch import read_transposition
 from finale_file_parser.enigma.score import score_xml
@@ -35,11 +36,13 @@ Both .mus note records are well-formed, so this reads as a revision made to the
 tolerated: if the count grows, something has actually broken.
 """
 
-KNOWN_NOTE_DIFFS = 1
-"""One note differs, in the same document as KNOWN_NOTE_COUNT_DIFFS and in an
-adjacent entry: 553 loses a note and 555 moves by an octave. Two neighbouring
-edits in one file read as a revision made to the .musx after the .mus was
-written, not a decode error. Pinned so a real regression still fails."""
+KNOWN_NOTE_DIFFS = 3
+"""Three notes differ once `harm_lev_octave_shift` is applied, out of 30,891.
+
+One is in the same document as KNOWN_NOTE_COUNT_DIFFS and in an adjacent entry
+(553 loses a note, 555 moves an octave), which reads as a revision made to the
+.musx afterwards. The other two sit on one octave-transposed staff and are off by
+a single step, cause unknown. Pinned so a real regression still fails."""
 
 MIN_PAIRS = 40
 """Guards the sweep: a corpus too small to be meaningful must fail, not pass."""
@@ -71,6 +74,17 @@ def _pairs() -> list[tuple[Path, Path]]:
     return out
 
 
+def _transposition_by_staff(document: EnigmaDocument) -> dict[int, int]:
+    """Each staff's diatonic transposition interval, 0 where it does not transpose."""
+    out: dict[int, int] = {}
+    for record in document.others.records:
+        if record.tag != "staffSpec":
+            continue
+        transposition = read_transposition(record)
+        out[int(record.attrs["cmper"])] = transposition.interval if transposition else 0
+    return out
+
+
 def _has_transposing_staff(document: EnigmaDocument) -> bool:
     """Any staff that actually transposes.
 
@@ -94,11 +108,10 @@ def test_enough_pairs_to_be_meaningful() -> None:
 def test_entries_match_the_paired_musx() -> None:
     """Entry identity, duration, rest-ness and note count must match exactly.
 
-    Notes are compared only on documents with no transposing staff: those with one
-    show a uniform one-octave offset in `harm_lev`, which is an unresolved
-    octave-reference question rather than a decode failure. Asserting notes
-    everywhere would either fail or force a fudge factor that corrupts the
-    non-transposing majority.
+    Notes are compared on every staff, transposing included, with
+    `harm_lev_octave_shift` applied. That turns what was a skipped case into a
+    positive assertion: the octave rule is pinned by this test, so a change to it
+    fails here rather than passing silently.
     """
     totals = dict(entries=0, duration=0, rest=0, count=0, notes=0, notes_ok=0)
     files_with_notes_checked = 0
@@ -126,18 +139,29 @@ def test_entries_match_the_paired_musx() -> None:
 
         assert set(actual) == set(expected), "entry numbers differ from the paired .musx"
 
-        check_notes = not _has_transposing_staff(document)
-        files_with_notes_checked += int(check_notes)
+        transposition_by_staff = _transposition_by_staff(document)
+        location = locate_entries(document)
+        files_with_notes_checked += 1
         for entnum, want in expected.items():
             got = actual[entnum]
             totals["entries"] += 1
             totals["duration"] += got.duration == want.duration
             totals["rest"] += got.is_rest == want.is_rest
             totals["count"] += len(got.notes) == len(want.notes)
-            if check_notes and len(got.notes) == len(want.notes):
-                for a, b in zip(got.notes, want.notes, strict=True):
-                    totals["notes"] += 1
-                    totals["notes_ok"] += a == b
+            if len(got.notes) != len(want.notes):
+                continue
+            here = location.get(entnum)
+            shift = harm_lev_octave_shift(
+                transposition_by_staff.get(here.staff, 0) if here is not None else 0
+            )
+            for a, b in zip(got.notes, want.notes, strict=True):
+                totals["notes"] += 1
+                totals["notes_ok"] += (
+                    a.harm_lev + shift == b.harm_lev
+                    and a.harm_alt == b.harm_alt
+                    and a.tie_start == b.tie_start
+                    and a.tie_end == b.tie_end
+                )
 
     supported = len(pairs) - unsupported
     assert supported >= 0.9 * len(pairs), (

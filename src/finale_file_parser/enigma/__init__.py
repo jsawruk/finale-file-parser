@@ -28,7 +28,7 @@ from finale_file_parser.enigma.location import (
     locate_entries,
 )
 from finale_file_parser.enigma.models import CorruptScoreError
-from finale_file_parser.enigma.mus_entries import read_mus_entries
+from finale_file_parser.enigma.mus_entries import harm_lev_octave_shift, read_mus_entries
 from finale_file_parser.enigma.mus_payload import (
     MAX_MUS_PAYLOAD,
     read_mus_payload,
@@ -84,6 +84,7 @@ __all__ = [
     "UnsupportedKeyError",
     "blast_decompress",
     "decode_key",
+    "harm_lev_octave_shift",
     "duration_from_edu",
     "decrypt",
     "locate_entries",

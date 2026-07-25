@@ -69,6 +69,7 @@ EXPECTED_PUBLIC_NAMES = {
     "TextsPool",
     "UnsupportedKeyError",
     "decode_key",
+    "harm_lev_octave_shift",
     "blast_decompress",
     "read_mus_entries",
     "read_mus_streams",

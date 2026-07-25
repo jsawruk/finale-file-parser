@@ -48,7 +48,7 @@ from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.mus_payload import read_mus_streams
 from finale_file_parser.enigma.music import Duration, Entry, Note, duration_from_edu
 
-__all__ = ["read_mus_entries"]
+__all__ = ["harm_lev_octave_shift", "read_mus_entries"]
 
 _SLOT = 38
 _SLOT_HEADER = 6
@@ -74,6 +74,33 @@ _TIE_END = 0x20000000
 
 _TCD_ALT_BITS = 4
 """The TCD's low nibble is the alteration; the upper twelve bits are the pitch."""
+
+
+def harm_lev_octave_shift(interval: int) -> int:
+    """Octave correction to align a `.mus` `harm_lev` with the `.musx` convention.
+
+    On a **transposing staff** the two containers place `harm_lev` in different
+    octaves. Add this to a `.mus` note's `harm_lev` to get the value the `.musx`
+    pipeline reports for the same note. `interval` is the staff transposition's
+    diatonic interval (`StaffTransposition.interval`, 7 = one octave); pass 0 for
+    a non-transposing staff, where the shift is 0.
+
+    `read_mus_entries` does **not** apply this, because the entry pool carries no
+    staff information -- the transposition lives in the `others` pool, which is not
+    yet readable from `.mus`. Apply it at the point where the staff is known.
+
+    The rule is **empirical, not derived**. Measured across every confirmed
+    `.mus`/`.musx` pair -- 30,891 notes over seven distinct transpositions:
+
+        interval 0, 1, 4          ->   0
+        interval 5, 7, 8          ->  -7
+        interval 12               -> -14
+
+    Applying it makes 30,888 of 30,891 notes agree exactly. *Why* the octave moves
+    at interval 5 rather than 7 is not understood; see
+    `docs/formats/mus-binary-notes.md`.
+    """
+    return -7 * ((interval + 2) // 7)
 
 
 def read_mus_entries(path: str | os.PathLike[str]) -> tuple[Entry, ...]:

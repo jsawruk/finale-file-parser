@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from finale_file_parser.enigma.models import CorruptScoreError
-from finale_file_parser.enigma.mus_entries import read_mus_entries
+from finale_file_parser.enigma.mus_entries import harm_lev_octave_shift, read_mus_entries
 from finale_file_parser.enigma.music import NoteValue
 
 SLOT = 38
@@ -75,11 +75,12 @@ def test_reads_entries(tmp_path: Path) -> None:
 
 
 def test_rest_has_no_notes_even_though_a_placeholder_is_stored(tmp_path: Path) -> None:
-    """NOTEBIT decides, not the stored count.
+    """FLOATREST decides, not the stored count and not NOTEBIT.
 
-    A floating rest carries a placeholder note record with a count of 1; .musx
-    reports zero notes. Reading the count instead of the flag regresses 55 entries
-    on one corpus file alone.
+    A floating rest carries a placeholder note record with a count of 1, while
+    .musx reports zero notes. Reading the count regresses 55 corpus entries;
+    reading NOTEBIT instead regresses a different 74, because a rest moved off the
+    midline clears FLOATREST and stores a real note record for its position.
     """
     pool = _entry_slot(1, dura=1024, flag=SETBIT | 0x01000000, notes=[(0x0000, SETBIT)]) + _pool(
         150
@@ -150,3 +151,17 @@ def test_rejects_a_payload_with_no_entry_pool(tmp_path: Path) -> None:
 def test_missing_file_raises(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         read_mus_entries(tmp_path / "absent.mus")
+
+
+@pytest.mark.parametrize(
+    ("interval", "shift"),
+    [(0, 0), (1, 0), (4, 0), (5, -7), (7, -7), (8, -7), (12, -14)],
+)
+def test_harm_lev_octave_shift(interval: int, shift: int) -> None:
+    """Pins the empirical octave rule for transposing staves.
+
+    Every value here was measured against paired .musx files. The boundary is the
+    surprising part: the octave moves at interval 5, not 7, so a "divide by 7"
+    implementation passes the 0/7/12 cases and silently breaks 5 and 8.
+    """
+    assert harm_lev_octave_shift(interval) == shift

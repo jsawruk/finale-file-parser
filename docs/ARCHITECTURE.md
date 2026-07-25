@@ -195,10 +195,29 @@ Verified across every 2011/2012 `.mus` with a confirmed `.musx` pair — **30,42
 numbers, durations and rest flags all agree exactly, and note pitches agree on every document without
 a transposing staff.
 
-Two known, pinned discrepancies, both believed to be document revisions rather than decode errors:
-one entry stores two notes in `.mus` and one in `.musx`, and an adjacent entry in the same file
-differs by an octave. Files *with* transposing staves show a uniform one-octave `harm_lev` offset —
-an unresolved octave-reference question, tracked in `docs/formats/mus-binary-notes.md`.
+**Transposing staves place `harm_lev` in a different octave.** On a staff with a transposition, the
+two containers disagree by whole octaves, and `harm_lev_octave_shift(interval)` converts a `.mus`
+value to the `.musx` convention. Measured across every confirmed pair, 30,891 notes over seven
+distinct transpositions:
+
+| staff transposition interval | shift |
+| --- | --- |
+| 0, 1, 4 | 0 |
+| 5, 7, 8 | −7 |
+| 12 | −14 |
+
+i.e. `-7 * ((interval + 2) // 7)`. **The boundary is the surprising part** — the octave moves at
+interval 5, not 7 — so a plain "divide by 7" passes the 0/7/12 cases and silently breaks 5 and 8. The
+rule is empirical; *why* it breaks at 5 is not understood.
+
+`read_mus_entries` does not apply it, because the entry pool carries no staff information — the
+transposition lives in the `others` pool, which is not yet readable from `.mus`. Apply it where the
+staff is known.
+
+With the shift applied, 30,888 of 30,891 notes agree exactly. The three that do not are pinned in the
+corpus sweep: one entry stores two notes in `.mus` and one in `.musx` with an adjacent entry off by an
+octave (a revision made to the `.musx` afterwards), and two notes on one octave-transposed staff are
+off by a single step, cause unknown.
 
 **Scope:** the 2011/2012 era, where each pool is its own zlib stream; 97 of 99 corpus files place the
 entry pool in a standalone stream and the other 2 lay the payload out as three streams rather than
