@@ -72,3 +72,28 @@ def test_every_corpus_entry_is_located_exactly_once() -> None:
     assert archives_read == EXPECTED_ARCHIVES
     assert entries_located > 0, "no entries were located across the sweep"
     assert seen_multi_layer_measure, "no multi-layer (frame2) measure was seen across the sweep"
+
+
+def test_layers_are_recorded_and_multi_layer_measures_exist() -> None:
+    """`layer` must be populated, and the corpus must actually exercise layers > 1.
+
+    Without the second assertion this would pass on a corpus where every measure
+    used only layer 1, proving nothing about the field that matters.
+    """
+    from collections import Counter
+
+    seen: Counter[int] = Counter()
+    multi_layer_measures = 0
+    for path in _archives()[:40]:
+        document = parse_enigma(score_xml(path))
+        located = locate_entries(document)
+        seen.update(where.layer for where in located.values())
+        by_measure: dict[tuple[int, int], set[int]] = {}
+        for where in located.values():
+            by_measure.setdefault((where.staff, where.measure), set()).add(where.layer)
+        multi_layer_measures += sum(1 for layers in by_measure.values() if len(layers) > 1)
+
+    assert seen, "no entries located"
+    assert set(seen) <= {1, 2, 3, 4}, f"layer outside 1-4: {sorted(seen)}"
+    assert seen[1] > 0
+    assert multi_layer_measures > 0, "corpus exercises only layer 1; the field is untested"

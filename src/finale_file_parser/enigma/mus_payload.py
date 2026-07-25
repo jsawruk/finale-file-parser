@@ -23,7 +23,7 @@ from finale_file_parser.enigma.blast import CorruptDclStreamError, blast_decompr
 from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.version import mus as mus_header
 
-__all__ = ["MAX_MUS_PAYLOAD", "read_mus_payload"]
+__all__ = ["MAX_MUS_PAYLOAD", "read_mus_payload", "read_mus_streams"]
 
 MAX_MUS_PAYLOAD = 64 * 1024 * 1024
 """Refuse output past 64 MiB.
@@ -97,6 +97,22 @@ def _read_dcl(data: bytes) -> bytes:
         raise CorruptScoreError(f"DCL stream at {_DCL_OFFSET:#x} did not decode: {exc}") from exc
 
 
+def read_mus_streams(path: str | os.PathLike[str]) -> list[bytes]:
+    """Return the payload's zlib streams individually, in file order.
+
+    `read_mus_payload` concatenates these. Callers that need the pool boundaries
+    -- the entries reader does -- need them apart, because each stream holds a
+    different pool. Returns a single element for a DCL-era file, which packs
+    everything into one stream with no delimiters yet known.
+    """
+    with open(path, "rb") as handle:
+        data = handle.read()
+    detail = mus_header.parse(data[: mus_header.MUS_METADATA_SIZE])
+    if detail.year is not None and detail.year <= _LAST_DCL_YEAR:
+        return [_read_dcl(data)]
+    return _zlib_streams(data)
+
+
 def _read_zlib_chain(data: bytes) -> bytes:
     """Decode the chain of consecutive zlib streams of a 2011-2012 file.
 
@@ -104,7 +120,13 @@ def _read_zlib_chain(data: bytes) -> bytes:
     preamble ahead of the first one is variable-length, and two corpus files
     start at 0x20A rather than the usual 0x216.
     """
-    out = bytearray()
+    return b"".join(_zlib_streams(data))
+
+
+def _zlib_streams(data: bytes) -> list[bytes]:
+    """Every zlib stream in `data`, in order. Raises if there are none."""
+    out: list[bytes] = []
+    total = 0
     position = 0
     while position < len(data) - 1:
         if not _is_zlib_header(data, position):
@@ -112,7 +134,7 @@ def _read_zlib_chain(data: bytes) -> bytes:
             continue
         index = position
         try:
-            chunk, consumed = _inflate_bounded(data[index:], MAX_MUS_PAYLOAD - len(out))
+            chunk, consumed = _inflate_bounded(data[index:], MAX_MUS_PAYLOAD - total)
         except (zlib.error, CorruptScoreError):
             # A byte pair that merely looks like a header; step past and go on.
             position = index + 1
@@ -120,12 +142,13 @@ def _read_zlib_chain(data: bytes) -> bytes:
         if len(chunk) < _MIN_STREAM_OUTPUT:
             position = index + 1
             continue
-        out += chunk
+        out.append(chunk)
+        total += len(chunk)
         # Guard against a zero-width advance, which would loop forever.
         position = index + max(consumed, 1)
     if not out:
         raise CorruptScoreError("no zlib stream found in payload")
-    return bytes(out)
+    return out
 
 
 def _inflate_bounded(data: bytes, budget: int) -> tuple[bytes, int]:

@@ -3,6 +3,13 @@
 from __future__ import annotations
 
 from finale_file_parser.enigma.blast import CorruptDclStreamError, blast_decompress
+from finale_file_parser.enigma.clef import (
+    Clef,
+    ClefSign,
+    clef_definitions,
+    clefs_by_measure,
+    default_clefs,
+)
 from finale_file_parser.enigma.crypt import decrypt
 from finale_file_parser.enigma.document import (
     DetailsPool,
@@ -28,13 +35,19 @@ from finale_file_parser.enigma.location import (
     locate_entries,
 )
 from finale_file_parser.enigma.models import CorruptScoreError
-from finale_file_parser.enigma.mus_payload import MAX_MUS_PAYLOAD, read_mus_payload
+from finale_file_parser.enigma.mus_entries import harm_lev_octave_shift, read_mus_entries
+from finale_file_parser.enigma.mus_payload import (
+    MAX_MUS_PAYLOAD,
+    read_mus_payload,
+    read_mus_streams,
+)
 from finale_file_parser.enigma.music import (
     Duration,
     Entry,
     MalformedEntryError,
     Note,
     NoteValue,
+    duration_from_edu,
     read_entry,
 )
 from finale_file_parser.enigma.pitch import (
@@ -48,6 +61,20 @@ from finale_file_parser.enigma.pitch import (
     transpose_pitch,
 )
 from finale_file_parser.enigma.score import MAX_INFLATED, score_xml
+from finale_file_parser.enigma.timesig import (
+    TimeSignature,
+    display_time_signature,
+    read_time_signature,
+    time_signatures,
+)
+from finale_file_parser.enigma.tuplet import (
+    EntryChain,
+    Tuplet,
+    entry_chain,
+    read_tuplet,
+    sounded_durations,
+    tuplets_by_entry,
+)
 
 __all__ = [
     "MAX_INFLATED",
@@ -77,12 +104,31 @@ __all__ = [
     "TextsPool",
     "UnsupportedKeyError",
     "blast_decompress",
+    "EntryChain",
+    "Tuplet",
+    "entry_chain",
+    "read_tuplet",
+    "sounded_durations",
+    "tuplets_by_entry",
+    "TimeSignature",
+    "display_time_signature",
+    "read_time_signature",
+    "time_signatures",
+    "Clef",
+    "ClefSign",
+    "clef_definitions",
+    "clefs_by_measure",
+    "default_clefs",
     "decode_key",
+    "harm_lev_octave_shift",
+    "duration_from_edu",
     "decrypt",
     "locate_entries",
     "parse_enigma",
     "read_entry",
+    "read_mus_entries",
     "read_mus_payload",
+    "read_mus_streams",
     "read_transposition",
     "score_xml",
     "spell_note",

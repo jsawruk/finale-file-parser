@@ -7,6 +7,70 @@
 All findings below are from **structural analysis of the curated corpus (238 `.mus`, 401 `.musx`)**
 plus permitted community documentation. Report counts/structure only — never corpus record values.
 
+## ✅ SCOPING ANSWERED: the payload maps onto the existing 7-pool `EnigmaDocument`
+
+`.mus` parity is a **small-to-medium project, not a second format to reverse-engineer.** The
+decompressed payload is the same Enigma record model the `.musx` pipeline already builds, and the
+vendored docs describe it accurately.
+
+### The streams are the pools
+
+A 2011 `.mus` decompresses to four zlib streams. Compared against the *same document* read from its
+paired `.musx` (`01 Overture - Acc`):
+
+| stream | size | character | maps to |
+| --- | --- | --- | --- |
+| 1 `@0x216` | 170,998 B | 66% zeros, instrument/percussion names, period 26 | `others` (3,850 records) |
+| 2 `@0x747C` | 118,274 B | binary, no ASCII, period 36 | `details` (2,686 records) |
+| 3 `@0xB19C` | 22,534 B | binary, **period 38** (79%, harmonics 76/114) | **`entries` (580 records)** |
+| 4 `@0xC3C9` | 8,734 B | **81% ASCII, ETF tagged text** | **`texts` (147 records)** |
+
+**Stream 4 is human-readable ETF markup** — `^block(1)^…Score^end^block(2)^font(Times,4096)^size(14)^nfx(0)Percussion^end`.
+Its tag counts match the `.musx` texts pool exactly:
+
+| stream 4 | count | `.musx` texts tag | count |
+| --- | --- | --- | --- |
+| `^expression(` | 72 | `expression` | **72** ✓ |
+| `^smartshape(` | 60 | `smartShapeText` | **60** ✓ |
+| `^fileInfo(` | 1 | `fileInfo` | **1** ✓ |
+
+(`^block(` is 28 against 14 `blockText` records — exactly 2×, unexplained and worth a look, but the
+other three families are exact.)
+
+### The entry pool parses directly from `eeppd.txt`
+
+Reading stream 3 little-endian at a 38-byte stride reproduces the documented doubly-linked list:
+
+| record | `@0` entnum | `@6` prev | `@10` next | `@14` dura |
+| --- | --- | --- | --- | --- |
+| 0 | 9 | 0 | 10 | 1024 |
+| 1 | 10 | 9 | 13 | 1024 |
+| 2 | 13 | 10 | 14 | 1024 |
+
+`dura = 1024` is a quarter note, exactly as `eeppd.txt` specifies. Validated against the paired
+`.musx`:
+
+- **580 entries parsed from `.mus`, 580 in `.musx`, 100% entry-number overlap**
+- **567/580 durations agree**
+
+The 13 disagreements are *not* a format problem: those records read as mostly zeros with data at
+offsets 35–37, i.e. a naive fixed-stride slice drifting out of alignment. All 13 have `numNotes = 3`.
+`eeppd.txt` says entries are **variable-length** — a header plus one 6-byte note record per note — so
+a real parser walks the chain rather than slicing at a constant stride. (Note 20 + 3×6 = 38, which is
+why a 38-byte stride works for most records and drifts on the rest.)
+
+### What this means for the work
+
+The hard parts are already done or documented: the payload decompresses (shipped), the pool structure
+matches the existing model, `docs/eeppd.txt` gives the entry/note layout and every flag bit, and the
+85 confirmed `.mus`/`.musx` pairs give exact per-record ground truth to validate against.
+
+Remaining unknowns are the `others` and `details` record layouts (streams 1 and 2), where the ETF spec
+gives semantics but **not** binary field order — see the two failed experiments below. Those will need
+the same empirical treatment, but now with a working oracle rather than blind.
+
+Sensible first slice: a `.mus` entries reader validated against the paired `.musx` on all 85 pairs.
+
 ## ✅✅ SOLVED — BOTH ERAS. 238 of 238 corpus files decode.
 
 | cohort | files | payload encoding | offset | decodes |

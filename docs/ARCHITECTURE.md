@@ -163,6 +163,124 @@ widths do not transfer to the binary layout — see the notes for the two experi
 The PKWARE DCL format knowledge is not this project's discovery — see the attribution in
 `docs/REFERENCES.md` and the DECIDED entry in `docs/DECISIONS.md`.
 
+### Known format facts — clefs
+
+Enigma keeps a document-wide table of clef definitions (`clefOptions.clefDef`, **18 entries in every
+corpus document**) and refers to them by index. Two things carry an index:
+
+- `staffSpec.defaultClef` — the staff's clef. **Omitted when it is 0**, so an absent field means
+  treble, not "missing"; skipping those staves would drop every treble-clef staff.
+- `gfhold.clefID` — the clef at that (staff, measure). Present on **every** corpus `gfhold`
+  (4,214/4,214), so it is the *effective* clef rather than only a change marker, and unlike the key
+  signature there is **no inheritance to apply**.
+
+A definition gives a Maestro font character plus placement, or — when `isShape` is set — a `shapeID`
+and no character. The two are mutually exclusive.
+
+`ClefSign` derives the kind from the character: 38 (`&`) → G and 63 (`?`) → F are **confirmed by
+use**; 66 (`B`) → C appears in the table but no corpus staff selects it, so it is inferred from the
+font. Shape clefs report `SHAPE` (percussion, in practice) rather than being guessed into a sign, and
+anything unrecognised stays `UNKNOWN`. Across the sampled corpus every measure resolves to G, F or
+SHAPE — no UNKNOWN — over clef indices 0, 3 and 16 only.
+
+### Known format facts — time signatures
+
+Enigma stores no numerator and denominator. A `measSpec` carries **`beats`** (how many divisions the
+measure has) and **`divbeat`** (how long each division is, in EDU). That is how compound meters fall
+out naturally: 6/8 is *two dotted-quarter divisions*, stored as `beats=2, divbeat=1536`, not six
+eighths.
+
+`TimeSignature` keeps that representation and derives the conventional pair. A division that is three
+times a power of two is compound, so the numerator multiplies by 3 and the denominator comes from the
+undotted unit. Reporting `beats` directly as the numerator would call 6/8 "2/8".
+
+Every one of the 2,622 corpus `measSpec` records carries both fields, so unlike the key signature
+there is **no inheritance to apply**. Signatures observed: 4/4, 3/4, 2/4, 2/2, 6/8, 9/8, 3/8, 1/4, 1/8.
+
+**A display time signature is only valid when `useDisplayTimesig` is set.** `dispBeats` and
+`dispDivbeat` are present on *every* measure but hold a default when the flag is clear — reading them
+unconditionally reports a display signature for 1,937 of 2,622 measures that do not have one, usually
+claiming 4/4 over a bar that is really 3/4. Only 76 measures genuinely set the flag.
+
+### Known format facts — layers
+
+A `gfhold` holds up to four frames, which are Finale's **layers**. `EntryLocation.layer` records which
+slot placed an entry (1–4).
+
+**Each layer independently fills its measure**, so anything summing durations must group by
+`(staff, measure, layer)`. Grouping by `(staff, measure)` alone makes a two-layer measure appear to
+hold exactly twice its time signature — measured on the corpus, 78 measures at exactly 2× and 4 at
+exactly 3×, matching their layer counts.
+
+With layer grouping, **1,420 of 1,423 layer-measures sum to exactly their time signature** once tuplet
+scaling and grace notes are applied, against 1,248 of 1,333 without it. The 3 that remain sit *below*
+capacity (5/6, 1/2) — a layer holding fewer notes than the measure allows, which is ordinary notation.
+
+Layers are distinct from Finale's **voice 1 / voice 2** within a layer (`eeppd.txt`'s `CNTLRBIT`
+"V2 launch" and `CNTLBIT`). No voice-2 marker has been located in EnigmaXML entry records yet, and the
+measure sums above do not require one, so it remains unmodelled.
+
+### Known format facts — the `.mus` entry pool
+
+`read_mus_entries(path)` returns the same `Entry`/`Note`/`Duration` objects the `.musx` path builds,
+so `spell_note`, `decode_key` and the rest attach unchanged. Layout is Coda's, from `docs/eeppd.txt`,
+confirmed field-by-field against paired `.musx` files.
+
+The pool is a flat array of fixed **38-byte slots**, each tagged with the entry it belongs to:
+
+```
+0-3   entnum        the entry this slot belongs to
+4-5   slot index    0 for an entry's first slot, then 1, 2, ...
+6-37  payload
+```
+
+First slot: `prev(4) next(4) dura(2) pos(2) flag(4) extflag(2) count(2)` then two note records.
+Continuation slots carry five more notes each, from offset 6. A note is `TCD(2) + flag(4)`.
+
+Three details that are easy to get wrong, each caught by comparing against ground truth:
+
+- **The TCD's alteration nibble is sign-and-magnitude**, bit 3 being the sign — not two's complement.
+  `eeppd.txt` calls it "a signed quantity … -8 to +7", which reads as two's complement; under that
+  reading `0x9` decodes to −7 where the corpus says −1.
+- **`FLOATREST` decides whether an entry has pitch content, not `NOTEBIT`.** A floating rest stores a
+  placeholder note with a count of 1; a rest dragged off the midline clears `FLOATREST` and stores a
+  *real* note record for its vertical position. Using `NOTEBIT` misclassifies 74 corpus entries.
+- **Notes do not run at a fixed stride from the entry start.** Note 3 onward lives in the next slot,
+  after that slot's own 6-byte tag.
+
+Verified across every 2011/2012 `.mus` with a confirmed `.musx` pair — **30,420 entries**: entry
+numbers, durations and rest flags all agree exactly, and note pitches agree on every document without
+a transposing staff.
+
+**Transposing staves place `harm_lev` in a different octave.** On a staff with a transposition, the
+two containers disagree by whole octaves, and `harm_lev_octave_shift(interval)` converts a `.mus`
+value to the `.musx` convention. Measured across every confirmed pair, 30,891 notes over seven
+distinct transpositions:
+
+| staff transposition interval | shift |
+| --- | --- |
+| 0, 1, 4 | 0 |
+| 5, 7, 8 | −7 |
+| 12 | −14 |
+
+i.e. `-7 * ((interval + 2) // 7)`. **The boundary is the surprising part** — the octave moves at
+interval 5, not 7 — so a plain "divide by 7" passes the 0/7/12 cases and silently breaks 5 and 8. The
+rule is empirical; *why* it breaks at 5 is not understood.
+
+`read_mus_entries` does not apply it, because the entry pool carries no staff information — the
+transposition lives in the `others` pool, which is not yet readable from `.mus`. Apply it where the
+staff is known.
+
+With the shift applied, 30,888 of 30,891 notes agree exactly. The three that do not are pinned in the
+corpus sweep: one entry stores two notes in `.mus` and one in `.musx` with an adjacent entry off by an
+octave (a revision made to the `.musx` afterwards), and two notes on one octave-transposed staff are
+off by a single step, cause unknown.
+
+**Scope:** the 2011/2012 era, where each pool is its own zlib stream; 97 of 99 corpus files place the
+entry pool in a standalone stream and the other 2 lay the payload out as three streams rather than
+four. DCL-era files (2001–2005) pack every pool into one stream with no known delimiters. Both
+unsupported cases raise `CorruptScoreError` rather than guessing.
+
 ### Known format facts — EnigmaXML structure
 
 Full reference and derivation: `docs/superpowers/specs/2026-07-22-enigma-document-design.md`.

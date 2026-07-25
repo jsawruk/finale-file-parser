@@ -104,8 +104,13 @@ def read_entry(record: Record) -> Entry:
     return Entry(entnum=entnum, duration=duration, is_rest=num_notes == 0, notes=notes)
 
 
-def _duration(record: Record) -> Duration:
-    edu = _int(_scalar(record, "dura"), "dura")
+def duration_from_edu(edu: int) -> Duration:
+    """Decode a written duration in EDU into a base note value plus dots.
+
+    Shared by the `.musx` and `.mus` readers: both formats store the same EDU
+    quantity, so the decode belongs in one place rather than being reimplemented
+    per container.
+    """
     if edu <= 0 or edu > _WHOLE_EDU:
         raise MalformedEntryError(f"dura {edu} is out of range")
     base_edu = _WHOLE_EDU
@@ -127,6 +132,10 @@ def _duration(record: Record) -> Duration:
     except ValueError as exc:
         raise MalformedEntryError(f"dura {edu} base has no note value") from exc
     return Duration(edu=edu, base=base, dots=dots)
+
+
+def _duration(record: Record) -> Duration:
+    return duration_from_edu(_int(_scalar(record, "dura"), "dura"))
 
 
 def _notes(record: Record) -> tuple[Note, ...]:
