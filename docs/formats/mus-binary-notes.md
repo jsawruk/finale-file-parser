@@ -123,6 +123,61 @@ where the `.musx` oracle exists. The old cohort was never searched at all until 
 the cohort with every result. Two false negatives (raw DEFLATE, and DCL) each cost this investigation
 more than every positive finding gained.
 
+## `others` and `details`: a foothold, not a solution
+
+`others` (stream 1) is **verified** and its `measSpec` section is decoded. `details` (stream 2) is not.
+
+### Stream 1 really is the `others` pool
+
+Previously inferred from size and autocorrelation period during scoping, never checked. It is now
+confirmed: **all 24 distinct `measSpec` widths from the paired `.musx` are present in stream 1**,
+against 4, 2 and 1 in streams 2-4 — chance level for a 16-bit value. They are interleaved rather than
+consecutive, which is what a record array with `width` as one field among many looks like.
+
+### `measSpec` decoded
+
+Located by searching stream 1 for the known width sequence and fitting an arithmetic progression:
+**41 of 41 measures fit at start offset 60,314 with an 84-byte stride** — 41 being exactly the measure
+count. Field offsets within a record, each confirmed against every one of the 41 measures:
+
+| offset | field | measure 1 |
+| --- | --- | --- |
+| +0 | `width` (ETF `measpace`) | 305 |
+| +2 | `key` | 253 |
+| +4 | `beats` | 2 |
+| +6 | `divbeat` | 1024 |
+
+**This is the ETF spec's documented field order** — `^MS(n) measpace key beats divbeat ...`. Worth
+noting explicitly, because that order emphatically did *not* transfer for the entry pool (see the two
+failed experiments below). ETF order transferring here and not there means neither outcome can be
+assumed; each record type has to be checked.
+
+### What the structure looks like so far
+
+Records of one tag sit **contiguously in a section**; the stream is a run of such sections. The first
+section of stream 1 is a different record type: 26-byte records with an incrementing `cmper` in bytes
+0-1, and a `fe ff` marker at +2 that occurs 269 times in the stream and so belongs to that type rather
+than to records generally.
+
+### The open problem: locating a section without the oracle
+
+`measSpec` was found by searching for values already known from the paired `.musx`. That does not
+generalise — a `.mus`-only file has no oracle, and the pool has 73 distinct tags.
+
+**No directory was found.** The section offset 60,314 appears nowhere as a 2- or 4-byte value in any
+stream or in the raw file (one incidental 2-byte hit in the raw file, not a reference). So sections are
+not indexed by absolute offset; if there is a table it is expressed some other way — counts and sizes
+to accumulate, or a per-section header. That is the thing to find next, and everything else unlocks
+behind it.
+
+### `details` (stream 2) — NOT confirmed, do not build on this
+
+Reading stream 2 at a 36-byte stride (the period autocorrelation suggested) yields plausible-looking
+structure: LE32 pairs where the second value increments by small amounts, and a constant `20` at +8.
+**But the first value is 1009, which matches no `cmper1` on any `.musx` details record in that
+document.** So the stride, the field boundaries, or both are wrong. Recorded only so the next attempt
+does not repeat it and mistake it for progress.
+
 ## READ `docs/eeppd.txt` AND `docs/etfspec.pdf` FIRST
 
 **Process failure worth recording:** most of this document was derived by reverse engineering while
