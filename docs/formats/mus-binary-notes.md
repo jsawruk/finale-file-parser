@@ -203,6 +203,57 @@ at 89,656 while 4 x 41 sits at 60,314. It depends on the size of everything prec
 with content such as chord suffixes and fretboards. So walking from the start of the stream, section by
 section, is the only route: each section's size has to be derivable before the next can be located.
 
+### `frameSpec` decoded
+
+Located the same way as `measSpec` -- by fitting an arithmetic progression to values already known
+from the paired `.musx`. **All 164 frameSpec records fit at offset 35,492 with a 26-byte stride**, and
+the fields are confirmed against every one of them:
+
+```
++0  startEntry  LE32      +4  endEntry  LE32
+```
+
+### The pool's first section is fixed-size
+
+The stream opens with **18 records of 26 bytes = 468 bytes**, and that size is identical across every
+configuration sampled (2-4 staves, 40-64 measures). Its *content* is not fixed -- two documents diverge
+at byte 18 -- and `header[24:40]` depends **only on the staff count**, identically across 4-staff files
+and identically across 2-staff files, so it encodes staff layout rather than counts.
+
+### Why counts cannot come from the document's shape
+
+`frameSpec` counts are **content-dependent, not structural**: 164 frames for 4 staves x 41 measures is
+exactly 4x41, but 4 staves x 40 measures gives **157, not 160**. Empty frames are omitted. So a reader
+cannot compute the section size from staff and measure counts, and something must supply it.
+
+Three candidates checked and ruled out:
+
+- **Not in the fixed header.** No offset in the 468-byte block holds the measure, staff or frame count
+  consistently across configurations.
+- **Not a length before the section.** The count, the byte size, and both offsets are all absent from
+  the 64 bytes preceding the section.
+- **Not an absolute offset anywhere** (established previously).
+
+### The lead worth following next: records may be self-identifying
+
+The 26-byte record run **does not begin at the fitted `frameSpec` offset** -- it extends earlier, and
+the records share a structure. Bytes +16 and +18 hold a pair that increments across records and rolls
+over between them:
+
+```
+... 92 00 | 03 00 ...   (record before the frameSpec fit)
+... 92 00 | 04 00 ...   (frameSpec record 0)
+... 92 00 | 05 00 ...   (frameSpec record 1)
+... 93 00 | 01 00 ...   (last frameSpec record)
+... 93 00 | 06 00 ...   (record after)
+```
+
+A rolling major/minor pair like that looks like a **key carried inside the record** rather than implied
+by position. If it is, this region is a flat array of self-identifying 26-byte records and needs no
+directory at all -- which would explain why no index has been found. **Testing whether that pair is a
+(cmper, inci) or (cmper1, cmper2) key is the next step**, and it can be checked directly against the
+`.musx`, whose records carry exactly those attributes.
+
 ### The open problem: locating a section without the oracle
 
 `measSpec` was found by searching for values already known from the paired `.musx`. That does not
