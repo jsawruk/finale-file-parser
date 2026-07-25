@@ -163,6 +163,29 @@ widths do not transfer to the binary layout — see the notes for the two experi
 The PKWARE DCL format knowledge is not this project's discovery — see the attribution in
 `docs/REFERENCES.md` and the DECIDED entry in `docs/DECISIONS.md`.
 
+### Known format facts — staff names and file info
+
+**A staff does not carry its own name.** `staffSpec.fullName` holds a number, and reaching the string
+takes *two* hops:
+
+```
+staffSpec.fullName → others.textBlock[cmper] → textID → texts.blockText[number] → the text
+```
+
+Going straight from `fullName` to `blockText` resolves **nothing** — all 24 named staves in the sampled
+corpus fail that way, because the two numbers live in different spaces. That failure is silent: the
+exporter simply falls back to "Staff N", which looks like valid output.
+
+The text is Enigma's tagged markup (`^fontid(9)^size(12)^nfx(0)Voice`) and also carries **inserts** —
+`^title()`, `^partname()` — which are placeholders resolved at render time, not literal text.
+`plain_text` strips both, so a block consisting only of inserts correctly yields an empty string.
+
+**Most staves are unnamed:** 24 of 84 in the sample carry a name. `staff_names` omits the rest rather
+than returning blanks, so a caller can tell "unnamed" from "named blank" and choose its own fallback.
+
+`fileInfo` records in the texts pool hold **title, composer, copyright and description** as literal
+strings, with no indirection and no markup.
+
 ## The IR and exporters
 
 `docs/DECISIONS.md` (2026-07-20) settles the shape: readers produce a **format-neutral IR**, exporters

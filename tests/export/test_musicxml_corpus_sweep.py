@@ -32,6 +32,7 @@ from defusedxml import ElementTree as DET
 
 from finale_file_parser.enigma.document import parse_enigma
 from finale_file_parser.enigma.score import score_xml
+from finale_file_parser.enigma.text import staff_names
 from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.export.musicxml import to_musicxml
 
@@ -82,6 +83,42 @@ def test_every_note_has_a_type_and_a_duration_unless_it_is_a_grace_note() -> Non
                 assert duration is not None and int(duration) > 0, "duration must be positive"
     assert notes > 1000
     assert grace > 0, "no grace note in the sample; that path is untested here"
+
+
+def test_titles_and_part_names_resolve() -> None:
+    """Names come through two hops of indirection, so a broken link is silent.
+
+    `staffSpec.fullName` -> `textBlock[cmper]` -> `textID` -> `blockText[number]`.
+    Dropping either hop yields no name and the exporter falls back to "Staff N",
+    which still looks like valid output.
+
+    The assertion is on the *mechanism*, not on how many scores happen to name
+    their staves: every document that supplies staff names must produce them in
+    the output. A ratio over the whole corpus would measure corpus composition
+    instead -- only 18 of 25 sampled scores name any staff at all, since piano and
+    accompaniment staves routinely go unnamed.
+    """
+    titled = documents = with_names = 0
+    for path in _archives():
+        document = parse_enigma(score_xml(path))
+        names = staff_names(document)
+        exported = DET.fromstring(to_musicxml(build_score(document)).decode())
+        documents += 1
+        if exported.findtext("./work/work-title"):
+            titled += 1
+        if not names:
+            continue
+        with_names += 1
+        resolved = {
+            element.text
+            for element in exported.findall("./part-list/score-part/part-name")
+            if element.text and not element.text.startswith("Staff ")
+        }
+        assert resolved, "document supplies staff names but none reached the output"
+
+    assert documents == SAMPLE
+    assert titled >= documents * 0.8, f"only {titled} of {documents} scores carry a title"
+    assert with_names >= 10, "too few named-staff documents to exercise the chain"
 
 
 @pytest.mark.skipif(shutil.which("xmllint") is None, reason="xmllint not available")
