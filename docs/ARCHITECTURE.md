@@ -163,6 +163,31 @@ widths do not transfer to the binary layout — see the notes for the two experi
 The PKWARE DCL format knowledge is not this project's discovery — see the attribution in
 `docs/REFERENCES.md` and the DECIDED entry in `docs/DECISIONS.md`.
 
+## The IR and exporters
+
+`docs/DECISIONS.md` (2026-07-20) settles the shape: readers produce a **format-neutral IR**, exporters
+consume one, and neither knows the other. The dependency runs one way only:
+
+```
+container ──▶ enigma ──▶ enigma/to_ir ──▶  ir  ◀── export/musicxml
+                                          (knows nobody)
+```
+
+`finale_file_parser/ir.py` imports nothing from `enigma` or `container`. A `.mus` reader added later
+produces the same `Score` and every exporter keeps working — which is the whole point of paying for the
+extra hop rather than exporting from `EnigmaDocument` directly.
+
+The decision's other consequence shapes the types: **MusicXML's limits must not constrain the IR.**
+Durations are exact `Fraction`s of a whole note, not MusicXML integer divisions, and a `Voice` keeps its
+source layer number rather than a MusicXML voice index. The exporter picks a divisions value per part by
+taking the LCM of the durations' denominators — a triplet eighth is 1/12 of a whole note, so a
+power-of-two divisions count truncates it to zero.
+
+**Naming collision worth knowing about:** `ir.TimeSignature` and `enigma.timesig.TimeSignature` are
+different types — conventional beats/beat-type versus Enigma's beats/division-EDU. The IR types are
+deliberately *not* flattened into the package root for that reason; import them from
+`finale_file_parser.ir`.
+
 ### Known format facts — clefs
 
 Enigma keeps a document-wide table of clef definitions (`clefOptions.clefDef`, **18 entries in every
