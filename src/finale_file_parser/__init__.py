@@ -36,10 +36,13 @@ from finale_file_parser.enigma import (
     blast_decompress,
     decode_key,
     decrypt,
+    duration_from_edu,
     locate_entries,
     parse_enigma,
     read_entry,
+    read_mus_entries,
     read_mus_payload,
+    read_mus_streams,
     read_transposition,
     score_xml,
     spell_note,
@@ -61,6 +64,9 @@ from finale_file_parser.version.models import (
 )
 
 __all__ = [
+    "duration_from_edu",
+    "read_mus_streams",
+    "read_mus_entries",
     "read_mus_payload",
     "blast_decompress",
     "CorruptDclStreamError",

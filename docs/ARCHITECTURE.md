@@ -163,6 +163,48 @@ widths do not transfer to the binary layout — see the notes for the two experi
 The PKWARE DCL format knowledge is not this project's discovery — see the attribution in
 `docs/REFERENCES.md` and the DECIDED entry in `docs/DECISIONS.md`.
 
+### Known format facts — the `.mus` entry pool
+
+`read_mus_entries(path)` returns the same `Entry`/`Note`/`Duration` objects the `.musx` path builds,
+so `spell_note`, `decode_key` and the rest attach unchanged. Layout is Coda's, from `docs/eeppd.txt`,
+confirmed field-by-field against paired `.musx` files.
+
+The pool is a flat array of fixed **38-byte slots**, each tagged with the entry it belongs to:
+
+```
+0-3   entnum        the entry this slot belongs to
+4-5   slot index    0 for an entry's first slot, then 1, 2, ...
+6-37  payload
+```
+
+First slot: `prev(4) next(4) dura(2) pos(2) flag(4) extflag(2) count(2)` then two note records.
+Continuation slots carry five more notes each, from offset 6. A note is `TCD(2) + flag(4)`.
+
+Three details that are easy to get wrong, each caught by comparing against ground truth:
+
+- **The TCD's alteration nibble is sign-and-magnitude**, bit 3 being the sign — not two's complement.
+  `eeppd.txt` calls it "a signed quantity … -8 to +7", which reads as two's complement; under that
+  reading `0x9` decodes to −7 where the corpus says −1.
+- **`FLOATREST` decides whether an entry has pitch content, not `NOTEBIT`.** A floating rest stores a
+  placeholder note with a count of 1; a rest dragged off the midline clears `FLOATREST` and stores a
+  *real* note record for its vertical position. Using `NOTEBIT` misclassifies 74 corpus entries.
+- **Notes do not run at a fixed stride from the entry start.** Note 3 onward lives in the next slot,
+  after that slot's own 6-byte tag.
+
+Verified across every 2011/2012 `.mus` with a confirmed `.musx` pair — **30,420 entries**: entry
+numbers, durations and rest flags all agree exactly, and note pitches agree on every document without
+a transposing staff.
+
+Two known, pinned discrepancies, both believed to be document revisions rather than decode errors:
+one entry stores two notes in `.mus` and one in `.musx`, and an adjacent entry in the same file
+differs by an octave. Files *with* transposing staves show a uniform one-octave `harm_lev` offset —
+an unresolved octave-reference question, tracked in `docs/formats/mus-binary-notes.md`.
+
+**Scope:** the 2011/2012 era, where each pool is its own zlib stream; 97 of 99 corpus files place the
+entry pool in a standalone stream and the other 2 lay the payload out as three streams rather than
+four. DCL-era files (2001–2005) pack every pool into one stream with no known delimiters. Both
+unsupported cases raise `CorruptScoreError` rather than guessing.
+
 ### Known format facts — EnigmaXML structure
 
 Full reference and derivation: `docs/superpowers/specs/2026-07-22-enigma-document-design.md`.

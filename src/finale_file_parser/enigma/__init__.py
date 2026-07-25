@@ -28,13 +28,19 @@ from finale_file_parser.enigma.location import (
     locate_entries,
 )
 from finale_file_parser.enigma.models import CorruptScoreError
-from finale_file_parser.enigma.mus_payload import MAX_MUS_PAYLOAD, read_mus_payload
+from finale_file_parser.enigma.mus_entries import read_mus_entries
+from finale_file_parser.enigma.mus_payload import (
+    MAX_MUS_PAYLOAD,
+    read_mus_payload,
+    read_mus_streams,
+)
 from finale_file_parser.enigma.music import (
     Duration,
     Entry,
     MalformedEntryError,
     Note,
     NoteValue,
+    duration_from_edu,
     read_entry,
 )
 from finale_file_parser.enigma.pitch import (
@@ -78,11 +84,14 @@ __all__ = [
     "UnsupportedKeyError",
     "blast_decompress",
     "decode_key",
+    "duration_from_edu",
     "decrypt",
     "locate_entries",
     "parse_enigma",
     "read_entry",
+    "read_mus_entries",
     "read_mus_payload",
+    "read_mus_streams",
     "read_transposition",
     "score_xml",
     "spell_note",
