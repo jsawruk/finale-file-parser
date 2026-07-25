@@ -252,6 +252,32 @@ record for `cmper` *c* would sit at `base + (c - 3) * 26`. That fits **72 of 164
 **164 of 164** for contiguous storage. So the 164 present frames are stored back to back in `cmper`
 order and the 28 empty ones are simply absent.
 
+### No key array either -- and the question may be malformed
+
+Searching every stream and the raw file for the 164 `cmper` values as a contiguous array, at both
+2- and 4-byte widths, finds **nothing** -- not the full list, not even its first twelve values. So
+`cmper` is not stored as a parallel index either.
+
+**That is four structural hypotheses refuted, which is enough to suspect the question.** Consider what
+the evidence actually shows: the 164 present frames sit back to back in `.musx` document order, and a
+positional fit over the *`.musx` cmper range* fails (72/164) while contiguous storage succeeds
+(164/164).
+
+The simplest reading is that **`.mus` numbers frames positionally and `.musx` renumbers them** -- the
+sparse 3..194 range with 28 gaps is `.musx`'s own numbering, not something `.mus` ever stored. On that
+reading there is no missing key: a `.mus` reader assigns frame numbers by position, and the internal
+references (a `gfhold`-equivalent naming `frame1..frame4`) would use that positional numbering.
+
+This is **not yet confirmed** -- it needs the `gfhold` equivalent located in stream 2 (`details`) to
+see what frame numbers `.mus` actually references. But it would explain every negative above at once,
+and it means the effort spent hunting for a directory, an in-record key and a key array was spent
+looking for something that need not exist.
+
+**Method note.** Four refutations in a row on the same question is itself evidence -- not that the
+format is unusually clever, but that the framing carried an assumption. Here the assumption was that
+`.musx` cmper values are faithful to `.mus`, imported from how every other cross-format check in this
+document has worked. That assumption is load-bearing and was never tested.
+
 ### Where that leaves `cmper`
 
 For this section `cmper` is **not in the record, not implied by position, and not in a directory** --
