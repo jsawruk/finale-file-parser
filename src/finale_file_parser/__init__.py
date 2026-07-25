@@ -8,6 +8,8 @@ from finale_file_parser.container import (
 )
 from finale_file_parser.enigma import (
     MAX_INFLATED,
+    MAX_MUS_PAYLOAD,
+    CorruptDclStreamError,
     CorruptScoreError,
     DetailsPool,
     Duration,
@@ -31,11 +33,13 @@ from finale_file_parser.enigma import (
     StaffTransposition,
     TextsPool,
     UnsupportedKeyError,
+    blast_decompress,
     decode_key,
     decrypt,
     locate_entries,
     parse_enigma,
     read_entry,
+    read_mus_payload,
     read_transposition,
     score_xml,
     spell_note,
@@ -57,6 +61,10 @@ from finale_file_parser.version.models import (
 )
 
 __all__ = [
+    "read_mus_payload",
+    "blast_decompress",
+    "CorruptDclStreamError",
+    "MAX_MUS_PAYLOAD",
     "MAX_INFLATED",
     "AppVersion",
     "Confidence",

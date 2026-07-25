@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from finale_file_parser.enigma.blast import CorruptDclStreamError, blast_decompress
 from finale_file_parser.enigma.crypt import decrypt
 from finale_file_parser.enigma.document import (
     DetailsPool,
@@ -27,6 +28,7 @@ from finale_file_parser.enigma.location import (
     locate_entries,
 )
 from finale_file_parser.enigma.models import CorruptScoreError
+from finale_file_parser.enigma.mus_payload import MAX_MUS_PAYLOAD, read_mus_payload
 from finale_file_parser.enigma.music import (
     Duration,
     Entry,
@@ -49,6 +51,8 @@ from finale_file_parser.enigma.score import MAX_INFLATED, score_xml
 
 __all__ = [
     "MAX_INFLATED",
+    "MAX_MUS_PAYLOAD",
+    "CorruptDclStreamError",
     "CorruptScoreError",
     "DetailsPool",
     "Duration",
@@ -72,11 +76,13 @@ __all__ = [
     "StaffTransposition",
     "TextsPool",
     "UnsupportedKeyError",
+    "blast_decompress",
     "decode_key",
     "decrypt",
     "locate_entries",
     "parse_enigma",
     "read_entry",
+    "read_mus_payload",
     "read_transposition",
     "score_xml",
     "spell_note",
