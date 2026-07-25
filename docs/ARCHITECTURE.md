@@ -163,6 +163,25 @@ widths do not transfer to the binary layout — see the notes for the two experi
 The PKWARE DCL format knowledge is not this project's discovery — see the attribution in
 `docs/REFERENCES.md` and the DECIDED entry in `docs/DECISIONS.md`.
 
+### Known format facts — time signatures
+
+Enigma stores no numerator and denominator. A `measSpec` carries **`beats`** (how many divisions the
+measure has) and **`divbeat`** (how long each division is, in EDU). That is how compound meters fall
+out naturally: 6/8 is *two dotted-quarter divisions*, stored as `beats=2, divbeat=1536`, not six
+eighths.
+
+`TimeSignature` keeps that representation and derives the conventional pair. A division that is three
+times a power of two is compound, so the numerator multiplies by 3 and the denominator comes from the
+undotted unit. Reporting `beats` directly as the numerator would call 6/8 "2/8".
+
+Every one of the 2,622 corpus `measSpec` records carries both fields, so unlike the key signature
+there is **no inheritance to apply**. Signatures observed: 4/4, 3/4, 2/4, 2/2, 6/8, 9/8, 3/8, 1/4, 1/8.
+
+**A display time signature is only valid when `useDisplayTimesig` is set.** `dispBeats` and
+`dispDivbeat` are present on *every* measure but hold a default when the flag is clear — reading them
+unconditionally reports a display signature for 1,937 of 2,622 measures that do not have one, usually
+claiming 4/4 over a bar that is really 3/4. Only 76 measures genuinely set the flag.
+
 ### Known format facts — layers
 
 A `gfhold` holds up to four frames, which are Finale's **layers**. `EntryLocation.layer` records which

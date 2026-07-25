@@ -54,6 +54,12 @@ from finale_file_parser.enigma.pitch import (
     transpose_pitch,
 )
 from finale_file_parser.enigma.score import MAX_INFLATED, score_xml
+from finale_file_parser.enigma.timesig import (
+    TimeSignature,
+    display_time_signature,
+    read_time_signature,
+    time_signatures,
+)
 from finale_file_parser.enigma.tuplet import (
     EntryChain,
     Tuplet,
@@ -97,6 +103,10 @@ __all__ = [
     "read_tuplet",
     "sounded_durations",
     "tuplets_by_entry",
+    "TimeSignature",
+    "display_time_signature",
+    "read_time_signature",
+    "time_signatures",
     "decode_key",
     "harm_lev_octave_shift",
     "duration_from_edu",
