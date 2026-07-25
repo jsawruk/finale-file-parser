@@ -234,7 +234,35 @@ Three candidates checked and ruled out:
   the 64 bytes preceding the section.
 - **Not an absolute offset anywhere** (established previously).
 
-### The lead worth following next: records may be self-identifying
+### ⚠️ REFUTED: records are NOT self-identifying
+
+The lead below was tested and **does not hold**. Retained because the tests narrow the problem.
+
+**`+16` is not a tag id.** Within the `frameSpec` region it is 146 on 163 of 164 records -- near
+constant, not a discriminator. Scanning the whole stream at stride 26 gives a value distribution
+dominated by 0, 12 and 65535, which is noise from a stream that is not uniformly 26-byte.
+
+**`+18` is not `cmper`.** It tracks `cmper + 1` on 156 of 164 records, which looked promising, but
+reading `+16..+19` as one LE32 shows it incrementing by **exactly 65536 on 155 of 163 steps** -- the
+high word is a plain sequential record counter. `cmper` meanwhile runs 3 to 194 with gaps, so the two
+drift apart wherever a slot is skipped. An approximate match to a counter is not a key.
+
+**The section is not positionally keyed either.** If every slot in the `cmper` range were stored, the
+record for `cmper` *c* would sit at `base + (c - 3) * 26`. That fits **72 of 164** records, against
+**164 of 164** for contiguous storage. So the 164 present frames are stored back to back in `cmper`
+order and the 28 empty ones are simply absent.
+
+### Where that leaves `cmper`
+
+For this section `cmper` is **not in the record, not implied by position, and not in a directory** --
+all three now tested. Something else must carry it. The remaining candidates are a separate key or
+index array elsewhere in the pool (one entry per record, which would not look like a "directory" and
+would be easy to miss), or a per-section run-length structure that encodes which slots are present.
+
+That is a narrower question than the one this line of work started with, and the tests above rule out
+the three most obvious answers rather than leaving them to be re-tried.
+
+### The original lead, now refuted -- records may be self-identifying
 
 The 26-byte record run **does not begin at the fitted `frameSpec` offset** -- it extends earlier, and
 the records share a structure. Bytes +16 and +18 hold a pair that increments across records and rolls
