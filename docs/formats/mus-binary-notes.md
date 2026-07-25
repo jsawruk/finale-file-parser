@@ -159,6 +159,50 @@ section of stream 1 is a different record type: 26-byte records with an incremen
 0-1, and a `fe ff` marker at +2 that occurs 269 times in the stream and so belongs to that type rather
 than to records generally.
 
+### The `measSpec` region is a per-measure block, not a flat record array
+
+The 84-byte "stride" is not a record size. Measuring it across ten document configurations and three
+staff counts gives an exact law:
+
+| staves | 2 | 3 | 4 |
+| --- | --- | --- | --- |
+| block size | 40 | 62 | 84 |
+
+That is **`18 + 22 x (staves - 1)`**. So each block is an 18-byte measure head followed by
+**`staves - 1`** rows of 22 bytes. The row count being one *fewer* than the staff count is the
+tell: it matches the number of **gaps between** staves, which is what inter-staff spacing data would
+need. (A flat `measSpec` array would not change size with the staff count at all.)
+
+The measure head carries the fields already identified:
+
+```
++0 width   +2 key   +4 beats   +6 divbeat   +8..17 further measure fields
+```
+
+Confirmed on consecutive measures: head 1 reads 305/253/2/1024 and head 2 reads 334/253/2/1024,
+matching the paired `.musx` exactly.
+
+### Layout is structural, not content-driven -- which argues against an index
+
+**Thirteen different pieces of music with the same shape (2 staves, 41 measures) put this region at the
+identical offset 57,244 with the identical block size.** Offset and size follow from the document's
+*counts*, not from what the music contains.
+
+That is what a format with **no directory** looks like: the reader knows each record type's size and
+walks sections in a fixed order, deriving offsets from counts it already has. Three places an index
+could have hidden were checked and ruled out:
+
+- **Not a small stream.** The payload holds exactly four zlib streams; nothing is hiding below the
+  reader's 4 KiB floor.
+- **Not the tail.** The 1,216 bytes after the last stream are the documented macOS plist plus 22 bytes.
+- **Not an absolute offset.** 60,314 appears nowhere as a 2- or 4-byte value in any stream or in the
+  raw file.
+
+**But the offset is not a simple function of (staves, measures) either** -- 4 staves x 23 measures sits
+at 89,656 while 4 x 41 sits at 60,314. It depends on the size of everything preceding it, which varies
+with content such as chord suffixes and fretboards. So walking from the start of the stream, section by
+section, is the only route: each section's size has to be derivable before the next can be located.
+
 ### The open problem: locating a section without the oracle
 
 `measSpec` was found by searching for values already known from the paired `.musx`. That does not
