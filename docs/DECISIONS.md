@@ -152,3 +152,24 @@ permissive license suits a format-interoperability library that other tools need
 - **OPEN — `.musx` major-version-to-year mapping.** The `major` field (15/16/17/18) has no
   established mapping to Finale's marketing years (2009/2011/2012/2014...), and nothing in the
   corpus bridges the two schemes. See `docs/ARCHITECTURE.md`.
+
+## 2026-07-24 — DECIDED: port zlib's `contrib/blast` for legacy `.mus` payloads
+
+**Context.** `.mus` files from Finale 2001-2005 (139 of the 238 corpus files) store their payload as a
+PKWARE DCL ("implode") stream. No Python stdlib module reads this format, and no maintained pure-Python
+implementation was found.
+
+**Decision.** Port Mark Adler's `blast.c` (zlib `contrib/blast`) to Python as
+`enigma/blast.py`, rather than shelling out to a tool or adding a dependency.
+
+**Licensing.** `contrib/blast` is under the **zlib License**, which permits use and modification
+provided the origin is not misrepresented and altered versions are marked as such. The module docstring
+states plainly that it is a port of Adler's work, and `docs/REFERENCES.md` records the attribution —
+the same treatment already given to denigma/Deguerre for the `score.dat` cipher.
+
+**Why not a dependency.** The format is small and stable (the tables are fixed constants), the port is
+~150 lines, and it must enforce this project's own allocation caps on untrusted input, which a
+third-party library would not.
+
+**Consequence.** `read_mus_payload()` decodes 238 of 238 corpus files. Correctness rests on the
+upstream test vector rather than on our own reimplementation being self-consistent.

@@ -55,6 +55,18 @@ entry here that supports them.
 - https://rpatters1.github.io/musxdom/
 - MIT License
 
+**zlib `contrib/blast`** — Mark Adler
+
+- https://github.com/madler/zlib (`contrib/blast`)
+- zlib License
+- Source of the PKWARE DCL ("implode") format knowledge implemented in
+  `enigma/blast.py`: the three fixed Huffman bit-length tables, the inverted canonical code
+  assignment, and the length/distance encodings. The Python port and its safety limits are this
+  project's; the format knowledge is Adler's. Correctness is pinned by that project's own documented
+  test vector (`00 04 82 24 25 8f 80 7f` -> `AIAIAIAIAIAIA`); see `tests/enigma/test_blast.py`.
+- Legacy `.mus` files from Finale 2001-2005 store their payload as a single DCL stream, and no stdlib
+  module reads the format. See `docs/formats/mus-binary-notes.md`.
+
 **musx2mxl**
 
 - https://github.com/joris-vaneyghen/musx2mxl
@@ -65,7 +77,8 @@ entry here that supports them.
 - Local copy: `docs/cahill-enigma-cpnview-thesis.pdf`
 - Original URL: http://www.csis.ul.ie/staff/margaretcahill/Research/MSc/MSc.pdf
 - Archive: https://web.archive.org/web/20041228062027/http://www.csis.ul.ie/staff/margaretcahill/Research/MSc/MSc.pdf
-- Sustained academic treatment of the legacy binary Enigma format.
+- Sustained academic treatment of **ETF, the plaintext transportable format** — despite the title,
+  it does not document the legacy *binary* layout. Useful for record semantics, not byte offsets.
 - Vendored under fair use; see note above.
 
 **An incomplete description of the Enigma Transport Format** — LilyPond project

@@ -15,12 +15,17 @@ plus permitted community documentation. Report counts/structure only — never c
 | 2011 / 2012 | 99 | **chain of zlib streams** (`78 9c`) | `0x216` (2 files `0x20A`) | **99/99** |
 
 Both offsets and the DCL header are constant across every file in their cohort. DCL inflation runs
-0.82×–2.75× (median 2.35×); zlib 3.2×–3.5×. Decoded output is unambiguously real Finale data —
+0.82×–2.75× (median 2.35×); the zlib chain 5.87×–8.63× (median 6.07×) once all streams are
+concatenated — a *single* zlib stream is only ~3.2×–3.5×. Decoded payloads run 32,816–699,585 bytes.
+
+Decoded output is unambiguously real Finale data —
 "General MIDI", "Entry & Playback", "Agogo Bells", "Wood Blocks", "Bookmark" in the old cohort;
 "Orchestral Percussion", "Times New Roman", "Broadway Copyist" in the new.
 
-Use `scratchpad/blast.py` (validated against zlib's own `contrib/blast` test vector) for the old
-cohort, and `zlib.decompressobj()` walking the `78 9c` chain for the new.
+**Shipped as `finale_file_parser.read_mus_payload(path) -> bytes`** (`enigma/mus_payload.py`), which
+dispatches on the banner year and falls back to the other scheme if that disagrees. The PKWARE DCL
+decompressor is `enigma/blast.py` — a port of zlib's `contrib/blast`, pinned by that project's own
+test vector. Both enforce a 64 MiB output cap *while* decoding, since this is untrusted input.
 
 ### ⚠️ RETRACTED: the "bit-packed record stream" model for 2001/2005
 

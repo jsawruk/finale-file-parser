@@ -133,6 +133,36 @@ Verified against all 401 corpus archives: 401/401 decode, every result is schema
 The cipher parameters are not this project's discovery — see the attribution in
 `docs/REFERENCES.md` and the DECIDED entry in `docs/DECISIONS.md`.
 
+### Known format facts — the legacy `.mus` payload
+
+Full reference, evidence, and the false starts: `docs/formats/mus-binary-notes.md`. Headline: a `.mus`
+file is a plaintext header followed by a **compressed** payload, and the codec depends on the era.
+
+| banner year | files | payload | offset |
+| --- | --- | --- | --- |
+| 2001–2005 | 139 | single **PKWARE DCL "implode"** stream, `lit=0`, `dict=4` | `0x20A` |
+| 2011–2012 | 99 | **chain of consecutive zlib streams**, ~4 per file | first at `0x216` (2 files `0x20A`) |
+
+Verified against every `.mus` in the corpus: **238/238 decode**. Inflation is 0.82×–2.75× for DCL and
+5.87×–8.63× for the concatenated zlib chain; decoded payloads run 32,816–699,585 bytes.
+
+Two practical notes that cost real time to learn:
+
+- **Locate zlib streams by header, not by offset.** The preamble ahead of the first stream is
+  variable-length. `enigma/mus_payload.py` validates a candidate with zlib's own rule — low nibble 8,
+  and the two header bytes a multiple of 31 — rather than matching the literal `78 9c` pair, which
+  would miss any file written at another compression level.
+- **A raw inflate at an arbitrary offset can hit a DEFLATE *stored* block** and return a verbatim copy
+  of its input, which looks exactly like a large successful decode. Any offset-scanning decoder needs
+  to reject that explicitly.
+
+The decoded payload is **not** EnigmaXML and is not yet parsed into records; that is the next step.
+`docs/eeppd.txt` and `docs/etfspec.pdf` give the record *semantics*, but their ETF field order and
+widths do not transfer to the binary layout — see the notes for the two experiments that establish it.
+
+The PKWARE DCL format knowledge is not this project's discovery — see the attribution in
+`docs/REFERENCES.md` and the DECIDED entry in `docs/DECISIONS.md`.
+
 ### Known format facts — EnigmaXML structure
 
 Full reference and derivation: `docs/superpowers/specs/2026-07-22-enigma-document-design.md`.
