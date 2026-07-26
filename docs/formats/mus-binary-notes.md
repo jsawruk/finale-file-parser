@@ -7,6 +7,68 @@
 All findings below are from **structural analysis of the curated corpus (238 `.mus`, 401 `.musx`)**
 plus permitted community documentation. Report counts/structure only — never corpus record values.
 
+## ⚠️ `staffSpec` located — but the transposition octave is NOT in it
+
+`staffSpec` is **others tag 231**, payload 84 bytes (161 records) or 96 (20). Confirmed by content
+against 181 paired records, not by key sequence:
+
+| offset | field | evidence |
+| --- | --- | --- |
+| +12 | `defaultClef` (u8) | 39/45 exact; the other 6 are `.mus` 0 where `.musx` says 3, and 136/136 records without one store 0 |
+| +16 | `staffLines` (u8) | every record, both payload lengths |
+| +24 | `dwRestOffset` (i8) | every record, 2 distinct values |
+| +25 | `wRestOffset` (i8) | every record, 2 distinct values |
+| +34 | `botRepeatDotOff` (i8) | every record |
+| +35 | `topRepeatDotOff` (i8) | every record |
+| +40 | `vertTabNumOff` (i16) | every record |
+
+The single-valued fields are weak on their own; `dwRestOffset`/`wRestOffset` landing on adjacent
+offsets with two distinct values each, plus `staffLines`, is what makes the identification solid.
+Both payload lengths share these offsets.
+
+### ⛔ REFUTED: that decoding `staffSpec` would fix transposing staves
+
+This was the stated reason to decode the record, and it does not work. **The octave component of a
+staff's transposition is not stored in `staffSpec`.**
+
+The corpus holds staves the `.musx` gives `interval` 1 and 8 (and 5 and 12) — pairs an octave apart.
+Their `.mus` `staffSpec` payloads are **byte-identical across all 84 bytes**, while their `.musx`
+records carry *different* `instUuid`s. So the `.musx` recovers the octave from its instrument
+identity, a Finale-2014-era concept the `.mus` record has no equivalent of.
+
+That is a hard negative, not a "not found yet": there are no bytes left to search in this record.
+
+What *is* there:
+
+- **`adjust` is bijective with byte +20** across all 181 records: 0 → `0x00`, 1 → `0x01`,
+  2 → `0x42`, 3 → `0x83`. Only four distinct values, and the encoding is not understood (the low
+  bits carry `adjust`; what the high bits mean is open), so treat this as a lead.
+- **`interval mod 7` is *not* recoverable.** In this corpus `adjust` maps 1:1 onto `interval mod 7`,
+  but with only four instruments that is a coincidence of the sample — both derive from the
+  instrument. Do not build on it.
+
+### ⛔ REFUTED: a transposing-staff flag at +23
+
+`+23` is 1 on all 25 transposing staves, which looked like a flag until the other side was checked:
+it is also 1 on **124 non-transposing** staves, and takes values 0, 1, 4, 6 and 7 across the corpus.
+It is some other field.
+
+### Part names are not at a fixed offset either
+
+`fullName`/`abbrvName` are text-block references (values 2/93 and 3/94 in the corpus). No 1-, 2- or
+4-byte offset matches even 80% of the 64 records that carry one; the best candidate, `u16` at +30,
+matches 6 of 64 while correctly storing 0 for 107 of 117 records without a name. So either the names
+live outside this record or the payload is not a flat fixed-offset struct.
+
+### What this means for `.mus` fidelity
+
+The `.mus` → IR sweep's 4,138 pitch differences on transposing staves **cannot be closed from
+`staffSpec`**. Either an instrument table exists elsewhere in the file and has to be found, or the
+information is genuinely absent and a `.mus`-only reader cannot spell transposing staves the way
+Finale 2014 did. The same "`.mus` stores 0, `.musx` materialises a real value" pattern already seen
+in `gfhold.clefID` shows up again in `defaultClef` (+12), which points at the same explanation:
+several staff defaults are instrument-derived and simply not written into the `.mus`.
+
 ## ✅✅ SOLVED: `details` too, and `gfhold` is decoded
 
 The `details` pool (stream 2) has the **same shape as `others`** with one extra key field, because a
