@@ -7,6 +7,101 @@
 All findings below are from **structural analysis of the curated corpus (238 `.mus`, 401 `.musx`)**
 plus permitted community documentation. Report counts/structure only — never corpus record values.
 
+## ✅✅ SOLVED: `others` records are self-identifying. The `cmper` question is answered.
+
+**Every `others` record carries its own key in a ten-byte header, and the pool is a flat run of
+variable-length records that can be walked from byte zero with no directory, no key array and no
+positional convention.** Little-endian:
+
+| offset | field | notes |
+| --- | --- | --- |
+| +0 | `tag` | record type; `.musx` names the same types |
+| +2 | `cmper` | the `(n)` in an ETF `^XX(n)` |
+| +4 | `part` | 0 for the score, then 1, 2, … per linked part |
+| +6 | `length` | payload size, LE32 |
+| +10 | payload | `length` bytes |
+| +10+`length` | trailer | four bytes |
+
+so a record occupies **`14 + length`** bytes. Records of one tag sit together in a section; sections
+may be separated by two-byte zero padding, which a walk skips.
+
+**Evidence.** Walking stream 1 from byte 0 tiles it exactly in **84 of 91** paired documents
+(211,554 records). Against the paired `.musx`:
+
+- **frameSpec (tag 146)** — the `(cmper, part)` sequence matches exactly in **76 of 77** same-content
+  documents, and the `startEntry`/`endEntry` payload in **7,919 of 7,922** records.
+- **measSpec (tag 176)** — `beats` and `divbeat` match in **3,799 of 3,799** records; `width` in
+  3,750, with every miss in one document, which is what re-spacing a score between saves does to
+  layout while leaving the music alone.
+
+Shipped as `enigma/mus_others.py` (`read_mus_others`). The seven documents that do not tile hit one
+record type whose length field the walk still mis-reads; the reader **refuses** those rather than
+returning a truncated pool.
+
+### Why five structural hypotheses were refuted before this
+
+Every earlier attempt located a section by searching for payload values already known from the
+paired `.musx`, then read **forward** from that anchor. The key sits **ten bytes behind** it, so it
+was never in view. The two near-misses recorded below were the *neighbouring record's* header read
+as though it belonged to the anchored one:
+
+- **`+18 == cmper + 1` on 156/164** — `+18` from the old anchor is the next record's `cmper` field.
+  It equals `cmper + 1` exactly when no frame number was skipped, which is why it decayed to 50/82
+  in documents with more gaps.
+- **`+16` "is 146 on 163 of 164 records, near-constant, not a discriminator"** — 146 *is* the tag,
+  and it is constant because every record in a section shares one. The 164th reads 147, the tag of
+  the next section. It was dismissed for being exactly what a tag looks like.
+
+**The lesson is not "look harder".** It is that an anchor found by content search has no defined
+relationship to the record boundary, so *scan in both directions from it*. The test that found this
+in one shot — sweep every stride and column in the stream for a strided series equal to the known
+key sequence — is cheap, assumes nothing about the record size, and would have answered the
+question at any point in the investigation.
+
+### What this retracts
+
+- **"Records are NOT self-identifying"** — wrong. They are. That section is kept below as a record
+  of the wrong turn.
+- **"No directory / no key array / not positional / no bitmap / no run-length"** — all still true,
+  and all irrelevant: the key never left the record.
+- **The `measSpec` "18 + 22 × (staves − 1) block"** — the numbers were right, the model was wrong.
+  It is not a measure head plus inter-staff rows. It is one 26-byte-payload `measSpec` record for
+  the score (40 bytes on disk) followed by one 8-byte-payload record per linked part (22 bytes
+  each). The block grew with the staff count because more parts means more part records, and the
+  third header field is the part index — confirmed 16/16 in the cases where `.musx` `part` and
+  `inci` disagree, and never `inci`.
+
+### Tag ids
+
+Derived by matching each tag's `(cmper, part)` sequence against the `.musx` `others` pool, with the
+number of documents agreeing. **Only `frameSpec` and `measSpec` are confirmed by payload content**;
+the rest are key-sequence matches and could still be coincidence for tags whose record counts
+collide, so treat them as leads, not facts.
+
+| tag | name | docs | | tag | name | docs |
+| --- | --- | --- | --- | --- | --- | --- |
+| 121 | `articDef` | 88 | | 165 | `metaArtic` | 80 |
+| 124 | `channelPlayData` | 80 | | 168 | `metaDynam` | 81 |
+| 126 | `chordSuffixPlay` | 85 | | 169 | `metaKeySig` | 80 |
+| 131 | `drumLibName` | 86 | | 170 | `metaRepeat` | 81 |
+| 134 | `durAllot` | 91 | | 171 | `metaShape` | 80 |
+| 136 | `execShape` | 85 | | 172 | `metaStaffStyle` | 80 |
+| 140 | `fretboardSymbol` | 91 | | 173 | `metaTimeSig` | 81 |
+| 144 | `fontName` | 5 | | **176** | **`measSpec`** | payload-confirmed |
+| **146** | **`frameSpec`** | payload-confirmed | | 231 | `staffSpec` | 9 |
+| 147 | `lockMeas` | 81 | | 235 | `shapeExprDef` | 10 |
+| 149 | `fretInst` | 90 | | 242 | `textExpressionEnclosure` | 14 |
+| 163 | `layerAtts` | 85 | | 315 | `volumeValue` | 14 |
+
+### What is still open
+
+- **Seven documents halt mid-walk**, always inside a record whose declared length does not carry the
+  walk to the next valid header. One tag (158) is implicated in six of them.
+- **The remaining sections' payload layouts** — the walk gives every record's tag, key and bytes;
+  what those bytes mean is per-tag work, and ETF field order transfers for some tags and not others.
+- **`details` (stream 2)** — the same header shape is the obvious first thing to try, and `gfhold`
+  is already located there at offset 104,240.
+
 ## ✅ SCOPING ANSWERED: the payload maps onto the existing 7-pool `EnigmaDocument`
 
 `.mus` parity is a **small-to-medium project, not a second format to reverse-engineer.** The
@@ -160,6 +255,8 @@ section of stream 1 is a different record type: 26-byte records with an incremen
 than to records generally.
 
 ### The `measSpec` region is a per-measure block, not a flat record array
+> **SUPERSEDED** by the self-identifying-record finding at the top of this file. Kept as a
+> record of the wrong turn, not as a finding.
 
 The 84-byte "stride" is not a record size. Measuring it across ten document configurations and three
 staff counts gives an exact law:
@@ -235,6 +332,8 @@ Three candidates checked and ruled out:
 - **Not an absolute offset anywhere** (established previously).
 
 ### ⚠️ REFUTED: records are NOT self-identifying
+> **SUPERSEDED** by the self-identifying-record finding at the top of this file. Kept as a
+> record of the wrong turn, not as a finding.
 
 The lead below was tested and **does not hold**. Retained because the tests narrow the problem.
 
@@ -274,6 +373,8 @@ was sound and the cmper question is real, not an artifact of renumbering. **The 
 retained as a record of a wrong turn, not as a finding.**
 
 ### A near-miss that survived one file and died on the second
+> **SUPERSEDED** by the self-identifying-record finding at the top of this file. Kept as a
+> record of the wrong turn, not as a finding.
 
 `gfhold`'s `measure + 1` at +22 looks like the same off-by-one as `frameSpec`'s `+18 = cmper + 1`
 (156/164), which was tempting evidence that `frameSpec` carries its key after all -- i.e. that the
@@ -287,6 +388,8 @@ Twice now on this question a ~95% match has looked like a finding. The check tha
 cheap and should be automatic: **run the candidate against a second document before believing it.**
 
 ### No key array either
+> **SUPERSEDED** by the self-identifying-record finding at the top of this file. Kept as a
+> record of the wrong turn, not as a finding.
 
 
 
@@ -315,6 +418,8 @@ format is unusually clever, but that the framing carried an assumption. Here the
 document has worked. That assumption is load-bearing and was never tested.
 
 ### Where that leaves `cmper`
+> **SUPERSEDED** by the self-identifying-record finding at the top of this file. Kept as a
+> record of the wrong turn, not as a finding.
 
 For this section `cmper` is **not in the record, not implied by position, and not in a directory** --
 all three now tested. Something else must carry it. The remaining candidates are a separate key or
@@ -325,6 +430,8 @@ That is a narrower question than the one this line of work started with, and the
 the three most obvious answers rather than leaving them to be re-tried.
 
 ### The original lead, now refuted -- records may be self-identifying
+> **SUPERSEDED** by the self-identifying-record finding at the top of this file. Kept as a
+> record of the wrong turn, not as a finding.
 
 The 26-byte record run **does not begin at the fitted `frameSpec` offset** -- it extends earlier, and
 the records share a structure. Bytes +16 and +18 hold a pair that increments across records and rolls

@@ -36,6 +36,12 @@ from finale_file_parser.enigma.location import (
 )
 from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.mus_entries import harm_lev_octave_shift, read_mus_entries
+from finale_file_parser.enigma.mus_others import (
+    TAG_FRAME_SPEC,
+    TAG_MEAS_SPEC,
+    MusOther,
+    read_mus_others,
+)
 from finale_file_parser.enigma.mus_payload import (
     MAX_MUS_PAYLOAD,
     read_mus_payload,
@@ -86,6 +92,8 @@ from finale_file_parser.enigma.tuplet import (
 __all__ = [
     "MAX_INFLATED",
     "MAX_MUS_PAYLOAD",
+    "TAG_FRAME_SPEC",
+    "TAG_MEAS_SPEC",
     "CorruptDclStreamError",
     "CorruptScoreError",
     "DetailsPool",
@@ -98,6 +106,7 @@ __all__ = [
     "MalformedEnigmaError",
     "MalformedEntryError",
     "MalformedScoreError",
+    "MusOther",
     "Mode",
     "Note",
     "NoteValue",
@@ -139,6 +148,7 @@ __all__ = [
     "parse_enigma",
     "read_entry",
     "read_mus_entries",
+    "read_mus_others",
     "read_mus_payload",
     "read_mus_streams",
     "read_transposition",

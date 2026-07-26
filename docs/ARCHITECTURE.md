@@ -38,6 +38,11 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
   mode, and tonic). See "Known format facts — score.dat", "Known format facts — EnigmaXML
   structure", "Known format facts — entries and pitch", "Known format facts — score linkage", and
   "Known format facts — key signatures" below.
+- The same package holds the legacy `.mus` readers, which produce the same types from the other
+  container: `mus_payload.py` (`read_mus_payload`, `read_mus_streams` — the two eras' codecs),
+  `mus_entries.py` (`read_mus_entries` — the entry pool), `mus_others.py` (`read_mus_others`,
+  `MusOther` — the `others` pool as tagged, self-identifying records). See the three "Known format
+  facts — … `.mus` …" sections below.
 
 ### Known format facts — version
 
@@ -328,6 +333,49 @@ off by a single step, cause unknown.
 entry pool in a standalone stream and the other 2 lay the payload out as three streams rather than
 four. DCL-era files (2001–2005) pack every pool into one stream with no known delimiters. Both
 unsupported cases raise `CorruptScoreError` rather than guessing.
+
+### Known format facts — the `.mus` others pool
+
+`read_mus_others(path)` returns every `others` record as a `MusOther(tag, cmper, part, payload)`.
+The pool is a flat run of **self-identifying, variable-length records**: each carries its own key, so
+addressing one needs nothing outside it. Little-endian:
+
+```
+0-1    tag       record type (numeric; .musx names the same types)
+2-3    cmper     the (n) in an ETF ^XX(n)
+4-5    part      0 for the score, then 1, 2, ... per linked part
+6-9    length    payload size in bytes
+10-    payload   `length` bytes, then a four-byte trailer
+```
+
+so one record occupies **`14 + length`** bytes. Records of one tag sit together in a section, and
+sections may be separated by two-byte zero padding.
+
+**This answers the long-open `cmper` question.** There is no directory, no key array and no
+positional convention, and the search for them failed for a mundane reason: every earlier attempt
+located a section by searching for payload values known from the paired `.musx` and then read
+*forward*, while the key sits ten bytes *behind* that anchor. Two ~95% near-misses came from reading
+the neighbouring record's header as part of the anchored one. See `docs/formats/mus-binary-notes.md`
+for the full account, the retractions it forces, and the candidate tag-id table.
+
+Verified against paired `.musx` files. The walk tiles stream 1 exactly in **84 of 91** pairs
+(211,554 records), and on same-content pairs:
+
+| check | result |
+| --- | --- |
+| `frameSpec` (tag 146) `(cmper, part)` sequence | 76 of 77 documents exact |
+| `frameSpec` `startEntry`/`endEntry` payload | 7,919 of 7,922 records |
+| `measSpec` (tag 176) `beats`, `divbeat` payload | 3,799 of 3,799 records |
+| `measSpec` `width` payload | 3,750 of 3,799, every miss in one document |
+
+`width` is layout, not music: re-spacing a score between the two saves changes every measure width
+and no `beats`/`divbeat`. Only these two tags are confirmed by payload content; the rest of the tag
+table is key-sequence matching and is recorded as leads.
+
+**Scope and refusals.** The 2011/2012 era only, as with the entry pool. Seven corpus documents halt
+part-way through one record type whose length field the walk mis-reads; `read_mus_others` raises
+`CorruptScoreError` for those rather than returning a truncated pool, because a partial pool is
+indistinguishable from a complete one at the call site.
 
 ### Known format facts — EnigmaXML structure
 
