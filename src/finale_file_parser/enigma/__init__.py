@@ -40,7 +40,12 @@ from finale_file_parser.enigma.mus_details import (
     MusDetailRecord,
     read_mus_details,
 )
-from finale_file_parser.enigma.mus_entries import harm_lev_octave_shift, read_mus_entries
+from finale_file_parser.enigma.mus_document import UNTRANSLATED, read_mus_document
+from finale_file_parser.enigma.mus_entries import (
+    harm_lev_octave_shift,
+    read_mus_entries,
+    read_mus_entry_records,
+)
 from finale_file_parser.enigma.mus_others import (
     TAG_FRAME_SPEC,
     TAG_MEAS_SPEC,
@@ -97,6 +102,7 @@ from finale_file_parser.enigma.tuplet import (
 __all__ = [
     "MAX_INFLATED",
     "MAX_MUS_PAYLOAD",
+    "UNTRANSLATED",
     "TAG_FRAME_SPEC",
     "TAG_GFHOLD",
     "TAG_MEAS_SPEC",
@@ -154,8 +160,10 @@ __all__ = [
     "locate_entries",
     "parse_enigma",
     "read_entry",
+    "read_mus_document",
     "read_mus_details",
     "read_mus_entries",
+    "read_mus_entry_records",
     "read_mus_others",
     "read_mus_payload",
     "read_mus_streams",

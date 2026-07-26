@@ -44,11 +44,12 @@ from __future__ import annotations
 
 import os
 
+from finale_file_parser.enigma.document import Record
 from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.mus_payload import read_mus_streams
-from finale_file_parser.enigma.music import Duration, Entry, Note, duration_from_edu
+from finale_file_parser.enigma.music import Duration, Entry, duration_from_edu, read_entry
 
-__all__ = ["harm_lev_octave_shift", "read_mus_entries"]
+__all__ = ["harm_lev_octave_shift", "read_mus_entries", "read_mus_entry_records"]
 
 _SLOT = 38
 _SLOT_HEADER = 6
@@ -65,10 +66,13 @@ _MAX_NOTES = 12
 _SETBIT = 0x80000000
 """Set on every legal entry and every legal note record."""
 _NOTEBIT = 0x40000000
-"""Set for a note, clear for a rest -- but see _read_entry: NOTEBIT alone does
-not decide whether an entry has pitch content."""
+"""Set for a note, clear for a rest -- but see `_entry_record`: NOTEBIT alone
+does not decide whether an entry has pitch content."""
 _FLOATREST = 0x01000000
 """A "floating" rest: it sits at the staff midline and has no pitch content."""
+_GRACENOTE = 0x00800000
+"""eeppd.txt: set for grace notes. Surfaced as a `graceNote` field so the
+duration model gives them zero sounded time, as it does for a `.musx`."""
 _TIE_START = 0x40000000
 _TIE_END = 0x20000000
 
@@ -86,8 +90,10 @@ def harm_lev_octave_shift(interval: int) -> int:
     a non-transposing staff, where the shift is 0.
 
     `read_mus_entries` does **not** apply this, because the entry pool carries no
-    staff information -- the transposition lives in the `others` pool, which is not
-    yet readable from `.mus`. Apply it at the point where the staff is known.
+    staff information -- the transposition lives in the `others` pool. That pool
+    is now readable (`read_mus_others`), but `staffSpec`'s payload layout is not
+    yet decoded, so the transposition is still not reachable from a `.mus`.
+    Apply this at the point where the staff is known.
 
     The rule is **empirical, not derived**. Measured across every confirmed
     `.mus`/`.musx` pair -- 30,891 notes over seven distinct transpositions:
@@ -103,8 +109,20 @@ def harm_lev_octave_shift(interval: int) -> int:
     return -7 * ((interval + 2) // 7)
 
 
-def read_mus_entries(path: str | os.PathLike[str]) -> tuple[Entry, ...]:
-    """Return every entry in the `.mus` file at `path`, in stream order.
+def read_mus_entry_records(path: str | os.PathLike[str]) -> tuple[Record, ...]:
+    """Return the entry pool as generic `entry` Records, in stream order.
+
+    The same shape `parse_enigma` produces for a `.musx`, so everything built
+    over that model -- `read_entry`, `entry_chain`, `locate_entries` -- reads a
+    `.mus` unchanged. `read_mus_entries` is this composed with `read_entry`,
+    which is what keeps the two containers' entry semantics from drifting: there
+    is one decode, not one per container.
+
+    Records carry what the pool actually holds -- `entnum`/`prev`/`next`,
+    `dura`, `numNotes`, `graceNote` where the flag is set, and a nested `note`
+    per note record. Fields Enigma would write but this pool does not reach
+    (positioning, articulations, lyrics) are simply absent, exactly as they are
+    on a `.musx` record that omits them.
 
     Raises:
         FileNotFoundError: no such path.
@@ -118,6 +136,18 @@ def read_mus_entries(path: str | os.PathLike[str]) -> tuple[Entry, ...]:
         f"{path} has no recognisable entry pool "
         "(DCL-era files pack all pools into one stream; that is not yet supported)"
     )
+
+
+def read_mus_entries(path: str | os.PathLike[str]) -> tuple[Entry, ...]:
+    """Return every entry in the `.mus` file at `path`, in stream order.
+
+    Raises:
+        FileNotFoundError: no such path.
+        CorruptScoreError: the payload does not decode, holds no recognisable
+            entry pool, or the pool is malformed.
+        MalformedEntryError: a record decodes but is not a well-formed entry.
+    """
+    return tuple(read_entry(record) for record in read_mus_entry_records(path))
 
 
 def _u16(data: bytes, offset: int) -> int:
@@ -164,16 +194,16 @@ def _looks_like_entry_pool(stream: bytes) -> bool:
     return position == len(stream)
 
 
-def _read_pool(stream: bytes) -> list[Entry]:
-    entries: list[Entry] = []
+def _read_pool(stream: bytes) -> list[Record]:
+    records: list[Record] = []
     position = 0
     while position + _SLOT <= len(stream):
         stored_count = _u16(stream, position + 24)
         if stored_count > _MAX_NOTES:
             raise CorruptScoreError(f"entry note count {stored_count} exceeds {_MAX_NOTES}")
-        entries.append(_read_entry(stream, position, stored_count))
+        records.append(_entry_record(stream, position, stored_count))
         position += _SLOT * _slot_span(stored_count)
-    return entries
+    return records
 
 
 def _note_offsets(base: int, count: int) -> list[int]:
@@ -190,7 +220,7 @@ def _note_offsets(base: int, count: int) -> list[int]:
     return offsets
 
 
-def _read_entry(stream: bytes, offset: int, stored_count: int) -> Entry:
+def _entry_record(stream: bytes, offset: int, stored_count: int) -> Record:
     flag = _u32(stream, offset + 18)
     # FLOATREST decides, not NOTEBIT. Three cases, all observed in the corpus:
     #   * ordinary note      NOTEBIT set                  -> notes = stored count
@@ -202,32 +232,49 @@ def _read_entry(stream: bytes, offset: int, stored_count: int) -> Entry:
     #     the vertical position, which .musx surfaces as one note
     # Using NOTEBIT instead mis-classifies the third case (74 corpus entries).
     note_count = 0 if flag & _FLOATREST else stored_count
-    is_rest = note_count == 0
     edu = _u16(stream, offset + 14)
+    # Fail here rather than in `read_entry`, so the message names the entry.
     try:
-        duration = duration_from_edu(edu)
+        duration_from_edu(edu)
     except Exception as exc:
         raise CorruptScoreError(f"entry {_u32(stream, offset)}: bad duration {edu}") from exc
-    return Entry(
-        entnum=_u32(stream, offset),
-        duration=duration,
-        is_rest=is_rest,
-        notes=tuple(_read_note(stream, o) for o in _note_offsets(offset, note_count)),
+    fields: dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]] = {
+        "dura": str(edu),
+        "numNotes": str(note_count),
+    }
+    if flag & _GRACENOTE:
+        # Presence is the signal, as it is in EnigmaXML's `<graceNote/>`.
+        fields["graceNote"] = ""
+    notes = tuple(_note_record(stream, o) for o in _note_offsets(offset, note_count))
+    if notes:
+        fields["note"] = notes if len(notes) > 1 else notes[0]
+    return Record(
+        tag="entry",
+        attrs={
+            "entnum": str(_u32(stream, offset)),
+            "prev": str(_u32(stream, offset + 6)),
+            "next": str(_u32(stream, offset + 10)),
+        },
+        text="",
+        fields=fields,
     )
 
 
-def _read_note(stream: bytes, offset: int) -> Note:
+def _note_record(stream: bytes, offset: int) -> Record:
     if offset + _NOTE > len(stream):
         raise CorruptScoreError("entry note record runs past the end of the pool")
     tcd = _u16(stream, offset)
     flag = _u32(stream, offset + 2)
     magnitude = tcd & 0x07
-    return Note(
-        harm_lev=_signed(tcd >> _TCD_ALT_BITS, 16 - _TCD_ALT_BITS),
-        harm_alt=-magnitude if tcd & 0x08 else magnitude,
-        tie_start=bool(flag & _TIE_START),
-        tie_end=bool(flag & _TIE_END),
-    )
+    fields: dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]] = {
+        "harmLev": str(_signed(tcd >> _TCD_ALT_BITS, 16 - _TCD_ALT_BITS)),
+        "harmAlt": str(-magnitude if tcd & 0x08 else magnitude),
+    }
+    if flag & _TIE_START:
+        fields["tieStart"] = ""
+    if flag & _TIE_END:
+        fields["tieEnd"] = ""
+    return Record(tag="note", attrs={}, text="", fields=fields)
 
 
 _ = Duration  # re-exported type used in the public signature

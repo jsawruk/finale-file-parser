@@ -32,6 +32,7 @@ from finale_file_parser.version import models as version_models
 EXPECTED_PUBLIC_NAMES = {
     "MAX_INFLATED",
     "MAX_MUS_PAYLOAD",
+    "UNTRANSLATED",
     "TAG_FRAME_SPEC",
     "TAG_GFHOLD",
     "TAG_MEAS_SPEC",
@@ -100,8 +101,10 @@ EXPECTED_PUBLIC_NAMES = {
     "decode_key",
     "harm_lev_octave_shift",
     "blast_decompress",
+    "read_mus_document",
     "read_mus_details",
     "read_mus_entries",
+    "read_mus_entry_records",
     "read_mus_others",
     "read_mus_streams",
     "duration_from_edu",
