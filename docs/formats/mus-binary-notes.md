@@ -7,6 +7,55 @@
 All findings below are from **structural analysis of the curated corpus (238 `.mus`, 401 `.musx`)**
 plus permitted community documentation. Report counts/structure only — never corpus record values.
 
+## ✅✅ SOLVED: `details` too, and `gfhold` is decoded
+
+The `details` pool (stream 2) has the **same shape as `others`** with one extra key field, because a
+details record is keyed by a pair of cmpers:
+
+```
++0 tag(2)  +2 cmper1(2)  +4 cmper2(2)  +6 inci(2)  +8 length(4)  +12 payload  +4 trailer
+```
+
+A record is **`16 + length`** bytes, against the `others` pool's `14 + length`. Shipped as
+`enigma/mus_details.py` (`read_mus_details`); the walk tiles stream 2 exactly in **84 of 91** pairs
+(167,463 records) — the same seven documents fail as for `others`.
+
+**`gfhold` is tag 1044**, and its 20-byte payload is `clefID` at +0, `clefPercent` at +4, `frame1`
+at +6. Over the 80 same-content pairs carrying it: the key sequence is the `.musx` sequence
+restricted to the keys `.mus` holds in **80 of 80** documents, `clefPercent` and `frame1` match on
+**every** record, and `clefID` matches on 8,110 with the other 272 explained — see below. That makes
+`gfhold` the second payload-confirmed record type after `frameSpec`/`measSpec`, and it is the link
+from a (staff, measure) to the entry frames that fill it.
+
+**`.mus` writes `clefID` 0 to mean "use the staff's `defaultClef`";** a `.musx` export materialises
+the resolved value. All 272 non-matching records are exactly that case, none unexplained. This
+refines the earlier finding that every `gfhold` carries a `clefID` with no inheritance — true of
+`.musx`, not of `.mus`.
+
+**`inci` at +6 is named by position, not evidence.** Zero in all 77,384 corpus records examined, and
+no corpus document repeats a `(tag, cmper1, cmper2)` key, so nothing distinguishes an incidence
+counter from a reserved field. The reader keeps the value rather than dropping it.
+
+### ⚠️ RETRACTED: the earlier `gfhold` field offsets
+
+The previously recorded layout — `frame1` at +0, staff at +20, measure+1 at +22, the latter two at
+160/164 — was **the same mistake a third time**. The anchor sat 16 bytes inside the record, so `+20`
+and `+22` were the *next* record's `cmper1`/`cmper2`. That is why they scored ~160/164 rather than
+164/164, and why the measure appeared to need a "+1" that no field actually stores. Correctly
+anchored, `cmper1` and `cmper2` are at +2 and +4 with no off-by-one, and `frame1` is a payload
+field.
+
+**Three near-misses on this format have now all been the neighbouring record's header.** The
+counter-measure is mechanical: after locating anything by content search, column-scan *backwards*
+as well as forwards before believing any offset.
+
+### Mutual rejection of the two pool rules is empirical, not structural
+
+Across the corpus the `others` stream never tiles under the details rule and the details stream
+never tiles under the `others` rule, which is what lets each reader identify its own stream. This is
+a property of real pools, not a guarantee: a degenerate stream of uniform zero-payload records
+satisfies both, because each rule reads its length field out of the other's zeroed payload.
+
 ## ✅✅ SOLVED: `others` records are self-identifying. The `cmper` question is answered.
 
 **Every `others` record carries its own key in a ten-byte header, and the pool is a flat run of
@@ -355,6 +404,10 @@ order and the 28 empty ones are simply absent.
 
 **`gfhold` sits in stream 2 (`details`) at offset 104,240, stride 36 bytes.**
 
+> **SUPERSEDED** — the offset and stride are right, but the field offsets below are read from an
+> anchor 16 bytes inside the record, so `+20`/`+22` are the *next* record's key pair. See the
+> details-pool section at the top of this file.
+
 | offset | field | evidence |
 | --- | --- | --- |
 | +0 | `frame1` (LE16) | **164/164** records match the paired `.musx` |
@@ -463,6 +516,9 @@ to accumulate, or a per-section header. That is the thing to find next, and ever
 behind it.
 
 ### `details` (stream 2) — NOT confirmed, do not build on this
+
+> **SUPERSEDED** — the details pool is now decoded; the 36-byte stride guessed here was right for
+> `gfhold` but the field boundaries were not. See the top of this file.
 
 Reading stream 2 at a 36-byte stride (the period autocorrelation suggested) yields plausible-looking
 structure: LE32 pairs where the second value increments by small amounts, and a constant `20` at +8.

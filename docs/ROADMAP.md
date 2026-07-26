@@ -127,9 +127,10 @@ limit is verified by mutation, because no real corpus archive trips one.
 - [ ] `.mus` internal record pools — part done. The payload decodes (both eras), the entry pool
       reads, and the **`others` pool now reads generically**: its records are self-identifying
       (`tag`, `cmper`, `part`, `length`), so the whole pool walks from byte zero without an oracle
-      — see `enigma/mus_others.py` and "Known format facts — the `.mus` others pool". Remaining:
-      the per-tag payload layouts, the `details` pool (stream 2), and the seven corpus documents
-      whose walk halts inside one unrecognised record type.
+      — see `enigma/mus_others.py`. The **`details` pool reads the same way** (one extra key
+      field; `enigma/mus_details.py`), and `gfhold` is payload-confirmed, which is the link from a
+      (staff, measure) to its entry frames. Remaining: the per-tag payload layouts, and the seven
+      corpus documents whose walk halts inside one unrecognised record type.
 - [ ] MusicXML exporter over the IR (DECIDED — see DECISIONS.md).
 - [ ] Desktop frontend: hex viewer with decoded structure values (DECIDED — framework still open).
 - [ ] Desktop frontend: notation rendering.
