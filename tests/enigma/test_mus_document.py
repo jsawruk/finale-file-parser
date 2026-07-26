@@ -12,10 +12,11 @@ from collections.abc import Callable
 import pytest
 
 from finale_file_parser.enigma import mus_document as adapter
+from finale_file_parser.enigma.clef import ClefSign, clef_definitions
 from finale_file_parser.enigma.document import Record
 from finale_file_parser.enigma.mus_details import MusDetailRecord
 from finale_file_parser.enigma.mus_document import read_mus_document
-from finale_file_parser.enigma.mus_others import MusOther
+from finale_file_parser.enigma.mus_others import OPTIONS_CMPER, TAG_CLEF_OPTIONS, MusOther
 
 PATH = "unused.mus"
 """Every reader is stubbed, so no file is ever opened."""
@@ -41,18 +42,35 @@ def gfhold_payload(clef: int, frame1: int, frame2: int = 0) -> bytes:
 
 @pytest.fixture
 def pools(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
-    """Install the three pool readers' returns for one test."""
+    """Install the three pool readers' returns, and the banner year, for one test."""
 
     def install(
         others: tuple[MusOther, ...] = (),
         details: tuple[MusDetailRecord, ...] = (),
         entries: tuple[Record, ...] = (),
+        year: int | None = 2011,
     ) -> None:
         monkeypatch.setattr(adapter, "read_mus_others", lambda _p: others)
         monkeypatch.setattr(adapter, "read_mus_details", lambda _p: details)
         monkeypatch.setattr(adapter, "read_mus_entry_records", lambda _p: entries)
+        monkeypatch.setattr(adapter, "_banner_year", lambda _p: year)
 
     return install
+
+
+def clef_entry(stride: int, adjust: int, char: int, ydisp: int, shape: int = 0) -> bytes:
+    """One clef-table entry in the layout the given stride implies."""
+    offsets = adapter._CLEF_FIELD_OFFSETS[stride]
+    entry = bytearray(stride)
+    for name, value in (
+        ("adjust", adjust),
+        ("clefChar", char),
+        ("clefYDisp", ydisp),
+        ("shapeID", shape),
+    ):
+        at = offsets[name]
+        entry[at : at + 2] = value.to_bytes(2, "little", signed=value < 0)
+    return bytes(entry)
 
 
 def test_translates_a_frame_spec(pools: Callable[..., None]) -> None:
@@ -143,6 +161,54 @@ def test_skips_a_payload_too_short_for_its_fields(pools: Callable[..., None]) ->
     document = read_mus_document(PATH)
     assert document.others.records == ()
     assert document.details.records == ()
+
+
+@pytest.mark.parametrize(("year", "stride"), [(2011, 18), (2012, 20)])
+def test_translates_the_clef_table_in_either_era_layout(
+    pools: Callable[..., None], year: int, stride: int
+) -> None:
+    """2012 moved `clefYDisp` and `shapeID`; the banner year picks the layout."""
+    payload = clef_entry(stride, -10, 38, -6) + clef_entry(stride, 2, 63, -2)
+    pools(others=(MusOther(TAG_CLEF_OPTIONS, OPTIONS_CMPER, 0, payload),), year=year)
+    table = clef_definitions(read_mus_document(PATH))
+    assert len(table) == 2
+    assert (table[0].clef_char, table[0].adjust, table[0].y_displacement) == (38, -10, -6)
+    assert (table[1].clef_char, table[1].adjust, table[1].y_displacement) == (63, 2, -2)
+
+
+def test_a_shape_clef_keeps_its_shape_id(pools: Callable[..., None]) -> None:
+    pools(
+        others=(MusOther(TAG_CLEF_OPTIONS, OPTIONS_CMPER, 0, clef_entry(18, -10, 0, 0, shape=50)),)
+    )
+    table = clef_definitions(read_mus_document(PATH))
+    assert (table[0].shape_id, table[0].clef_char) == (50, None)
+    assert table[0].sign is ClefSign.SHAPE
+
+
+def test_a_zero_clef_char_becomes_an_absent_field(pools: Callable[..., None]) -> None:
+    """Absent means "there is no character"; `clefChar="0"` would be a real
+    character, and `Clef.sign` must report UNKNOWN rather than inventing one."""
+    pools(others=(MusOther(TAG_CLEF_OPTIONS, OPTIONS_CMPER, 0, clef_entry(18, -10, 0, -6)),))
+    table = clef_definitions(read_mus_document(PATH))
+    assert table[0].clef_char is None
+    assert table[0].sign is ClefSign.UNKNOWN
+
+
+def test_skips_a_clef_table_that_is_not_a_whole_number_of_entries(
+    pools: Callable[..., None],
+) -> None:
+    """A mis-strided table would yield plausible wrong clefs, so emit none."""
+    pools(others=(MusOther(TAG_CLEF_OPTIONS, OPTIONS_CMPER, 0, clef_entry(18, -10, 38, -6)[:-3]),))
+    assert clef_definitions(read_mus_document(PATH)) == {}
+
+
+def test_skips_the_clef_table_when_the_era_is_unknown(pools: Callable[..., None]) -> None:
+    """No banner year means no way to know the entry width."""
+    pools(
+        others=(MusOther(TAG_CLEF_OPTIONS, OPTIONS_CMPER, 0, clef_entry(18, -10, 38, -6)),),
+        year=None,
+    )
+    assert clef_definitions(read_mus_document(PATH)) == {}
 
 
 def test_reports_what_it_does_not_translate() -> None:

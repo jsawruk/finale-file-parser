@@ -434,16 +434,26 @@ container.
 
 **It is an MVP and translates only the record types whose payloads are decoded**: `frameSpec`
 (startEntry, endEntry), `measSpec` (keySig.key, beats, divbeat), `gfhold` (clefID, frame1, frame2),
-and entries. A record type it does not understand is **absent** from the document rather than
+`clefOptions` (the clef table — see "Known format facts — clefs"), and entries. A record type it does not understand is **absent** from the document rather than
 present and wrong. `enigma.UNTRANSLATED` names each remaining gap and its consequence.
 
-Two translations are omissions rather than values, and both matter:
+**The clef table** comes from `others` tag 109 under cmper `0xFFFE`, Enigma's sentinel for a
+document-wide option. Its entry stride is set by the banner year — 2011 uses 18 bytes, 2012 uses 20
+and moves `clefYDisp` and `shapeID` — which is the same era split `mus_payload` uses to choose a
+codec. All four fields match the paired `.musx` on 1,512 of 1,512 entries. Deriving the stride from
+the payload length instead would be ambiguous: 324 and 360 are both divisible by 18 and 20, and
+reading a 360-byte table as 20 entries of 18 rather than 18 of 20 puts every field two bytes out.
+
+Three translations are omissions rather than values, and all three matter:
 
 - **A `measSpec` key of 0 becomes no `keySig` element at all.** An absent key means "inherit the
   previous measure's"; writing `key="0"` would silently make every inheriting measure C major.
   Verified: a `.musx` never writes `key="0"`, and `.mus` stores 0 exactly where the `.musx` omits it.
 - **A `gfhold` frame of 0 is an empty layer and is omitted**, rather than sending `locate_entries`
   after a `frameSpec` numbered 0.
+- **A clef entry's `clefChar` or `shapeID` of 0 is omitted**, because absent means "there is no
+  character/shape" — which is what makes `Clef.sign` report UNKNOWN or SHAPE instead of inventing a
+  G clef.
 
 **Validation is IR against IR** — the same document built from both containers, compared field by
 field (`tests/enigma/test_mus_to_ir_corpus_sweep.py`). Over 73 same-content pairs:
@@ -455,7 +465,7 @@ field (`tests/enigma/test_mus_to_ir_corpus_sweep.py`). Over 73 same-content pair
 | written duration, dots, ties, grace notes | **no differences** |
 | sounded duration | 1,092 events differ — every one a tuplet (`tupletDef` untranslated) |
 | pitch | 4,140 differ; 4,138 on transposing staves (`staffSpec` untranslated), 2 are known content revisions |
-| clef | 327 measures carry none, because the clef table lives in the undecoded options pool |
+| clef | 22 measures differ, all instrument-derived (see below); was 327 before the clef table was decoded |
 
 The structural row is the load-bearing one: a difference there would mean entries placed in the
 wrong measure, which produces plausible output nobody notices. The rest are known gaps with pinned

@@ -37,7 +37,14 @@ from dataclasses import dataclass
 from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.mus_payload import read_mus_streams
 
-__all__ = ["MusOther", "TAG_FRAME_SPEC", "TAG_MEAS_SPEC", "read_mus_others"]
+__all__ = [
+    "OPTIONS_CMPER",
+    "TAG_CLEF_OPTIONS",
+    "TAG_FRAME_SPEC",
+    "TAG_MEAS_SPEC",
+    "MusOther",
+    "read_mus_others",
+]
 
 _HEADER = 10
 """tag (2) + cmper (2) + part (2) + length (4)."""
@@ -48,6 +55,21 @@ TAG_FRAME_SPEC = 146
 """`frameSpec` — confirmed by payload, not only by key sequence."""
 TAG_MEAS_SPEC = 176
 """`measSpec` — confirmed by payload, not only by key sequence."""
+
+TAG_CLEF_OPTIONS = 109
+"""The clef definition table — confirmed by payload.
+
+An `others` record rather than a pool of its own: Enigma's document-wide options
+live in this pool under the `OPTIONS_CMPER` sentinel, and `EnigmaDocument` keeps
+them in `options` only because EnigmaXML puts them in a separate element.
+"""
+
+OPTIONS_CMPER = 0xFFFE
+"""The cmper Enigma gives a document-wide option record rather than a real key.
+
+98 records in a sampled document carry it, against the `.musx` options pool's
+34: the `.mus` split is finer, so the two pools' record counts do not correspond.
+"""
 
 _MAX_PAYLOAD = 64 * 1024
 """Refuse a record claiming more than 64 KiB.

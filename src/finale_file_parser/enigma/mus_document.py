@@ -23,6 +23,7 @@ Translated:
 | others | `frameSpec` (146) | `startEntry`, `endEntry` |
 | others | `measSpec` (176) | `keySig.key`, `beats`, `divbeat` |
 | details | `gfhold` (1044) | `clefID`, `frame1`, `frame2` |
+| options | `clefOptions` (109) | the clef table: `adjust`, `clefChar`, `clefYDisp`, `shapeID` |
 
 Every field above is confirmed against paired `.musx` files; see
 `docs/formats/mus-binary-notes.md` for the evidence behind each.
@@ -45,11 +46,14 @@ from finale_file_parser.enigma.document import (
 from finale_file_parser.enigma.mus_details import TAG_GFHOLD, MusDetailRecord, read_mus_details
 from finale_file_parser.enigma.mus_entries import read_mus_entry_records
 from finale_file_parser.enigma.mus_others import (
+    OPTIONS_CMPER,
+    TAG_CLEF_OPTIONS,
     TAG_FRAME_SPEC,
     TAG_MEAS_SPEC,
     MusOther,
     read_mus_others,
 )
+from finale_file_parser.version import mus as mus_header
 
 __all__ = ["UNTRANSLATED", "read_mus_document"]
 
@@ -61,8 +65,11 @@ UNTRANSLATED = (
     "spelled correctly from a .mus until an instrument table is found, if one "
     "exists. Parts fall back to positional names. See docs/formats/"
     "mus-binary-notes.md.",
-    "clefOptions: the clef definition table lives in the options pool, whose "
-    "payloads are not decoded, so no clef is emitted at all.",
+    "Instrument-derived clefs: where a gfhold stores clefID 0 it means 'use the "
+    "staff's defaultClef', and for some staves the .mus stores 0 there too while "
+    "the .musx materialises a real clef. Those measures come out treble. Same "
+    "root cause as the transposition gap above -- the value lives with the "
+    "instrument, not in the file.",
     "measSpec display time signatures (useDisplayTimesig, dispBeats, dispDivbeat).",
     "gfhold frame3-4: layers 3 and 4. Frames 1 and 2 are at payload +6 and +8, "
     "confirmed against the corpus; no corpus .musx carries a frame3 or frame4, so "
@@ -81,6 +88,25 @@ _VERSION = "mus"
 """`EnigmaDocument.version` is the EnigmaXML schema version, which a `.mus` has
 no equivalent of. A distinct value is better than a plausible-looking lie."""
 
+_CLEF_ENTRY_STRIDE = {2011: 18, 2012: 20}
+"""Bytes per clef-table entry, by the banner year that wrote the file.
+
+The two eras lay the entry out differently, and the file says which it is --
+the same era split `mus_payload` already uses to choose a codec. Deriving the
+stride from the payload length instead would need the entry count assumed, and
+324 and 360 are both divisible by 18 and 20, so the ambiguity is real.
+"""
+
+_CLEF_FIELD_OFFSETS = {
+    18: {"adjust": 0, "clefChar": 2, "clefYDisp": 4, "shapeID": 8},
+    20: {"adjust": 0, "clefChar": 2, "clefYDisp": 6, "shapeID": 10},
+}
+"""Field offsets within a clef entry, per stride. 2012 inserts two bytes after
+`clefChar` and two more before `shapeID`; everything else is shared."""
+
+_CLEF_SIGNED = {"adjust", "clefYDisp"}
+"""`clefChar` and `shapeID` are unsigned; the two displacements are not."""
+
 _EMPTY: tuple[Record, ...] = ()
 
 
@@ -98,7 +124,7 @@ def read_mus_document(path: str | os.PathLike[str]) -> EnigmaDocument:
         version=_VERSION,
         header=Pool(records=_EMPTY),
         mappings=Pool(records=_EMPTY),
-        options=OptionsPool(records=_EMPTY),
+        options=OptionsPool(records=tuple(_options_records(others, _banner_year(path)))),
         others=OthersPool(records=tuple(_others_records(others))),
         details=DetailsPool(records=tuple(_details_records(details))),
         entries=EntriesPool(records=read_mus_entry_records(path)),
@@ -112,6 +138,54 @@ def _u16(payload: bytes, offset: int) -> int:
 
 def _u32(payload: bytes, offset: int) -> int:
     return int.from_bytes(payload[offset : offset + 4], "little")
+
+
+def _banner_year(path: str | os.PathLike[str]) -> int | None:
+    """The Finale version that wrote the file, which fixes the clef-entry width.
+
+    Read from the plaintext header rather than guessed from a payload length --
+    see `_CLEF_ENTRY_STRIDE`.
+    """
+    with open(path, "rb") as handle:
+        return mus_header.parse(handle.read(mus_header.MUS_METADATA_SIZE)).year
+
+
+def _options_records(records: tuple[MusOther, ...], year: int | None) -> list[Record]:
+    """The document-wide options this can translate: the clef table, so far."""
+    stride = _CLEF_ENTRY_STRIDE.get(year or 0)
+    if stride is None:
+        return []
+    for record in records:
+        if record.tag != TAG_CLEF_OPTIONS or record.cmper != OPTIONS_CMPER:
+            continue
+        if not record.payload or len(record.payload) % stride:
+            # The era says how wide an entry is; a payload that is not a whole
+            # number of them means one of the two is wrong. Emit no table rather
+            # than a mis-strided one, which would produce plausible wrong clefs.
+            continue
+        definitions = tuple(
+            _clef_def(record.payload[at : at + stride], stride)
+            for at in range(0, len(record.payload), stride)
+        )
+        return [Record(tag="clefOptions", attrs={}, text="", fields={"clefDef": definitions})]
+    return []
+
+
+def _clef_def(entry: bytes, stride: int) -> Record:
+    """One clef-table entry.
+
+    A zero `clefChar` or `shapeID` is written as an absent field, not as "0":
+    `clef_definitions` reads absent as "there is no character/shape", and a
+    clef with neither is what makes `Clef.sign` report UNKNOWN rather than
+    inventing a G clef.
+    """
+    fields: dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]] = {}
+    for name, offset in _CLEF_FIELD_OFFSETS[stride].items():
+        raw = entry[offset : offset + 2]
+        value = int.from_bytes(raw, "little", signed=name in _CLEF_SIGNED)
+        if value or name in _CLEF_SIGNED:
+            fields[name] = str(value)
+    return Record(tag="clefDef", attrs={}, text="", fields=fields)
 
 
 def _others_records(records: tuple[MusOther, ...]) -> list[Record]:
