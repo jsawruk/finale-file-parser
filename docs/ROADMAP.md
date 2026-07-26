@@ -124,8 +124,12 @@ limit is verified by mutation, because no real corpus archive trips one.
 - [x] `.mus` header provenance stamps (created/modified with date, application, platform).
 - [x] Unify `.musx` provenance onto `ProvenanceStamp` (see `docs/DECISIONS.md`). `MusxDetail.platform`
       was dropped in favour of a platform on each stamp, matching `.mus`.
-- [ ] `.mus` internal record pools — open research. A `.mus` file has no member table, so there is
-      no container abstraction to mirror from `.musx`; the pools must be located empirically.
+- [ ] `.mus` internal record pools — part done. The payload decodes (both eras), the entry pool
+      reads, and the **`others` pool now reads generically**: its records are self-identifying
+      (`tag`, `cmper`, `part`, `length`), so the whole pool walks from byte zero without an oracle
+      — see `enigma/mus_others.py` and "Known format facts — the `.mus` others pool". Remaining:
+      the per-tag payload layouts, the `details` pool (stream 2), and the seven corpus documents
+      whose walk halts inside one unrecognised record type.
 - [ ] MusicXML exporter over the IR (DECIDED — see DECISIONS.md).
 - [ ] Desktop frontend: hex viewer with decoded structure values (DECIDED — framework still open).
 - [ ] Desktop frontend: notation rendering.
