@@ -54,10 +54,13 @@ from finale_file_parser.enigma.mus_others import (
 __all__ = ["UNTRANSLATED", "read_mus_document"]
 
 UNTRANSLATED = (
-    "staffSpec: part names and staff transposition. Without the transposition a "
-    "transposing staff's notes keep the .mus octave convention, which "
-    "harm_lev_octave_shift exists to correct -- so those staves can come out an "
-    "octave off. Parts fall back to positional names.",
+    "staffSpec: part names and staff transposition. The record is located (others "
+    "tag 231) but the transposition's octave is provably NOT in it -- staves the "
+    ".musx gives intervals an octave apart have byte-identical .mus payloads, "
+    "differing only in the .musx's instUuid. So transposing staves cannot be "
+    "spelled correctly from a .mus until an instrument table is found, if one "
+    "exists. Parts fall back to positional names. See docs/formats/"
+    "mus-binary-notes.md.",
     "clefOptions: the clef definition table lives in the options pool, whose "
     "payloads are not decoded, so no clef is emitted at all.",
     "measSpec display time signatures (useDisplayTimesig, dispBeats, dispDivbeat).",
