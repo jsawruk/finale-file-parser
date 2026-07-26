@@ -7,6 +7,49 @@
 All findings below are from **structural analysis of the curated corpus (238 `.mus`, 401 `.musx`)**
 plus permitted community documentation. Report counts/structure only — never corpus record values.
 
+## ✅ The clef table is decoded — options tag 109
+
+Enigma's document-wide options live in the **`others` pool under cmper `0xFFFE`** (98 records in a
+sampled document, against the `.musx` options pool's 34 — the `.mus` split is finer, so the two do
+not correspond record for record). `EnigmaDocument` keeps them in `options` only because EnigmaXML
+puts them in a separate element.
+
+**Tag 109 is `clefOptions`**: a flat array of clef-table entries, one per clef index.
+
+**The entry stride is set by the Finale version**, the same era split `mus_payload` already uses to
+choose a codec — 2011 → 72 documents at stride 18, 2012 → 10 at stride 20, with no overlap:
+
+| field | 2011 (stride 18) | 2012 (stride 20) |
+| --- | --- | --- |
+| `adjust` (i16) | +0 | +0 |
+| `clefChar` (u16) | +2 | +2 |
+| `clefYDisp` (i16) | +4 | **+6** |
+| `shapeID` (u16) | +8 | **+10** |
+
+2012 inserts two bytes after `clefChar` and two more before `shapeID`. A zero `clefChar` or
+`shapeID` means the field is absent, not zero — that is what makes `Clef.sign` report UNKNOWN or
+SHAPE rather than inventing a G clef.
+
+**Evidence: all four fields match the paired `.musx` on 1,512 of 1,512 entries across 84 documents**
+(18 clefs each).
+
+### The false start worth recording
+
+The 360-byte payloads first looked like **20 entries of 18 bytes** rather than 18 entries of 20,
+because 360 is divisible by both. Read that way the fields were consistently two bytes out and the
+match rate collapsed to ~1/18. The tell was that `.musx` reports exactly 18 clefs in every corpus
+document, so a 20-entry reading needed the `.musx` to be dropping two — a much larger claim than a
+stride change. **Deriving the stride from the payload length cannot disambiguate this; the banner
+year can, and does.**
+
+### Effect
+
+Clef differences in the `.mus` → IR sweep fall from **327 measures to 22**. Every one of the 22 is
+the same case: the `gfhold` stores `clefID` 0, meaning "use the staff's `defaultClef`", and the
+`.mus` `staffSpec` stores 0 there too while the `.musx` materialises clef 3. That is the
+instrument-derived gap already documented below, not a decode error — so 22 is a floor until an
+instrument table is found.
+
 ## ⚠️ `staffSpec` located — but the transposition octave is NOT in it
 
 `staffSpec` is **others tag 231**, payload 84 bytes (161 records) or 96 (20). Confirmed by content

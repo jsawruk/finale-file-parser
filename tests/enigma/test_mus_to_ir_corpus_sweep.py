@@ -67,11 +67,14 @@ Both are known `.mus`/`.musx` content revisions already pinned by the entry-pool
 sweep -- one entry storing two notes against one, and one note an octave apart.
 """
 
-CLEF_MEASURES = 327
-"""Measures where the `.musx` emits a clef and the `.mus` cannot.
+CLEF_MEASURES = 22
+"""Measures whose clef differs, down from 327 before the clef table was decoded.
 
-The clef *table* lives in the options pool, whose payloads are undecoded, so no
-clef is emitted at all rather than a wrong one.
+Every one is the same case: the `gfhold` stores `clefID` 0, meaning "use the
+staff's `defaultClef`", and the `.mus` `staffSpec` stores 0 there as well while
+the `.musx` materialises clef 3. The value lives with the instrument, not in the
+file -- the same root cause as the transposition gap. So this is a floor, not a
+decode error, until an instrument table is found.
 """
 
 
@@ -207,5 +210,5 @@ def test_pitch_differences_are_confined_to_transposing_staves(tally: Tally) -> N
     assert tally.other_pitches == OTHER_PITCHES
 
 
-def test_clefs_are_absent_rather_than_wrong(tally: Tally) -> None:
+def test_clefs_match_except_where_the_clef_is_instrument_derived(tally: Tally) -> None:
     assert tally.clef_measures == CLEF_MEASURES
