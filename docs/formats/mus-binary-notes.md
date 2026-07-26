@@ -252,7 +252,43 @@ record for `cmper` *c* would sit at `base + (c - 3) * 26`. That fits **72 of 164
 **164 of 164** for contiguous storage. So the 164 present frames are stored back to back in `cmper`
 order and the 28 empty ones are simply absent.
 
-### No key array either -- and the question may be malformed
+### `gfhold` located -- and the "malformed question" reframing is REFUTED
+
+**`gfhold` sits in stream 2 (`details`) at offset 104,240, stride 36 bytes.**
+
+| offset | field | evidence |
+| --- | --- | --- |
+| +0 | `frame1` (LE16) | **164/164** records match the paired `.musx` |
+| +20 | staff (`cmper1`) | 160/164 |
+| +22 | measure + 1 (`cmper2`) | 160/164; measure *without* the +1 matches 0/164 |
+
+The remaining 4 are where the fixed-stride walk drifts, the same way it did for the entry pool before
+variable-length records were understood.
+
+**The decisive result:** fitting `gfhold`'s frame references against the two candidate numberings gives
+**164/164 for `.musx` numbering** and **8/164 for positional**. So `.mus` references frames by exactly
+the numbers `.musx` reports, and **every one of the 164 referenced frames has a `frameSpec` record**.
+
+That kills the reframing proposed above. `.musx` cmper values *are* faithful to `.mus`; the assumption
+was sound and the cmper question is real, not an artifact of renumbering. **The section above is
+retained as a record of a wrong turn, not as a finding.**
+
+### A near-miss that survived one file and died on the second
+
+`gfhold`'s `measure + 1` at +22 looks like the same off-by-one as `frameSpec`'s `+18 = cmper + 1`
+(156/164), which was tempting evidence that `frameSpec` carries its key after all -- i.e. that the
+refutation recorded below was itself wrong.
+
+It is not. Re-tested across four documents, `+18 == cmper + 1` holds on **156/164** in the first file
+but only **50/82** in three others. The first file's cmpers happen to be mostly contiguous, which makes
+a plain counter look like a key. **The original refutation stands.**
+
+Twice now on this question a ~95% match has looked like a finding. The check that settles it is
+cheap and should be automatic: **run the candidate against a second document before believing it.**
+
+### No key array either
+
+
 
 Searching every stream and the raw file for the 164 `cmper` values as a contiguous array, at both
 2- and 4-byte widths, finds **nothing** -- not the full list, not even its first twelve values. So
