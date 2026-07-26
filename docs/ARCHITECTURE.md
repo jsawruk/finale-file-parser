@@ -42,7 +42,9 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
   container: `mus_payload.py` (`read_mus_payload`, `read_mus_streams` — the two eras' codecs),
   `mus_entries.py` (`read_mus_entries` — the entry pool), `mus_others.py` (`read_mus_others`,
   `MusOther` — the `others` pool as tagged, self-identifying records), `mus_details.py`
-  (`read_mus_details`, `MusDetailRecord` — the `details` pool, the same shape with a two-cmper key). See
+  (`read_mus_details`, `MusDetailRecord` — the `details` pool, the same shape with a two-cmper key),
+  and `mus_document.py` (`read_mus_document` — the adapter that turns those pools into an
+  `EnigmaDocument`, which is what lets one IR builder and one exporter serve both containers). See
   the "Known format facts — … `.mus` …" sections below.
 
 ### Known format facts — version
@@ -422,6 +424,47 @@ Locating `gfhold` cost a third repeat of the same mistake: the previously record
 +20, measure+1 at +22, both ~160/164) were the **next record's key pair**, read from an anchor that
 sat 16 bytes inside the record. See `docs/formats/mus-binary-notes.md`.
 
+### Known format facts — reading a `.mus` as an EnigmaDocument
+
+`read_mus_document(path)` translates the `.mus` pools into the `Record` model `parse_enigma` builds
+from a `.musx`, so every module over that model reads a `.mus` unchanged. `read_mus_entry_records`
+is the same idea one level down: the entry pool's primitive is now a `Record`, and
+`read_mus_entries` is that composed with `read_entry` — one decode of entry semantics, not one per
+container.
+
+**It is an MVP and translates only the record types whose payloads are decoded**: `frameSpec`
+(startEntry, endEntry), `measSpec` (keySig.key, beats, divbeat), `gfhold` (clefID, frame1, frame2),
+and entries. A record type it does not understand is **absent** from the document rather than
+present and wrong. `enigma.UNTRANSLATED` names each remaining gap and its consequence.
+
+Two translations are omissions rather than values, and both matter:
+
+- **A `measSpec` key of 0 becomes no `keySig` element at all.** An absent key means "inherit the
+  previous measure's"; writing `key="0"` would silently make every inheriting measure C major.
+  Verified: a `.musx` never writes `key="0"`, and `.mus` stores 0 exactly where the `.musx` omits it.
+- **A `gfhold` frame of 0 is an empty layer and is omitted**, rather than sending `locate_entries`
+  after a `frameSpec` numbered 0.
+
+**Validation is IR against IR** — the same document built from both containers, compared field by
+field (`tests/enigma/test_mus_to_ir_corpus_sweep.py`). Over 73 same-content pairs:
+
+| result | count |
+| --- | --- |
+| parts, measures and events, one for one | **no differences** |
+| key signatures and time signatures | **no differences** |
+| written duration, dots, ties, grace notes | **no differences** |
+| sounded duration | 1,092 events differ — every one a tuplet (`tupletDef` untranslated) |
+| pitch | 4,140 differ; 4,138 on transposing staves (`staffSpec` untranslated), 2 are known content revisions |
+| clef | 327 measures carry none, because the clef table lives in the undecoded options pool |
+
+The structural row is the load-bearing one: a difference there would mean entries placed in the
+wrong measure, which produces plausible output nobody notices. The rest are known gaps with pinned
+sizes, so closing one shows up as a number moving.
+
+One document fails to build: its `.mus` frame chain references an entry its pool does not hold. It
+is the same document whose `.musx` carries three `frameSpec` records its `.mus` does not, so the two
+containers disagree about its frames rather than the adapter mis-reading them.
+
 ### Known format facts — EnigmaXML structure
 
 Full reference and derivation: `docs/superpowers/specs/2026-07-22-enigma-document-design.md`.
@@ -647,9 +690,19 @@ spells with 0 invariant violations — see below).
 <!-- Describe the path of the core operation, input to output, naming the key types. -->
 
 ```
-.mus  ────────────────▶ parser ──▶ IR ──▶ MusicXML
-.musx ──▶ EnigmaXML ──▶ parser ──▶ IR ──▶ MusicXML
+.mus  ──▶ zlib streams ──▶ pools ──────┐
+                                       ├──▶ EnigmaDocument ──▶ build_score ──▶ IR ──▶ MusicXML
+.musx ──▶ score.dat ──▶ EnigmaXML ─────┘
 ```
 
-Both inputs converge on the same IR, so format-specific handling stays inside the readers and never
-reaches the exporters. Key types are named here as they are defined.
+Both inputs converge **before** the IR, on `EnigmaDocument`. That is stronger than converging at the
+IR: `locate_entries`, `read_entry`, `time_signatures`, `decode_key`, `spell_note` and `build_score`
+are written once and read either container, so there is no second pipeline to keep in step and no
+opportunity for the two to drift.
+
+- `.musx`: `score_xml(path)` → `parse_enigma(xml)` → `EnigmaDocument`
+- `.mus`: `read_mus_document(path)` → `EnigmaDocument`, translating the `.mus` pools into the same
+  `Record`s (see "Known format facts — reading a `.mus` as an EnigmaDocument")
+
+Then `build_score(document)` → `Score` → `to_musicxml(score)`. Key types are named here as they are
+defined.
