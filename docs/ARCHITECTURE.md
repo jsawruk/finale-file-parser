@@ -41,8 +41,9 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
 - The same package holds the legacy `.mus` readers, which produce the same types from the other
   container: `mus_payload.py` (`read_mus_payload`, `read_mus_streams` — the two eras' codecs),
   `mus_entries.py` (`read_mus_entries` — the entry pool), `mus_others.py` (`read_mus_others`,
-  `MusOther` — the `others` pool as tagged, self-identifying records). See the three "Known format
-  facts — … `.mus` …" sections below.
+  `MusOther` — the `others` pool as tagged, self-identifying records), `mus_details.py`
+  (`read_mus_details`, `MusDetailRecord` — the `details` pool, the same shape with a two-cmper key). See
+  the "Known format facts — … `.mus` …" sections below.
 
 ### Known format facts — version
 
@@ -376,6 +377,50 @@ table is key-sequence matching and is recorded as leads.
 part-way through one record type whose length field the walk mis-reads; `read_mus_others` raises
 `CorruptScoreError` for those rather than returning a truncated pool, because a partial pool is
 indistinguishable from a complete one at the call site.
+
+### Known format facts — the `.mus` details pool
+
+`read_mus_details(path)` returns every `details` record as a
+`MusDetailRecord(tag, cmper1, cmper2, inci, payload)`. The pool has the **same shape as `others`** and
+differs in exactly one way, for the obvious reason — a `details` record is keyed by a *pair* of
+cmpers, so its header carries one more field:
+
+```
+0-1    tag       record type (numeric; .musx names the same types)
+2-3    cmper1    first key component (staff, for gfhold)
+4-5    cmper2    second key component (measure, for gfhold)
+6-7    inci      incidence — identified by position only, see below
+8-11   length    payload size in bytes
+12-    payload   `length` bytes, then a four-byte trailer
+```
+
+so one record occupies **`16 + length`** bytes, against the `others` pool's `14 + length`.
+
+`gfhold` (**tag 1044**) is why this pool matters: it ties a measure on a staff to the entry frames
+that fill it. Its 20-byte payload holds `clefID` at +0, `clefPercent` at +4 and `frame1` at +6.
+
+Verified against paired `.musx` files. The walk tiles stream 2 exactly in **84 of 91** pairs
+(167,463 records), and on the 80 same-content pairs carrying `gfhold`:
+
+| check | result |
+| --- | --- |
+| `gfhold` key sequence | 80 of 80 documents — the `.musx` sequence restricted to the keys `.mus` holds |
+| `clefPercent` at payload +4 | every record |
+| `frame1` at payload +6 | every record |
+| `clefID` at payload +0 | 8,110 exact, 272 defaulted (below), **0 unexplained** |
+
+**`.mus` writes `clefID` 0 for "use the staff's `defaultClef`"**, and a `.musx` export materialises
+the resolved clef into the record. This refines the earlier note that every `gfhold` carries a
+`clefID` with no inheritance — true of `.musx`, not of `.mus`.
+
+**`inci` is named by position, not evidence.** It sits exactly where Enigma's third key component
+belongs, but it is zero in all 77,384 corpus records examined and no corpus document repeats a
+`(tag, cmper1, cmper2)` key, so nothing yet distinguishes an incidence counter from a reserved
+field. The reader keeps the value rather than dropping it.
+
+Locating `gfhold` cost a third repeat of the same mistake: the previously recorded offsets (staff at
++20, measure+1 at +22, both ~160/164) were the **next record's key pair**, read from an anchor that
+sat 16 bytes inside the record. See `docs/formats/mus-binary-notes.md`.
 
 ### Known format facts — EnigmaXML structure
 
