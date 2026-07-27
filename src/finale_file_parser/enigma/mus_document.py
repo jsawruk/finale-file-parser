@@ -75,10 +75,11 @@ UNTRANSLATED = (
     "See docs/formats/mus-binary-notes.md.",
     "staffSpec part names: the reference at +30/+32 does not resolve to a text "
     "block -- the best candidate chain matches 16 of 59 staves, and by hand it "
-    "picks a trumpet block for a saxophone part. The .musx cannot arbitrate: the "
-    "two containers hold different strings for the same staff ('Tenor Sax' "
-    "against 'Tenor Saxophone'). Parts fall back to positional names rather than "
-    "to a plausible wrong one. See docs/formats/mus-binary-notes.md.",
+    "picks a trumpet block for a saxophone part. The .musx is only a fuzzy oracle "
+    "here -- it names the same staff 'Tenor Sax' where the .mus says 'Tenor "
+    "Saxophone', synonyms rather than a disagreement -- so a match must tolerate "
+    "abbreviation. Parts fall back to positional names rather than to a plausible "
+    "wrong one. See docs/formats/mus-binary-notes.md.",
     "Instrument-derived clefs: where a gfhold stores clefID 0 it means 'use the "
     "staff's defaultClef', and for some staves the .mus stores 0 there too while "
     "the .musx materialises a real clef. Those measures come out treble. Same "

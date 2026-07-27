@@ -32,8 +32,14 @@ CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
-COMPARED = 73
-"""Same-content pairs whose `.mus` builds a Score."""
+COMPARED = 76
+"""Same-content pairs whose `.mus` builds a Score.
+
+Was 73 until `0xFFFF` was recognised as filler. The two pools' halt sets were
+not identical, so three documents that previously failed only in `details` now
+build end to end -- and add no differences of any kind, which is the useful
+part: more coverage, same fidelity.
+"""
 
 UNBUILDABLE = 1
 """One document's `.mus` frame chain references an entry the pool does not hold.

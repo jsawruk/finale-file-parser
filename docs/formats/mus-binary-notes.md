@@ -7,6 +7,49 @@
 All findings below are from **structural analysis of the curated corpus (238 `.mus`, 401 `.musx`)**
 plus permitted community documentation. Report counts/structure only — never corpus record values.
 
+## ✅ `0xFFFF` is filler — the details pool now reads 91 of 91 documents
+
+Both pools separate sections with two-byte filler words. `0x0000` was always skipped; **`0xFFFF` is
+filler too**, and missing that was what stopped the walk on seven documents.
+
+The failure is worth understanding, because it looked like a length-field problem and was not. A run
+of `0xFFFF` words parses as a record whose *declared length is 0*, so the walk consumed 16 bytes
+where the filler occupies 20 and fell four bytes short each time. The zero-skip rule then recovered
+the alignment — which is why the walk kept going and died much later, in the middle of an unrelated
+record, pointing the investigation at the wrong place entirely.
+
+No tag in either pool is 65535, and the format already uses that family of sentinels (`OPTIONS_CMPER`
+is 0xFFFE).
+
+**Effect: the details pool tiles 91 of 91 paired documents, up from 84**, and the end-to-end
+IR-against-IR comparison covers **76 same-content pairs, up from 73** — the two pools' halt sets
+were not identical, so three documents that previously failed only in `details` now build. They add
+**no differences of any kind**, which is the useful part: more coverage at the same fidelity. Verified safe rather than
+assumed: across the corpus the change drops exactly **four** records, all of them tag 65535 —
+phantoms the old walk manufactured out of filler in one document — and adds none. Every other
+document's record list is byte-identical. Of the newly readable documents whose `.musx` pair holds
+the same music, `gfhold` keys validate **3 of 3**; the other four are known different-content pairs.
+
+### ⛔ Still open: tag 158 keeps the `others` pool at 84 of 91
+
+The same seven documents still halt in the `others` pool, at **tag 158, cmper 2**, whose length field
+reads 110,664 in all six of the documents that reach it — the same value each time, so it is one
+shared record rather than corruption.
+
+What is known:
+
+- The preceding record (tag 158, cmper 1, length 36) parses cleanly and lands exactly on it, so the
+  walk is correctly aligned; the length field itself is what cannot be read.
+- Its payload contains repeating ASCII — `", Big Band & Marching "` about every 36-40 bytes, with
+  `"Default Prefs"` interleaved. Those are Finale font/style family names, so this is likely a
+  document-preferences or style-list record carrying a string table.
+- **It is not an era split.** All seven halting documents are 2011-banner, the same as 74 that walk
+  cleanly, so this is content-specific, not version-specific.
+- A resync search (walk backwards from the end of the stream, marking every offset from which the
+  remainder tiles exactly) finds no plausible record boundary: the nearest is 39,284 bytes later,
+  and 17,143 offsets qualify overall, so "tiles to the end" is far too weak a criterion to identify
+  the next record here.
+
 ## ✅ `tupletDef` is decoded — details tag 1072, keyed by entry
 
 **Entry-attached details reuse the two key fields as one 32-bit entry number, high word first**:
@@ -165,10 +208,17 @@ statistics suggest — in a Tenor Sax part, `staffSpec` +30 is 93, tag 183 (the 
 at cmper 93 holds 22, and **block 22 is "B♭ Trumpet"**. Shipping that would label a saxophone part
 as a trumpet: plausible, wrong, and invisible without checking.
 
-**2. The `.musx` is not a valid oracle here.** The two containers hold *different strings* for the
-same staff. The `.musx` says "Tenor Sax"; the `.mus` blocks say "Tenor Saxophone" (block 12) and
-"B♭ Tenor Saxophone" (block 28). So even a resolution that worked could not be validated against
-the paired file, because the paired file disagrees about the text itself.
+**2. The `.musx` is a *fuzzy* oracle, not an exact one.** The two containers hold different strings
+for the same staff: the `.musx` says "Tenor Sax" where the `.mus` blocks say "Tenor Saxophone"
+(block 12) and "B♭ Tenor Saxophone" (block 28).
+
+**These are synonyms, not a disagreement** — an earlier draft of this section called the `.musx`
+unusable here, which was too strong. A name match has to tolerate abbreviation ("Tenor Sax" is a
+substring of "Tenor Saxophone"; "Vc." and "Cello" are not related by substring at all), so the
+oracle exists but is approximate, and a scoring search must be written to allow it. The 16-of-59
+result above already used substring matching with a first-word fallback, so it is not an artifact
+of demanding exact equality. What it cannot do is distinguish "close enough" from "wrong" at the
+margin, which is why the trumpet-for-saxophone case is the decisive evidence rather than the ratio.
 
 ### What the text stream does hold — for whoever picks this up
 

@@ -28,19 +28,26 @@ CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
-READABLE = 84
-"""Pairs whose `.mus` details pool tiles its stream exactly, out of 91.
+READABLE = 91
+"""Every pair's `.mus` details pool tiles its stream exactly.
 
-The other seven are the same documents the `others` reader refuses -- both
-pools stop inside a record type whose length field is not yet understood.
+It was 84 until `0xFFFF` was recognised as filler alongside `0x0000`. The seven
+that failed hit a run of `0xFFFF` words, which parse as records of declared
+length 0 and leave the walk four bytes short each time. The `others` pool still
+refuses those seven for an unrelated reason -- a `tupletDef`-sized record under
+tag 158 whose length field is not understood.
 """
 
-SAME_CONTENT = 80
-"""Readable pairs holding the same music and carrying `gfhold` records."""
+SAME_CONTENT = 83
+"""Readable pairs holding the same music and carrying `gfhold` records.
 
-CLEF_ID = 8110
+Was 80 until `0xFFFF` was recognised as filler; the three added are documents
+whose details pool the walk could not previously finish.
+"""
+
+CLEF_ID = 8356
 CLEF_ID_DEFAULTED = 272
-"""`clefID` matches outright in 8,110 records. The other 272 are `.mus` storing
+"""`clefID` matches outright in 8,356 records. The other 272 are `.mus` storing
 0 where the `.musx` materialises that staff's `defaultClef` -- so every record
 is accounted for, and a regression would show up as an *unexplained* miss."""
 
