@@ -122,7 +122,10 @@ limit is verified by mutation, because no real corpus archive trips one.
       See `enigma.UNTRANSLATED`.
 - [x] **Lyrics** — `enigma/lyrics.py`, both containers, schema-validated. 12,912 syllables
       across 85 corpus documents.
-- [ ] Beams, articulations, repeats, part groups.
+- [x] **Articulations** — `enigma/articulations.py`, both containers. 22,821 marks across 273
+      documents, from the five music-font characters with cross-font evidence; fingerings and the
+      other 24 characters are deliberately not guessed at.
+- [ ] Beams, repeats, part groups, fingerings.
 
 ## Later
 

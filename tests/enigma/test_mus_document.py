@@ -14,9 +14,11 @@ import pytest
 
 from finale_file_parser.enigma import mus_details
 from finale_file_parser.enigma import mus_document as adapter
+from finale_file_parser.enigma.articulations import articulations_by_entry
 from finale_file_parser.enigma.clef import ClefSign, clef_definitions
 from finale_file_parser.enigma.document import Record
 from finale_file_parser.enigma.mus_details import (
+    TAG_ARTIC_ASSIGN,
     TAG_LYRIC_VERSE,
     TAG_TUPLET_DEF,
     MusDetailRecord,
@@ -24,6 +26,7 @@ from finale_file_parser.enigma.mus_details import (
 from finale_file_parser.enigma.mus_document import read_mus_document
 from finale_file_parser.enigma.mus_others import (
     OPTIONS_CMPER,
+    TAG_ARTIC_DEF,
     TAG_CLEF_OPTIONS,
     TAG_STAFF_SPEC,
     MusOther,
@@ -352,6 +355,66 @@ def test_a_repeated_lyric_assignment_is_emitted_once(pools: Callable[..., None])
 def test_an_empty_verse_slot_is_skipped(pools: Callable[..., None]) -> None:
     pools(details=(MusDetailRecord(TAG_LYRIC_VERSE, 0, 9, 0, lyric_payload((0, 0, False))),))
     assert read_mus_document(PATH).details.of_tag("lyrDataVerse") == ()
+
+
+def artic_def_payload(character: int, *, length: int = 48) -> bytes:
+    payload = bytearray(length)
+    offset = 0 if length == 48 else 2
+    payload[offset : offset + 2] = character.to_bytes(2, "little")
+    return bytes(payload)
+
+
+@pytest.mark.parametrize("length", [48, 60])
+def test_an_articulation_definition_reads_in_either_era_layout(
+    pools: Callable[..., None], length: int
+) -> None:
+    """2012 puts two bytes ahead of the character, as it does for clefs."""
+    pools(
+        others=(MusOther(TAG_ARTIC_DEF, 1, 0, artic_def_payload(46, length=length)),),
+        details=(
+            MusDetailRecord(TAG_ARTIC_ASSIGN, 0, 9, 0, (1).to_bytes(2, "little") + bytes(18)),
+        ),
+    )
+    assert articulations_by_entry(read_mus_document(PATH)) == {9: ("staccato",)}
+
+
+def test_a_repeated_articulation_assignment_is_emitted_once(
+    pools: Callable[..., None],
+) -> None:
+    """A `.mus` repeats an assignment on 23 corpus entries; no `.musx` ever
+    assigns the same articDef twice, so a repeat would print the mark twice."""
+    payload = (1).to_bytes(2, "little") + bytes(18)
+    pools(
+        others=(MusOther(TAG_ARTIC_DEF, 1, 0, artic_def_payload(62)),),
+        details=(
+            MusDetailRecord(TAG_ARTIC_ASSIGN, 0, 9, 0, payload),
+            MusDetailRecord(TAG_ARTIC_ASSIGN, 0, 9, 1, payload),
+        ),
+    )
+    assert articulations_by_entry(read_mus_document(PATH)) == {9: ("accent",)}
+
+
+def test_two_different_articulations_on_one_entry_both_survive(
+    pools: Callable[..., None],
+) -> None:
+    pools(
+        others=(
+            MusOther(TAG_ARTIC_DEF, 1, 0, artic_def_payload(46)),
+            MusOther(TAG_ARTIC_DEF, 2, 0, artic_def_payload(62)),
+        ),
+        details=(
+            MusDetailRecord(TAG_ARTIC_ASSIGN, 0, 9, 0, (1).to_bytes(2, "little") + bytes(18)),
+            MusDetailRecord(TAG_ARTIC_ASSIGN, 0, 9, 1, (2).to_bytes(2, "little") + bytes(18)),
+        ),
+    )
+    assert articulations_by_entry(read_mus_document(PATH)) == {9: ("staccato", "accent")}
+
+
+def test_an_articulation_definition_of_unknown_length_is_skipped(
+    pools: Callable[..., None],
+) -> None:
+    pools(others=(MusOther(TAG_ARTIC_DEF, 1, 0, artic_def_payload(46)[:30]),))
+    assert read_mus_document(PATH).others.of_tag("articDef") == ()
 
 
 def test_reports_what_it_does_not_translate() -> None:

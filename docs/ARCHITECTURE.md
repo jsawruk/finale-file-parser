@@ -498,6 +498,36 @@ One document fails to build: its `.mus` frame chain references an entry its pool
 is the same document whose `.musx` carries three `frameSpec` records its `.mus` does not, so the two
 containers disagree about its frames rather than the adapter mis-reading them.
 
+### Known format facts — articulations
+
+Two records again. An `articAssign` entry detail names an `articDef`, and the definition says what
+the mark is — not by name, but as a **character in a music font**:
+
+```
+articAssign(entnum) -> articDef -> charMain
+```
+
+So the meaning comes from the character, as `clef.py` reads a clef from `clefChar`. Five characters
+sit at the same ASCII positions in every music font the corpus uses — Maestro, Engraver Font Set and
+Broadway Copyist all write `.` staccato, `>` accent, `-` tenuto, `^` marcato, `,` breath mark — which
+is what makes reading them without resolving the font defensible.
+
+**Anything else produces nothing.** The corpus assigns 29 distinct characters; emitting a guess would
+put a wrong articulation on a real note, which is worse than leaving the note bare. Coverage is
+22,821 marks across 273 documents.
+
+**Fingerings are deliberately not read.** The corpus carries numerals 1–5 in a text font (Arial),
+which are fingerings rather than articulations — but telling those from a music-font numeral needs
+the font, and a `.mus` does not reliably give one (`fontMain`'s offset varies within a single era).
+Reading them would make the two containers disagree.
+
+On the `.mus` side: `articAssign` is details tag 1009 with the definition's cmper at payload +0;
+`articDef` is others tag 121 with `charMain` at +0 (2011, 48-byte payload) or +2 (2012, 60-byte) —
+the same era split as the clef table. A `.mus` sometimes **repeats** an assignment, on 23 corpus
+entries; no `.musx` ever assigns the same `articDef` twice in 11,404 assignments, so the repeat is a
+storage artifact its reader drops. Both containers then agree on all 27,155 events of the 72 paired
+documents that carry articulations.
+
 ### Known format facts — lyrics
 
 Enigma splits a lyric in two, and neither half is much use alone.

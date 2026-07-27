@@ -54,6 +54,10 @@ ignoring it leaves the walk short by that much. A record therefore occupies
 `header + length + 4 + extra`.
 """
 
+TAG_ARTIC_ASSIGN = 1009
+"""`articAssign` — the articulation on an entry. Its payload names an `articDef`
+at +0; everything else in the 20 bytes is positioning."""
+
 TAG_GFHOLD = 1044
 """`gfhold` -- confirmed by payload, not only by key sequence."""
 

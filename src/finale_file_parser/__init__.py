@@ -7,6 +7,7 @@ from finale_file_parser.container import (
     open_musx,
 )
 from finale_file_parser.enigma import (
+    ARTICULATION_CHARACTERS,
     MAX_INFLATED,
     MAX_MUS_PAYLOAD,
     TAG_FRAME_SPEC,
@@ -48,6 +49,7 @@ from finale_file_parser.enigma import (
     TimeSignature,
     Tuplet,
     UnsupportedKeyError,
+    articulations_by_entry,
     blast_decompress,
     clef_definitions,
     clefs_by_measure,
@@ -114,6 +116,7 @@ __all__ = [
     "read_mus_entry_records",
     "read_mus_others",
     "read_mus_payload",
+    "articulations_by_entry",
     "blast_decompress",
     "CorruptDclStreamError",
     "MAX_MUS_PAYLOAD",
@@ -122,6 +125,7 @@ __all__ = [
     "TAG_GFHOLD",
     "TAG_MEAS_SPEC",
     "MusOther",
+    "ARTICULATION_CHARACTERS",
     "MAX_INFLATED",
     "AppVersion",
     "Confidence",

@@ -39,6 +39,7 @@ from finale_file_parser.enigma.mus_payload import read_mus_streams
 
 __all__ = [
     "OPTIONS_CMPER",
+    "TAG_ARTIC_DEF",
     "TAG_CLEF_OPTIONS",
     "TAG_FRAME_SPEC",
     "TAG_MEAS_SPEC",
@@ -67,6 +68,10 @@ TAG_MEAS_SPEC = 176
 TAG_STAFF_SPEC = 231
 """`staffSpec` — confirmed by payload (rest offsets, staff lines, repeat-dot
 offsets), not by key sequence."""
+
+TAG_ARTIC_DEF = 121
+"""`articDef` — an articulation's definition. Its `charMain` is the music-font
+character that says what the mark is; see `enigma.articulations`."""
 
 TAG_CLEF_OPTIONS = 109
 """The clef definition table — confirmed by payload.

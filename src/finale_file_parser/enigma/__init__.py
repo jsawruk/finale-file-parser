@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from finale_file_parser.enigma.articulations import (
+    ARTICULATION_CHARACTERS,
+    articulations_by_entry,
+)
 from finale_file_parser.enigma.blast import CorruptDclStreamError, blast_decompress
 from finale_file_parser.enigma.clef import (
     Clef,
@@ -107,6 +111,7 @@ from finale_file_parser.enigma.tuplet import (
 )
 
 __all__ = [
+    "ARTICULATION_CHARACTERS",
     "MAX_INFLATED",
     "MAX_MUS_PAYLOAD",
     "UNTRANSLATED",
@@ -142,6 +147,7 @@ __all__ = [
     "StaffTransposition",
     "TextsPool",
     "UnsupportedKeyError",
+    "articulations_by_entry",
     "blast_decompress",
     "EntryChain",
     "Tuplet",

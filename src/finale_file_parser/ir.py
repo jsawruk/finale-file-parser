@@ -111,6 +111,10 @@ class Event:
     lyrics: tuple[Lyric, ...] = ()
     """Syllables sung on this event, one per verse, in verse order."""
 
+    articulations: tuple[str, ...] = ()
+    """MusicXML articulation names -- "staccato", "accent", "tenuto",
+    "strong-accent", "breath-mark" -- in document order."""
+
     @property
     def is_rest(self) -> bool:
         return not self.pitches
