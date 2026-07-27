@@ -32,6 +32,18 @@ def record(tag: int, cmper1: int, cmper2: int, inci: int, payload: bytes) -> byt
     return header + payload + bytes(4)
 
 
+def record_with_extra(tag: int, cmper1: int, cmper2: int, payload: bytes, extra: bytes) -> bytes:
+    """A record carrying a second block after its payload."""
+    header = (
+        tag.to_bytes(2, "little")
+        + cmper1.to_bytes(2, "little")
+        + cmper2.to_bytes(2, "little")
+        + (0).to_bytes(2, "little")
+        + len(payload).to_bytes(4, "little")
+    )
+    return header + payload + len(extra).to_bytes(4, "little") + extra
+
+
 def pool(*records: bytes) -> bytes:
     """A stream holding `records`, padded out to the reader's floor."""
     filler = b"".join(record(1044, 1, n, 0, bytes(20)) for n in range(mus_details._MIN_RECORDS))
@@ -89,6 +101,23 @@ def test_all_ones_filler_yields_no_record(streams: Callable[..., None]) -> None:
     four such phantoms in one corpus document."""
     streams(pool(b"\xff\xff" * 12))
     assert all(r.tag != 0xFFFF for r in read_mus_details(PATH))
+
+
+def test_an_extra_block_is_skipped_whole(streams: Callable[..., None]) -> None:
+    """The four bytes after a payload are the length of a second block, not a
+    fixed trailer -- see the others reader's test for how that was found."""
+    # Non-zero filler, or an all-zero block would be skipped as padding anyway.
+    streams(
+        pool(record_with_extra(1044, 2, 7, bytes(20), b"\xaa" * 48), record(1043, 5, 1, 0, b""))
+    )
+    first, second = read_mus_details(PATH)[:2]
+    assert (first.tag, first.cmper1, first.cmper2) == (1044, 2, 7)
+    assert (second.tag, second.cmper1) == (1043, 5)
+
+
+def test_an_extra_block_is_kept_not_discarded(streams: Callable[..., None]) -> None:
+    streams(pool(record_with_extra(1044, 2, 7, bytes(20), b"\xbb" * 48)))
+    assert read_mus_details(PATH)[0].extra == b"\xbb" * 48
 
 
 def test_picks_the_stream_that_tiles_exactly(streams: Callable[..., None]) -> None:

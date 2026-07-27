@@ -456,7 +456,7 @@ Three translations are omissions rather than values, and all three matter:
   G clef.
 
 **Validation is IR against IR** — the same document built from both containers, compared field by
-field (`tests/enigma/test_mus_to_ir_corpus_sweep.py`). Over 76 same-content pairs:
+field (`tests/enigma/test_mus_to_ir_corpus_sweep.py`). Over 81 same-content pairs:
 
 | result | count |
 | --- | --- |

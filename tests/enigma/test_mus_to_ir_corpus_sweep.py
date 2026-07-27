@@ -32,21 +32,20 @@ CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
-COMPARED = 76
+COMPARED = 81
 """Same-content pairs whose `.mus` builds a Score.
 
-Was 73 until `0xFFFF` was recognised as filler. The two pools' halt sets were
-not identical, so three documents that previously failed only in `details` now
-build end to end -- and add no differences of any kind, which is the useful
-part: more coverage, same fidelity.
+Was 73, then 76, now 81, as the two pool-walk fixes landed. The five added by
+the payload-cap fix contribute **no differences of any kind** -- more coverage at
+the same fidelity.
 """
 
-UNBUILDABLE = 1
-"""One document's `.mus` frame chain references an entry the pool does not hold.
+UNBUILDABLE = 2
+"""Documents whose `.mus` frame chain references an entry the pool does not hold.
 
-The same document is the one whose `.musx` carries three frameSpec records its
-`.mus` does not (see the others-pool sweep), so the two containers disagree
-about its frames rather than the adapter mis-reading them. Pinned, not excused.
+Both fail the same way (`frameSpec N chain references missing entry M`). One is
+newly readable, so this is a second instance of a known class rather than a new
+failure mode.
 """
 
 TUPLET_EVENTS = 0
