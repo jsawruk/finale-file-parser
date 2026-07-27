@@ -73,10 +73,12 @@ UNTRANSLATED = (
     "needs, so note letters are right; what stays wrong is the octave on those "
     "staves, and the concert pitch spell_note returns alongside the written one. "
     "See docs/formats/mus-binary-notes.md.",
-    "staffSpec part names: fullName and abbrvName are at +30 and +32 and are "
-    "non-zero exactly where the .musx names a staff, but they reference .mus "
-    "text blocks whose numbering is not yet resolved. Parts fall back to "
-    "positional names.",
+    "staffSpec part names: the reference at +30/+32 does not resolve to a text "
+    "block -- the best candidate chain matches 16 of 59 staves, and by hand it "
+    "picks a trumpet block for a saxophone part. The .musx cannot arbitrate: the "
+    "two containers hold different strings for the same staff ('Tenor Sax' "
+    "against 'Tenor Saxophone'). Parts fall back to positional names rather than "
+    "to a plausible wrong one. See docs/formats/mus-binary-notes.md.",
     "Instrument-derived clefs: where a gfhold stores clefID 0 it means 'use the "
     "staff's defaultClef', and for some staves the .mus stores 0 there too while "
     "the .musx materialises a real clef. Those measures come out treble. Same "

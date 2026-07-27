@@ -136,14 +136,57 @@ already pinned by the entry-pool sweep.
 **correct for the written pitch the IR uses and wrong for the concert pitch `spell_note` returns
 alongside it.** A `.mus` cannot supply the concert pitch of a transposing staff.
 
-### Part names are at +30 and +32 after all
+### ⚠️ Part names at +30/+32 — the presence correlation was mostly a corpus artifact
 
-The earlier "not at a fixed offset" refutation compared *values* across the two containers, which
-use different text-block numbering. Comparing **presence** instead: `fullName` at +30 is non-zero on
-**64 of 64** records whose `.musx` names the staff, and `abbrvName` at +32 on **60 of 60** — with
-zeros on 107 of 117 and 112 of 121 of the records without one. ETF's field order puts them exactly
-there. Resolving the `.mus` text-block numbering to the strings (which are present — staff names
-were found in stream 3 of 28 of 34 documents checked) is the remaining step.
+**This corrects an over-claim made when this section was first written.** The statement below is
+true as measured and was presented as identifying the field. Following it up showed it does not
+carry that weight.
+
+The measurement: `fullName` at +30 is non-zero on 64 of 64 records whose `.musx` names the staff,
+`abbrvName` at +32 on 60 of 60, with zeros on 107 of 117 and 112 of 121 of those without one. ETF's
+field order does put `fullName`/`abbrvName` right there, after `stemReversal`.
+
+What undercuts it: **+30 takes only three values across the whole corpus — 93 (69 records), 0 (122)
+and 2 (10).** A per-staff name reference that is 93 for nearly every named staff, whatever the
+instrument, carries almost no per-staff information. And the correlation is not clean either: 15
+records hold a non-zero value where the `.musx` names nothing. So "non-zero exactly where a name
+exists" is largely measuring which collection a file came from — the same trap as "80% of scores
+name a part". The offsets may well still be right, on ETF's authority; the *evidence from presence*
+is not what makes them so.
+
+### ⛔ The name indirection does not resolve, and the `.musx` cannot judge it
+
+Two independent problems, either of which is disqualifying on its own.
+
+**1. The chain does not resolve.** Searching every `.mus` record whose cmper equals the `staffSpec`
+reference, at every offset, for a value naming the block that holds the staff's name: the best
+candidate matches **16 of 59** staff/name pairs. Following the reference by hand is worse than the
+statistics suggest — in a Tenor Sax part, `staffSpec` +30 is 93, tag 183 (the `textBlock` candidate)
+at cmper 93 holds 22, and **block 22 is "B♭ Trumpet"**. Shipping that would label a saxophone part
+as a trumpet: plausible, wrong, and invisible without checking.
+
+**2. The `.musx` is not a valid oracle here.** The two containers hold *different strings* for the
+same staff. The `.musx` says "Tenor Sax"; the `.mus` blocks say "Tenor Saxophone" (block 12) and
+"B♭ Tenor Saxophone" (block 28). So even a resolution that worked could not be validated against
+the paired file, because the paired file disagrees about the text itself.
+
+### What the text stream does hold — for whoever picks this up
+
+Stream 3 is **ETF tagged text**, directly parseable, no binary layout involved:
+
+```
+^block(1)^font(Times,4096)^size(14)^nfx(0)Score^end^block(2)...^end
+```
+
+Block numbers run **1..~30** in every corpus document — never near 93 — which is independent proof
+that the `staffSpec` reference is not a block number but an indirection through something else.
+Blocks carry `^font(...)`, `^size(...)`, `^nfx(...)` markup, plus raw high-byte tags (`^\x85...`)
+that `plain_text` has not been checked against.
+
+The next attempt needs a way to tell a correct resolution from a wrong one **without** the `.musx`,
+since the strings differ. The cheapest oracle available: a part file's own instrument is usually
+evident from the block texts it contains, so a candidate chain can be scored on whether it picks the
+block a human would.
 
 ## ⛔ The instrument table: not found, and the search was systematic
 
