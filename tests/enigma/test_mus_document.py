@@ -16,7 +16,11 @@ from finale_file_parser.enigma import mus_details
 from finale_file_parser.enigma import mus_document as adapter
 from finale_file_parser.enigma.clef import ClefSign, clef_definitions
 from finale_file_parser.enigma.document import Record
-from finale_file_parser.enigma.mus_details import TAG_TUPLET_DEF, MusDetailRecord
+from finale_file_parser.enigma.mus_details import (
+    TAG_LYRIC_VERSE,
+    TAG_TUPLET_DEF,
+    MusDetailRecord,
+)
 from finale_file_parser.enigma.mus_document import read_mus_document
 from finale_file_parser.enigma.mus_others import (
     OPTIONS_CMPER,
@@ -57,11 +61,13 @@ def pools(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
         others: tuple[MusOther, ...] = (),
         details: tuple[MusDetailRecord, ...] = (),
         entries: tuple[Record, ...] = (),
+        texts: tuple[Record, ...] = (),
         year: int | None = 2011,
     ) -> None:
         monkeypatch.setattr(adapter, "read_mus_others", lambda _p: others)
         monkeypatch.setattr(adapter, "read_mus_details", lambda _p: details)
         monkeypatch.setattr(adapter, "read_mus_entry_records", lambda _p: entries)
+        monkeypatch.setattr(adapter, "_texts_records", lambda _p: list(texts))
         monkeypatch.setattr(adapter, "_banner_year", lambda _p: year)
 
     return install
@@ -297,6 +303,55 @@ def test_a_concert_staff_gets_no_transposition_record(pools: Callable[..., None]
     record = read_mus_document(PATH).others.get("staffSpec", 1)
     assert record is not None
     assert "transposition" not in record.fields
+
+
+def lyric_payload(*groups: tuple[int, int, bool]) -> bytes:
+    """A lyrDataVerse payload: one 20-byte group per verse."""
+    out = bytearray()
+    for number, syll, extend in groups:
+        block = bytearray(20)
+        block[0:2] = number.to_bytes(2, "little")
+        block[2:4] = syll.to_bytes(2, "little")
+        block[8:10] = (1 if extend else 0).to_bytes(2, "little")
+        out += block
+    return bytes(out)
+
+
+def test_one_mus_lyric_record_becomes_one_record_per_verse(
+    pools: Callable[..., None],
+) -> None:
+    """A `.mus` packs every verse into one record; a `.musx` writes one each.
+    Splitting here is what lets one lyrics module read both."""
+    pools(
+        details=(
+            MusDetailRecord(TAG_LYRIC_VERSE, 0, 9, 0, lyric_payload((1, 3, False), (2, 4, True))),
+        )
+    )
+    found = read_mus_document(PATH).details.of_tag("lyrDataVerse")
+    assert [(r.attrs["entnum"], r.fields["lyricNumber"], r.fields["syll"]) for r in found] == [
+        ("9", "1", "3"),
+        ("9", "2", "4"),
+    ]
+    assert "wext" not in found[0].fields
+    assert "wext" in found[1].fields
+
+
+def test_a_repeated_lyric_assignment_is_emitted_once(pools: Callable[..., None]) -> None:
+    """A `.mus` repeats an entry's assignments, usually as two identical
+    records. Emitting both would sing every syllable twice."""
+    payload = lyric_payload((1, 3, False))
+    pools(
+        details=(
+            MusDetailRecord(TAG_LYRIC_VERSE, 0, 9, 0, payload),
+            MusDetailRecord(TAG_LYRIC_VERSE, 0, 9, 1, payload),
+        )
+    )
+    assert len(read_mus_document(PATH).details.of_tag("lyrDataVerse")) == 1
+
+
+def test_an_empty_verse_slot_is_skipped(pools: Callable[..., None]) -> None:
+    pools(details=(MusDetailRecord(TAG_LYRIC_VERSE, 0, 9, 0, lyric_payload((0, 0, False))),))
+    assert read_mus_document(PATH).details.of_tag("lyrDataVerse") == ()
 
 
 def test_reports_what_it_does_not_translate() -> None:

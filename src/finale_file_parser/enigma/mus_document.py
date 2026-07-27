@@ -26,6 +26,8 @@ Translated:
 | options | `clefOptions` (109) | the clef table: `adjust`, `clefChar`, `clefYDisp`, `shapeID` |
 | details | `tupletDef` (1072) | `symbolicNum`, `symbolicDur`, `refNum`, `refDur` |
 | others | `staffSpec` (231) | `transposition.keysig.adjust` only — see below |
+| details | `lyrDataVerse` (1108) | `lyricNumber`, `syll`, `wext`, per 20-byte group |
+| texts | `verse` | the `^verse(N)…^end` sections of the text stream |
 
 Every field above is confirmed against paired `.musx` files; see
 `docs/formats/mus-binary-notes.md` for the evidence behind each.
@@ -34,6 +36,7 @@ Every field above is confirmed against paired `.musx` files; see
 from __future__ import annotations
 
 import os
+import re
 
 from finale_file_parser.enigma.document import (
     DetailsPool,
@@ -47,6 +50,7 @@ from finale_file_parser.enigma.document import (
 )
 from finale_file_parser.enigma.mus_details import (
     TAG_GFHOLD,
+    TAG_LYRIC_VERSE,
     TAG_TUPLET_DEF,
     MusDetailRecord,
     entry_key,
@@ -62,6 +66,7 @@ from finale_file_parser.enigma.mus_others import (
     MusOther,
     read_mus_others,
 )
+from finale_file_parser.enigma.mus_payload import read_mus_streams
 from finale_file_parser.version import mus as mus_header
 
 __all__ = ["UNTRANSLATED", "read_mus_document"]
@@ -90,6 +95,9 @@ UNTRANSLATED = (
     "root cause as the transposition gap above -- the value lives with the "
     "instrument, not in the file.",
     "measSpec display time signatures (useDisplayTimesig, dispBeats, dispDivbeat).",
+    "Chorus and section lyrics: the .mus tag for lyrDataVerse is identified, but "
+    "no paired corpus document uses a chorus or section track, so their tags are "
+    "unknown and those lyrics are absent from a .mus-derived score.",
     "gfhold frame3-4: layers 3 and 4. Frames 1 and 2 are at payload +6 and +8, "
     "confirmed against the corpus; no corpus .musx carries a frame3 or frame4, so "
     "the next two slots are a guess this does not make. A document using layer 3 "
@@ -121,6 +129,28 @@ _CLEF_FIELD_OFFSETS = {
 }
 """Field offsets within a clef entry, per stride. 2012 inserts two bytes after
 `clefChar` and two more before `shapeID`; everything else is shared."""
+
+_LYRIC_GROUP = 20
+"""Bytes per verse assignment inside a `lyrDataVerse` payload."""
+
+_LYRIC_NUMBER = 0
+_LYRIC_SYLL = 2
+_LYRIC_WEXT = 8
+"""Word-extension flag; matches the `.musx` `wext` on every corpus assignment."""
+
+_TEXT_STREAM = 3
+"""The payload stream holding ETF tagged text (`^verse(1)...^end`)."""
+
+_TEXT_SECTION = re.compile(rb"\^(verse|chorus|section)\((\d+)\)(.*?)\^end", re.DOTALL)
+"""One tagged text section. The body keeps its markup; `plain_text` strips it."""
+
+_FALLBACK_ENCODING = {"MAC": "mac_roman", "WIN": "cp1252"}
+"""What a text section is if it is not UTF-8.
+
+Most corpus sections decode as UTF-8, but not all -- five verses in the paired
+corpus are legacy 8-bit text -- and which legacy encoding depends on the
+platform that wrote the file, which its header records.
+"""
 
 _STAFF_TRANSPOSITION = 20
 """Offset of `staffSpec`'s `transposition` field, per ETF's documented field
@@ -157,7 +187,7 @@ def read_mus_document(path: str | os.PathLike[str]) -> EnigmaDocument:
         others=OthersPool(records=tuple(_others_records(others))),
         details=DetailsPool(records=tuple(_details_records(details))),
         entries=EntriesPool(records=read_mus_entry_records(path)),
-        texts=TextsPool(records=_EMPTY),
+        texts=TextsPool(records=tuple(_texts_records(path))),
     )
 
 
@@ -167,6 +197,48 @@ def _u16(payload: bytes, offset: int) -> int:
 
 def _u32(payload: bytes, offset: int) -> int:
     return int.from_bytes(payload[offset : offset + 4], "little")
+
+
+def _texts_records(path: str | os.PathLike[str]) -> list[Record]:
+    """The text stream's tagged sections, as `verse`/`chorus`/`section` Records.
+
+    A `.mus` keeps these as ETF tagged text rather than as binary records, so
+    they are read straight out of the stream. The body keeps its markup, exactly
+    as the `.musx` texts pool does, and `plain_text` handles both dialects.
+    """
+    streams = read_mus_streams(path)
+    if len(streams) <= _TEXT_STREAM:
+        return []
+    fallback = _FALLBACK_ENCODING.get(_banner_platform(path) or "", "cp1252")
+    out: list[Record] = []
+    seen: set[tuple[str, str]] = set()
+    for match in _TEXT_SECTION.finditer(streams[_TEXT_STREAM]):
+        tag = match.group(1).decode("ascii")
+        number = match.group(2).decode("ascii")
+        if (tag, number) in seen:
+            # TextsPool rejects a duplicate identity, and a repeated section is
+            # the writer's business rather than something to fail a read over.
+            continue
+        seen.add((tag, number))
+        out.append(
+            Record(
+                tag=tag, attrs={"number": number}, text=_decode(match.group(3), fallback), fields={}
+            )
+        )
+    return out
+
+
+def _decode(raw: bytes, fallback: str) -> str:
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode(fallback, errors="replace")
+
+
+def _banner_platform(path: str | os.PathLike[str]) -> str | None:
+    with open(path, "rb") as handle:
+        stamp = mus_header.parse(handle.read(mus_header.MUS_METADATA_SIZE))
+    return stamp.created.platform if stamp.created else None
 
 
 def _banner_year(path: str | os.PathLike[str]) -> int | None:
@@ -319,8 +391,61 @@ matches its `.musx`, which a transposed or swapped pair would not survive
 """
 
 
+def _lyric_records(
+    record: MusDetailRecord, seen: dict[int, int], emitted: set[tuple[int, int]]
+) -> list[Record]:
+    """One `lyrDataVerse` Record per verse the entry sings.
+
+    A `.mus` packs every verse into one record as consecutive 20-byte groups; a
+    `.musx` writes one record per verse. Splitting here is what lets
+    `lyrics_by_entry` read either container.
+
+    **A `.mus` repeats an entry's assignments**, typically as two identical
+    records, so the same (entry, verse) is emitted once and later copies are
+    dropped. Corpus-wide, 697 of 2,524 assignments are such repeats and 23 of
+    those disagree with the first about the syllable or the extension. None of
+    the 23 falls in a document whose `.musx` can arbitrate, so keeping the first
+    is unvalidated for exactly those; both orders match the oracle on all 971
+    assignments it does cover.
+
+    `inci` only has to make the identities distinct, so it counts assignments
+    per entry.
+    """
+    out: list[Record] = []
+    entnum = entry_key(record)
+    groups = len(record.payload) // _LYRIC_GROUP
+    for index in range(groups):
+        at = index * _LYRIC_GROUP
+        number = _u16(record.payload, at + _LYRIC_NUMBER)
+        if not number:
+            # An empty slot, not a verse.
+            continue
+        identity = (entnum, number)
+        if identity in emitted:
+            continue
+        emitted.add(identity)
+        fields: dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]] = {
+            "lyricNumber": str(number),
+            "syll": str(_u16(record.payload, at + _LYRIC_SYLL)),
+        }
+        if _u16(record.payload, at + _LYRIC_WEXT):
+            fields["wext"] = ""
+        out.append(
+            Record(
+                tag="lyrDataVerse",
+                attrs={"entnum": str(entnum), "inci": str(seen.get(entnum, 0))},
+                text="",
+                fields=fields,
+            )
+        )
+        seen[entnum] = seen.get(entnum, 0) + 1
+    return out
+
+
 def _details_records(records: tuple[MusDetailRecord, ...]) -> list[Record]:
     out: list[Record] = []
+    lyric_incidence: dict[int, int] = {}
+    lyric_seen: set[tuple[int, int]] = set()
     for record in records:
         if record.tag == TAG_GFHOLD and len(record.payload) >= 10:
             out.append(
@@ -331,6 +456,8 @@ def _details_records(records: tuple[MusDetailRecord, ...]) -> list[Record]:
                     fields=_gfhold(record.payload),
                 )
             )
+        elif record.tag == TAG_LYRIC_VERSE:
+            out.extend(_lyric_records(record, lyric_incidence, lyric_seen))
         elif record.tag == TAG_TUPLET_DEF and len(record.payload) >= 8:
             out.append(
                 Record(

@@ -8,7 +8,16 @@ import pytest
 from defusedxml import ElementTree as DET
 
 from finale_file_parser.export.musicxml import ExportError, to_musicxml
-from finale_file_parser.ir import Event, Measure, Part, Pitch, Score, TimeSignature, Voice
+from finale_file_parser.ir import (
+    Event,
+    Lyric,
+    Measure,
+    Part,
+    Pitch,
+    Score,
+    TimeSignature,
+    Voice,
+)
 
 QUARTER = Fraction(1, 4)
 EIGHTH = Fraction(1, 8)
@@ -154,3 +163,61 @@ def test_second_voice_is_preceded_by_a_backup() -> None:
 def test_unrepresentable_duration_raises() -> None:
     with pytest.raises(ExportError, match="note value"):
         to_musicxml(_score(_note(written_duration=Fraction(5, 16))))
+
+
+def test_a_lyric_is_emitted_with_its_syllabic_and_text() -> None:
+    score = _score(
+        Event(
+            duration=Fraction(1, 4),
+            written_duration=Fraction(1, 4),
+            pitches=(Pitch(step="C", alteration=0, octave=4),),
+            lyrics=(Lyric(number=1, text="ho", syllabic="begin"),),
+        )
+    )
+    xml = to_musicxml(score).decode()
+    assert '<lyric number="1">' in xml
+    assert "<syllabic>begin</syllabic>" in xml
+    assert "<text>ho</text>" in xml
+
+
+def test_a_word_extension_emits_extend() -> None:
+    score = _score(
+        Event(
+            duration=Fraction(1, 4),
+            written_duration=Fraction(1, 4),
+            pitches=(Pitch(step="C", alteration=0, octave=4),),
+            lyrics=(Lyric(number=1, text="ah", syllabic="single", extend=True),),
+        )
+    )
+    assert "<extend />" in to_musicxml(score).decode()
+
+
+def test_a_chord_sings_its_syllable_once() -> None:
+    """The syllable belongs to the event, not to each pitch: repeating it per
+    note of a chord would make the part sing it three times."""
+    score = _score(
+        Event(
+            duration=Fraction(1, 4),
+            written_duration=Fraction(1, 4),
+            pitches=(
+                Pitch(step="C", alteration=0, octave=4),
+                Pitch(step="E", alteration=0, octave=4),
+            ),
+            lyrics=(Lyric(number=1, text="ah", syllabic="single"),),
+        )
+    )
+    assert to_musicxml(score).decode().count("<lyric ") == 1
+
+
+def test_lyric_comes_after_notations_as_the_schema_requires() -> None:
+    score = _score(
+        Event(
+            duration=Fraction(1, 4),
+            written_duration=Fraction(1, 4),
+            pitches=(Pitch(step="C", alteration=0, octave=4),),
+            tie_start=True,
+            lyrics=(Lyric(number=1, text="ah", syllabic="single"),),
+        )
+    )
+    xml = to_musicxml(score).decode()
+    assert xml.index("<notations>") < xml.index("<lyric ")

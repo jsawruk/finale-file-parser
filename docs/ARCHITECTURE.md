@@ -498,6 +498,39 @@ One document fails to build: its `.mus` frame chain references an entry its pool
 is the same document whose `.musx` carries three `frameSpec` records its `.mus` does not, so the two
 containers disagree about its frames rather than the adapter mis-reading them.
 
+### Known format facts — lyrics
+
+Enigma splits a lyric in two, and neither half is much use alone.
+
+- **Text**: one blob per verse in the `texts` pool, syllabified with hyphens
+  (`An-gels we have heard on high`). Tag `verse`, `chorus` or `section`, keyed by number.
+- **Assignment**: an entry detail (`lyrDataVerse` and friends) carrying `lyricNumber` — which
+  verse — and `syll`, a **1-based index into that verse's syllables**. Optionally `wext`, a word
+  extension (the line under a held syllable).
+
+Nothing stores the syllables themselves, so `enigma/lyrics.py` tokenises the verse — split on
+whitespace, then each word on hyphens — and indexes it. Verified against the corpus: the syllables
+land on consecutive entries in playing order, exactly as sung.
+
+**`syllabic` is derived, not stored.** MusicXML needs `single`/`begin`/`middle`/`end`, and Enigma
+records only hyphens: a hyphen after a syllable means the word continues, one before means it was
+continued into. This is the part most likely to be subtly wrong — it produces output that looks
+plausible and sings wrong — so it carries the most tests, including a mutation check that removing
+the "previous syllable ended in a hyphen" test breaks `middle` and `end`.
+
+Two cases are dropped rather than guessed at: an assignment whose index falls past the end of its
+verse (a verse shortened after the notes were entered), and a lyric detail carrying only positioning.
+
+**The two containers store this very differently, and produce identical output.** A `.musx` writes
+one record per (entry, verse). A `.mus` packs every verse the entry sings into one record as
+consecutive 20-byte groups (`lyricNumber` +0, `syll` +2, `wext` +8, details tag 1108) — and then
+**repeats the whole record**, usually twice, so the adapter emits each (entry, verse) once. Its verse
+text is ETF tagged text (`^verse(1)…^end`) in the text stream rather than a binary record. Over the
+six same-content pairs whose `.musx` carries lyrics, all 1,794 events match exactly.
+
+`plain_text` now strips both markup dialects: EnigmaXML's `^name(args)` and the binary
+`^<opcode><4 bytes>` a `.mus` uses.
+
 ### Known format facts — EnigmaXML structure
 
 Full reference and derivation: `docs/superpowers/specs/2026-07-22-enigma-document-design.md`.
