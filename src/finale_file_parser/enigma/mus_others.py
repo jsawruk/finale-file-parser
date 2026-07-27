@@ -73,6 +73,24 @@ TAG_ARTIC_DEF = 121
 """`articDef` — an articulation's definition. Its `charMain` is the music-font
 character that says what the mark is; see `enigma.articulations`."""
 
+TAG_REPEAT_BACK = 203
+"""`repeatBack` — a backward repeat's detail record, keyed by measure.
+
+Identified by key set: across the 20 paired documents that carry a backward
+repeat, tag 203's cmpers equal the `.musx` `repeatBack` cmpers exactly, and no
+other tag matches even once. See `enigma.repeats`."""
+
+TAG_REPEAT_ENDING_START = 204
+"""`repeatEndingStart` — an ending bracket's detail record, keyed by measure."""
+
+TAG_REPEAT_PASS_LIST = 206
+"""`repeatPassList` — which passes an ending is taken on, keyed by measure.
+
+204 and 206 both match `repeatEndingStart`'s and `repeatPassList`'s key sets,
+because the two records always share a measure; the payloads separate them. 206
+is 12 bytes and opens with the pass number itself (1 for a first ending, 2 for a
+second, 31 of 31 paired records), while 204 is 24 bytes of bracket geometry."""
+
 TAG_CLEF_OPTIONS = 109
 """The clef definition table — confirmed by payload.
 

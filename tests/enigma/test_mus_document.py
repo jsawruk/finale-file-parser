@@ -422,3 +422,77 @@ def test_reports_what_it_does_not_translate() -> None:
     would claim full fidelity."""
     assert adapter.UNTRANSLATED
     assert all(isinstance(gap, str) and gap for gap in adapter.UNTRANSLATED)
+
+
+REPEAT_BACK = 203
+REPEAT_ENDING_START = 204
+REPEAT_PASS_LIST = 206
+
+
+def meas_spec_with_flags(flags: int) -> bytes:
+    """A `measSpec` long enough to carry the flags byte at +10."""
+    return meas_spec_payload(305, 0, 2, 1024) + bytes(2) + bytes([flags]) + bytes(15)
+
+
+@pytest.mark.parametrize(
+    ("flags", "expected"),
+    [(0x02, "barEnding"), (0x04, "bacRepBar"), (0x08, "forRepBar")],
+)
+def test_the_repeat_barline_flags_are_read(
+    pools: Callable[..., None], flags: int, expected: str
+) -> None:
+    """All three live in one byte at +10, on adjacent bits."""
+    pools(others=(MusOther(MEAS_SPEC, 4, 0, meas_spec_with_flags(flags)),))
+    record = read_mus_document(PATH).others.get("measSpec", 4)
+    assert record is not None
+    assert expected in record.fields
+
+
+def test_the_barline_style_nibble_is_not_mistaken_for_a_repeat(
+    pools: Callable[..., None],
+) -> None:
+    """The same byte's high nibble is the barline style -- 0x10 normal, 0x20
+    double. Reading the byte as a whole, or masking it loosely, would turn every
+    ordinary barline into a repeat."""
+    pools(others=(MusOther(MEAS_SPEC, 5, 0, meas_spec_with_flags(0x10)),))
+    record = read_mus_document(PATH).others.get("measSpec", 5)
+    assert record is not None
+    assert not {"forRepBar", "bacRepBar", "barEnding"} & set(record.fields)
+
+
+def test_a_measure_spec_too_short_for_the_flags_byte_keeps_its_other_fields(
+    pools: Callable[..., None],
+) -> None:
+    pools(others=(MusOther(MEAS_SPEC, 6, 0, meas_spec_payload(305, 0, 2, 1024)),))
+    record = read_mus_document(PATH).others.get("measSpec", 6)
+    assert record is not None
+    assert record.fields["beats"] == "2"
+
+
+def test_translates_a_backward_repeat_s_total_passes(pools: Callable[..., None]) -> None:
+    pools(others=(MusOther(REPEAT_BACK, 8, 0, bytes(2) + (3).to_bytes(2, "little") + bytes(20)),))
+    record = read_mus_document(PATH).others.get("repeatBack", 8)
+    assert record is not None
+    assert record.fields["actuate"] == "3"
+
+
+def test_a_zero_total_passes_becomes_no_field_at_all(pools: Callable[..., None]) -> None:
+    """Same omission convention as `measSpec.key`: a `.musx` writes nothing
+    where the value is the default, and the `.mus` stores 0 there."""
+    pools(others=(MusOther(REPEAT_BACK, 9, 0, bytes(24)),))
+    record = read_mus_document(PATH).others.get("repeatBack", 9)
+    assert record is not None
+    assert "actuate" not in record.fields
+
+
+def test_translates_an_ending_start_and_its_pass_number(pools: Callable[..., None]) -> None:
+    pools(
+        others=(
+            MusOther(REPEAT_ENDING_START, 21, 0, bytes(24)),
+            MusOther(REPEAT_PASS_LIST, 21, 0, (2).to_bytes(2, "little") + bytes(10)),
+        )
+    )
+    document = read_mus_document(PATH)
+    assert document.others.get("repeatEndingStart", 21) is not None
+    passes = document.others.get("repeatPassList", 21)
+    assert passes is not None and passes.fields["act"] == "2"

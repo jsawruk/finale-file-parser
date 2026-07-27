@@ -21,6 +21,7 @@ from fractions import Fraction
 
 __all__ = [
     "Beam",
+    "Ending",
     "Event",
     "Lyric",
     "Measure",
@@ -152,6 +153,18 @@ class Voice:
 
 
 @dataclass(frozen=True)
+class Ending:
+    """One end of an ending bracket -- a "first time" / "second time" volta."""
+
+    numbers: tuple[int, ...]
+    """The passes this bracket is taken on. `1.` is (1,), `1., 2.` is (1, 2)."""
+
+    type: str
+    """`start` where the bracket opens; at its close, `stop` if it ends in a
+    downward hook and `discontinue` if it just stops being drawn."""
+
+
+@dataclass(frozen=True)
 class Measure:
     """One measure of one part."""
 
@@ -168,6 +181,20 @@ class Measure:
     """``G``, ``F``, ``C``, or ``percussion``."""
 
     clef_line: int | None = None
+
+    repeat_forward: bool = False
+    """A forward repeat barline on the left of this measure."""
+
+    repeat_backward: bool = False
+    """A backward repeat barline on the right of this measure."""
+
+    repeat_passes: int = 2
+    """How many times the repeated section is played. Only meaningful with
+    `repeat_backward`; 2 is the ordinary "play it twice"."""
+
+    endings: tuple[Ending, ...] = ()
+    """Ending brackets opening or closing at this measure. A single-measure
+    ending does both, so this can hold two."""
 
 
 @dataclass(frozen=True)

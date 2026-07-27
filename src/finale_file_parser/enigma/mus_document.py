@@ -21,7 +21,7 @@ Translated:
 | --- | --- | --- |
 | entries | `entry` | via `read_mus_entry_records` |
 | others | `frameSpec` (146) | `startEntry`, `endEntry` |
-| others | `measSpec` (176) | `keySig.key`, `beats`, `divbeat` |
+| others | `measSpec` (176) | `keySig.key`, `beats`, `divbeat`, the repeat flags at +10 |
 | details | `gfhold` (1044) | `clefID`, `frame1`, `frame2` |
 | options | `clefOptions` (109) | the clef table: `adjust`, `clefChar`, `clefYDisp`, `shapeID` |
 | details | `tupletDef` (1072) | `symbolicNum`, `symbolicDur`, `refNum`, `refDur` |
@@ -29,6 +29,9 @@ Translated:
 | details | `lyrDataVerse` (1108) | `lyricNumber`, `syll`, `wext`, per 20-byte group |
 | details | `articAssign` (1009) | `articDef` |
 | others | `articDef` (121) | `charMain` — at +0 (2011) or +2 (2012) |
+| others | `repeatBack` (203) | `actuate` — Finale's "Total Passes" |
+| others | `repeatEndingStart` (204) | presence only; the bracket's extent comes from `barEnding` |
+| others | `repeatPassList` (206) | `act` — which pass the ending is taken on |
 | texts | `verse` | the `^verse(N)…^end` sections of the text stream |
 
 Every field above is confirmed against paired `.musx` files; see
@@ -66,6 +69,9 @@ from finale_file_parser.enigma.mus_others import (
     TAG_CLEF_OPTIONS,
     TAG_FRAME_SPEC,
     TAG_MEAS_SPEC,
+    TAG_REPEAT_BACK,
+    TAG_REPEAT_ENDING_START,
+    TAG_REPEAT_PASS_LIST,
     TAG_STAFF_SPEC,
     MusOther,
     read_mus_others,
@@ -99,6 +105,16 @@ UNTRANSLATED = (
     "root cause as the transposition gap above -- the value lives with the "
     "instrument, not in the file.",
     "measSpec display time signatures (useDisplayTimesig, dispBeats, dispDivbeat).",
+    "Barline styles: measSpec's flags byte at +10 holds the style in its high "
+    "nibble (1 normal, 2 double), but the paired corpus carries 11 double "
+    "barlines and no final one -- too thin to commit to, so an ordinary barline "
+    "is written everywhere. The repeat bits in the same byte's low nibble ARE "
+    "read; see enigma.repeats.",
+    "Repeat jumps: repeatBack's target/trigger/action and the textRepeatAssign "
+    "family (D.C., D.S., Fine, To Coda) describe where a repeat sends the "
+    "player rather than what barline is drawn. Neither container's reading is "
+    "implemented, so both are equally silent -- this is a missing feature "
+    "rather than a .mus gap.",
     "Fingerings: the corpus stores them as articulations whose character is a "
     "numeral in a text font, so telling them from a music-font numeral needs "
     "articDef's fontMain -- whose offset varies within a single era, so a .mus "
@@ -176,6 +192,19 @@ platform that wrote the file, which its header records.
 _STAFF_TRANSPOSITION = 20
 """Offset of `staffSpec`'s `transposition` field, per ETF's documented field
 order (`... topBarlineOffset transposition instflag dw_wRest ...`)."""
+
+_MEAS_FLAGS = 10
+_MEAS_REPEAT_BITS = {"barEnding": 0x02, "bacRepBar": 0x04, "forRepBar": 0x08}
+"""`measSpec`'s repeat-barline flags, all in the byte at +10.
+
+Found by testing every (byte, bit) in the payload against the paired `.musx`:
+each of the three has exactly one candidate that agrees on all 1,025 measures of
+the 20 paired documents that use repeats, with no second candidate anywhere
+close. That they land on three adjacent bits of one byte is the corroboration
+the correlation alone would not give -- this is a flags byte, not three
+coincidences. Its high nibble is the barline style (1 normal, 2 double), which
+is deliberately not read: the paired corpus holds 11 double barlines and no
+final one, which is too thin to commit to."""
 
 _ALTERATION_MAGNITUDE = 0x07
 _ALTERATION_SIGN = 0x08
@@ -349,7 +378,34 @@ def _others_records(records: tuple[MusOther, ...]) -> list[Record]:
             out.append(
                 Record(tag="staffSpec", attrs=attrs, text="", fields=_staff_spec(record.payload))
             )
+        elif record.tag == TAG_REPEAT_BACK and len(record.payload) >= 4:
+            out.append(
+                Record(tag="repeatBack", attrs=attrs, text="", fields=_repeat_back(record.payload))
+            )
+        elif record.tag == TAG_REPEAT_ENDING_START:
+            # The bracket's geometry is not read; its presence is what says an
+            # ending opens here, and `measSpec.barEnding` says where it closes.
+            out.append(Record(tag="repeatEndingStart", attrs=attrs, text="", fields={}))
+        elif record.tag == TAG_REPEAT_PASS_LIST and len(record.payload) >= 2:
+            act = _u16(record.payload, 0)
+            if act:
+                out.append(
+                    Record(tag="repeatPassList", attrs=attrs, text="", fields={"act": str(act)})
+                )
     return out
+
+
+def _repeat_back(payload: bytes) -> dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]]:
+    """`actuate` -- Finale's "Total Passes" -- at +2.
+
+    A stored 0 is written as **no `actuate` at all**, the same omission
+    convention as `measSpec.key` and `gfhold.clefID`: a `.musx` omits the
+    element where the value is the default rather than writing it out. Across
+    the paired corpus the two agree on every record that has one, and the `.mus`
+    holds 0 exactly where the `.musx` omits it.
+    """
+    actuate = _u16(payload, 2)
+    return {"actuate": str(actuate)} if actuate else {}
 
 
 def _staff_spec(payload: bytes) -> dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]]:
@@ -392,6 +448,12 @@ def _meas_spec(payload: bytes) -> dict[str, str | tuple[str, ...] | Record | tup
     key = _u16(payload, 2)
     if key:
         fields["keySig"] = Record(tag="keySig", attrs={}, text="", fields={"key": str(key)})
+    if len(payload) > _MEAS_FLAGS:
+        for name, bit in _MEAS_REPEAT_BITS.items():
+            if payload[_MEAS_FLAGS] & bit:
+                # Written as a bare presence, matching the `.musx`, where these
+                # are empty elements rather than values.
+                fields[name] = ""
     return fields
 
 

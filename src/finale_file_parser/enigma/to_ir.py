@@ -22,6 +22,7 @@ from finale_file_parser.enigma.lyrics import Lyric as EnigmaLyric
 from finale_file_parser.enigma.lyrics import lyrics_by_entry
 from finale_file_parser.enigma.music import read_entry
 from finale_file_parser.enigma.pitch import StaffTransposition, read_transposition, spell_note
+from finale_file_parser.enigma.repeats import Repeats, repeats_for
 from finale_file_parser.enigma.text import file_info, staff_names
 from finale_file_parser.enigma.timesig import TimeSignature as EnigmaTimeSignature
 from finale_file_parser.enigma.timesig import time_signatures
@@ -132,6 +133,7 @@ def build_score(document: EnigmaDocument) -> Score:
     clef_at = clefs_by_measure(document)
     names = staff_names(document)
     info = file_info(document)
+    repeats = repeats_for(document)
 
     staves = sorted({staff for staff, _ in cells})
     numbers = sorted({measure for _, measure in cells})
@@ -152,6 +154,7 @@ def build_score(document: EnigmaDocument) -> Score:
                     signatures=signatures,
                     clef_table=clef_table,
                     clef_at=clef_at,
+                    repeats=repeats,
                 )
                 for index, number in enumerate(numbers)
                 if (staff, number) in cells
@@ -259,6 +262,7 @@ def _measure(
     signatures: dict[int, EnigmaTimeSignature],
     clef_table: dict[int, Clef],
     clef_at: dict[tuple[int, int], int],
+    repeats: Repeats,
 ) -> Measure:
     cell = cells[(staff, number)]
     previous_cell = cells.get((staff, previous)) if previous is not None else None
@@ -272,6 +276,7 @@ def _measure(
 
     key = decode_key(cell.key_raw)
     key_changed = previous_cell is None or cell.key_raw != previous_cell.key_raw
+    here = repeats.get(number)
 
     return Measure(
         number=number,
@@ -290,4 +295,10 @@ def _measure(
         ),
         clef_sign=_MUSICXML_SIGNS.get(clef.sign) if clef_changed and clef else None,
         clef_line=_clef_line(clef) if clef_changed and clef else None,
+        # Repeats belong to the measure, not the staff: every part carries the
+        # same barline, which is what a reader of one part expects to see.
+        repeat_forward=here.forward,
+        repeat_backward=here.backward,
+        repeat_passes=here.passes,
+        endings=here.endings,
     )

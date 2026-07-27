@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 from fractions import Fraction
 
 from finale_file_parser.errors import FinaleFileError
-from finale_file_parser.ir import Event, Lyric, Measure, Part, Pitch, Score, Voice
+from finale_file_parser.ir import Ending, Event, Lyric, Measure, Part, Pitch, Score, Voice
 
 __all__ = ["MUSICXML_VERSION", "ExportError", "to_musicxml"]
 
@@ -137,6 +137,7 @@ def _append_measure(
     parent: ET.Element, measure: Measure, divisions: int, *, emit_divisions: bool
 ) -> None:
     element = ET.SubElement(parent, "measure", number=str(measure.number))
+    _append_barline(element, measure, "left")
     _append_attributes(element, measure, divisions, emit_divisions=emit_divisions)
 
     for index, voice in enumerate(measure.voices):
@@ -155,6 +156,48 @@ def _append_measure(
                 ET.SubElement(backup, "duration").text = str(spent)
         for event in voice.events:
             _append_event(element, event, voice, divisions)
+
+    _append_barline(element, measure, "right")
+
+
+def _append_barline(element: ET.Element, measure: Measure, location: str) -> None:
+    """A repeat barline and any ending bracket that meets it.
+
+    Left and right are separate elements at opposite ends of the measure, so a
+    forward repeat opens the measure and a backward one closes it -- and a
+    one-measure ending, which both opens and closes here, writes one of each.
+    """
+    left = location == "left"
+    endings = [e for e in measure.endings if (e.type == "start") == left]
+    repeat = measure.repeat_forward if left else measure.repeat_backward
+    if not endings and not repeat:
+        return
+
+    barline = ET.SubElement(element, "barline", location=location)
+    # Schema order within a barline: bar-style, then ending, then repeat.
+    if repeat:
+        ET.SubElement(barline, "bar-style").text = "heavy-light" if left else "light-heavy"
+    for ending in endings:
+        attrs = {"number": ",".join(str(n) for n in ending.numbers), "type": ending.type}
+        ET.SubElement(barline, "ending", attrs).text = _ending_text(ending)
+    if repeat:
+        attrs = {"direction": "forward" if left else "backward"}
+        # `times` defaults to 2, so it is written only where Finale says
+        # otherwise -- a section played three times, say.
+        if not left and measure.repeat_passes != 2:
+            attrs["times"] = str(measure.repeat_passes)
+        ET.SubElement(barline, "repeat", attrs)
+
+
+def _ending_text(ending: Ending) -> str:
+    """What the bracket reads as: "1." for one pass, "1., 2." for several.
+
+    MusicXML takes the displayed text separately from `number`, and leaving it
+    empty makes a reader invent its own. Finale can store custom text
+    (`repeatEndingText`), which three corpus documents use and this does not
+    read; the derived form matches what the others display.
+    """
+    return ", ".join(f"{number}." for number in ending.numbers)
 
 
 def _append_attributes(

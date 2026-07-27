@@ -498,6 +498,53 @@ One document fails to build: its `.mus` frame chain references an entry its pool
 is the same document whose `.musx` carries three `frameSpec` records its `.mus` does not, so the two
 containers disagree about its frames rather than the adapter mis-reading them.
 
+### Known format facts — repeats
+
+Repeats live in two places at once, and reconstructing one bracket needs both.
+
+The **barlines** are flags on `measSpec`: `forRepBar` means a forward repeat at that measure's left
+barline, `bacRepBar` a backward repeat at its right. Nothing else is stored about a forward repeat —
+it is only ever a barline. A backward one also gets a `repeatBack` record keyed by measure, whose
+`actuate` is Finale's "Total Passes"; the corpus has 25 measures where it is not the default 2.
+
+The **endings** need three records and one flag:
+
+| what | where |
+| --- | --- |
+| the bracket opens here | `repeatEndingStart(measure)` |
+| which passes it is taken on | `repeatPassList(measure)` → one `act` per pass |
+| how far it extends | `measSpec.barEnding` |
+
+That last one does not mean what it looks like it means. **`barEnding` is not set on every measure a
+bracket covers**: in a four-measure first ending the corpus flags the first measure and the fourth
+and leaves the two between them clear. So a bracket runs to *the last flagged measure at or after
+its start and before the next bracket starts* — not to the end of a run of consecutive flags.
+Reading it as a run stops a four-measure bracket after one measure, and without the next-start
+boundary a bracket swallows the ending that follows it.
+
+The rule was checked against the two independent things that ought to agree with it: the measure
+carrying the backward repeat (71 brackets, no disagreement) and `nextEnd` where a
+`repeatEndingStart` supplies one. The other 67 brackets are single measures with no backward
+repeat — a final "2." ending, which MusicXML closes with `discontinue` rather than `stop`.
+
+Corpus: 109 forward repeats, 121 backward, 142 brackets, across 109 documents. Each matches the raw
+element count in the pool exactly, so nothing is invented or lost on the way to the IR.
+
+In a `.mus` all three flags sit in **one byte at `measSpec` +10**, on adjacent bits — `barEnding`
+0x02, `bacRepBar` 0x04, `forRepBar` 0x08. Each was found by testing every (byte, bit) in the payload
+against the paired `.musx`: each has exactly one candidate agreeing on all 1,025 measures of the 20
+paired documents that use repeats. That they land on three adjacent bits of one byte is the
+corroboration the correlation alone would not give. The byte's high nibble is the barline style
+(1 normal, 2 double), **not read**: the paired corpus holds 11 double barlines and no final one,
+which is too thin to commit to. The records are tags **203** (`repeatBack`), **204**
+(`repeatEndingStart`) and **206** (`repeatPassList`); 204 and 206 share a key set, and the payload
+separates them — 206 is 12 bytes opening with the pass number, 204 is 24 bytes of bracket geometry.
+
+Not read, deliberately: `repeatBack.target`, `trigger`, `action`, and the `textRepeatAssign` family
+(D.C., D.S., Fine, To Coda). Those describe *jumps* rather than repeat barlines and MusicXML spells
+them differently. `repeatEndingText` — a bracket's custom label, used by three corpus documents — is
+also unread; the text is derived from the pass numbers instead.
+
 ### Known format facts — beams
 
 **Enigma does not store beams.** It stores one bit per entry — `BEATBIT` in `eeppd.txt`, surfaced by
