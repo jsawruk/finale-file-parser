@@ -117,8 +117,9 @@ limit is verified by mutation, because no real corpus archive trips one.
 - [x] **`.mus` input** — `read_mus_document(path)` yields an `EnigmaDocument`, so
       `to_musicxml(build_score(read_mus_document(path)))` exports a legacy `.mus`. Validated IR
       against IR on 73 paired documents: parts, measures, events, keys, time signatures and written
-      rhythm all match exactly. Known gaps, each pinned by the sweep: tuplet sounded durations,
-      transposing staves, part names, and 22 instrument-derived clefs. See `enigma.UNTRANSLATED`.
+      rhythm all match exactly. Sounded durations and tuplet ratios match too. The
+      remaining gaps are all instrument-derived — transposing staves, 22 clefs — plus part names.
+      See `enigma.UNTRANSLATED`.
 - [ ] Beams, articulations, lyrics, repeats, part groups.
 
 ## Later

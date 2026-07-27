@@ -7,6 +7,41 @@
 All findings below are from **structural analysis of the curated corpus (238 `.mus`, 401 `.musx`)**
 plus permitted community documentation. Report counts/structure only — never corpus record values.
 
+## ✅ `tupletDef` is decoded — details tag 1072, keyed by entry
+
+**Entry-attached details reuse the two key fields as one 32-bit entry number, high word first**:
+`entnum = (cmper1 << 16) | cmper2`. Confirmed on every `tupletDef` in the corpus; the little-endian
+reading matches **none** of them, so the order is established rather than assumed. This is the first
+`.mus` record found keyed by entry rather than by a (staff, measure) pair, and the same convention
+should be tried first for the other entry details (articulations, lyrics, beams).
+
+Payload, 30 bytes, little-endian u16:
+
+```
++0 symbolicNum   +2 symbolicDur   +4 refNum   +6 refDur
+```
+
+### The evidence here is end-to-end, not an offset sweep — and that matters
+
+**Every one of the 373 paired corpus tuplets is 3:2 over a 512-EDU reference.** Each of the four
+fields therefore has exactly *one* distinct value in the whole corpus, so an offset sweep matches
+several candidates trivially and can distinguish none of them. Two things pin the layout instead:
+
+1. The natural u16 reading at 0/2/4/6 agrees with **ETF's documented field order**
+   (`symbolicNum symbolicDur refNum refDur`).
+2. **Every `.mus` sounded duration and tuplet ratio now equals its `.musx`.** Swapping the two pairs
+   inverts every ratio, so that check would fail immediately.
+
+The unit tests carry a 5:4 case that the corpus does not contain, precisely because the corpus
+cannot tell an inverted ratio from a correct one.
+
+### Effect
+
+The `.mus` → IR sweep's sounded-duration differences fall from **1,092 events to 0**, and tuplet
+ratios match on every event. **Every remaining difference between a `.mus`-derived score and its
+`.musx` is now instrument-derived** — 4,138 pitches on transposing staves and 22 clefs, both
+traced below to values the `.mus` does not store at all.
+
 ## ✅ The clef table is decoded — options tag 109
 
 Enigma's document-wide options live in the **`others` pool under cmper `0xFFFE`** (98 records in a

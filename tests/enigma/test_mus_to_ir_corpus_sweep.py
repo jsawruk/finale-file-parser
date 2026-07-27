@@ -44,13 +44,15 @@ The same document is the one whose `.musx` carries three frameSpec records its
 about its frames rather than the adapter mis-reading them. Pinned, not excused.
 """
 
-TUPLET_EVENTS = 1092
-"""Events whose sounded duration differs -- every one of them a tuplet.
+TUPLET_EVENTS = 0
+"""Events whose sounded duration differs. Zero since `tupletDef` was decoded.
 
-`tupletDef` is not translated, so a `.mus` tuplet reads as its written
-duration. The assertion that matters is that these are the *only* event
-differences and that their written durations agree: a tuplet is the one thing
-this is allowed to be.
+It was 1,092 -- every corpus tuplet -- while tuplets read as their written
+durations. This is the assertion that pins the `tupletDef` field offsets: every
+corpus tuplet is 3:2 over a 512-EDU reference, so no offset sweep can tell
+`symbolicNum`/`symbolicDur` from `refNum`/`refDur`, and swapping the two pairs
+would invert every ratio. Sounded durations agreeing end to end is what rules
+that out.
 """
 
 TRANSPOSED_PITCHES = 4138
@@ -86,6 +88,7 @@ class Tally:
     attributes: int = 0
     events: int = 0
     tuplet_events: int = 0
+    tuplet_ratios: int = 0
     transposed_pitches: int = 0
     other_pitches: int = 0
     clef_measures: int = 0
@@ -146,6 +149,8 @@ def compare(mine: Score, theirs: Score, transposed: set[int], tally: Tally) -> N
                     tally.events += 1
                 elif event.duration != want.duration:
                     tally.tuplet_events += 1
+                if event.tuplet_ratio != want.tuplet_ratio:
+                    tally.tuplet_ratios += 1
                 if event.pitches != want.pitches:
                     if index in transposed:
                         tally.transposed_pitches += 1
@@ -195,8 +200,11 @@ def test_written_rhythm_matches_exactly(tally: Tally) -> None:
     assert tally.events == 0
 
 
-def test_only_tuplets_differ_in_sounded_duration(tally: Tally) -> None:
+def test_sounded_durations_and_tuplet_ratios_match_exactly(tally: Tally) -> None:
+    """The ratio is the stronger of the two: it is what a swapped
+    `symbolicNum`/`refNum` pair would invert."""
     assert tally.tuplet_events == TUPLET_EVENTS
+    assert tally.tuplet_ratios == 0
 
 
 def test_pitch_differences_are_confined_to_transposing_staves(tally: Tally) -> None:

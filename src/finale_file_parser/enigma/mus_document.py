@@ -24,6 +24,7 @@ Translated:
 | others | `measSpec` (176) | `keySig.key`, `beats`, `divbeat` |
 | details | `gfhold` (1044) | `clefID`, `frame1`, `frame2` |
 | options | `clefOptions` (109) | the clef table: `adjust`, `clefChar`, `clefYDisp`, `shapeID` |
+| details | `tupletDef` (1072) | `symbolicNum`, `symbolicDur`, `refNum`, `refDur` |
 
 Every field above is confirmed against paired `.musx` files; see
 `docs/formats/mus-binary-notes.md` for the evidence behind each.
@@ -43,7 +44,13 @@ from finale_file_parser.enigma.document import (
     Record,
     TextsPool,
 )
-from finale_file_parser.enigma.mus_details import TAG_GFHOLD, MusDetailRecord, read_mus_details
+from finale_file_parser.enigma.mus_details import (
+    TAG_GFHOLD,
+    TAG_TUPLET_DEF,
+    MusDetailRecord,
+    entry_key,
+    read_mus_details,
+)
 from finale_file_parser.enigma.mus_entries import read_mus_entry_records
 from finale_file_parser.enigma.mus_others import (
     OPTIONS_CMPER,
@@ -76,7 +83,6 @@ UNTRANSLATED = (
     "the next two slots are a guess this does not make. A document using layer 3 "
     "or 4 therefore leaves those entries unplaced, which locate_entries rejects "
     "as orphans -- a loud failure rather than a silent misplacement.",
-    "tupletDef: tuplets read as their written durations.",
 )
 """What a `.mus`-derived score does not yet carry, and the consequence of each.
 
@@ -251,17 +257,39 @@ def _gfhold(payload: bytes) -> dict[str, str | tuple[str, ...] | Record | tuple[
     return fields
 
 
+_TUPLET_FIELDS = (("symbolicNum", 0), ("symbolicDur", 2), ("refNum", 4), ("refDur", 6))
+"""ETF's documented field order, and the layout the payload actually has.
+
+**Every corpus tuplet is 3:2 over a 512-EDU reference**, so no offset sweep can
+tell these four apart -- any offset holding the right constant matches. What
+pins them is the ETF order agreeing with the natural u16 reading at 0/2/4/6,
+and then the end-to-end check: with these offsets every `.mus` sounded duration
+matches its `.musx`, which a transposed or swapped pair would not survive
+(swapping the two pairs inverts every ratio).
+"""
+
+
 def _details_records(records: tuple[MusDetailRecord, ...]) -> list[Record]:
     out: list[Record] = []
     for record in records:
-        if record.tag != TAG_GFHOLD or len(record.payload) < 10:
-            continue
-        out.append(
-            Record(
-                tag="gfhold",
-                attrs={"cmper1": str(record.cmper1), "cmper2": str(record.cmper2)},
-                text="",
-                fields=_gfhold(record.payload),
+        if record.tag == TAG_GFHOLD and len(record.payload) >= 10:
+            out.append(
+                Record(
+                    tag="gfhold",
+                    attrs={"cmper1": str(record.cmper1), "cmper2": str(record.cmper2)},
+                    text="",
+                    fields=_gfhold(record.payload),
+                )
             )
-        )
+        elif record.tag == TAG_TUPLET_DEF and len(record.payload) >= 8:
+            out.append(
+                Record(
+                    tag="tupletDef",
+                    attrs={"entnum": str(entry_key(record))},
+                    text="",
+                    fields={
+                        name: str(_u16(record.payload, offset)) for name, offset in _TUPLET_FIELDS
+                    },
+                )
+            )
     return out
