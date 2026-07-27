@@ -34,6 +34,13 @@ from finale_file_parser.enigma.location import (
     MalformedScoreError,
     locate_entries,
 )
+from finale_file_parser.enigma.lyrics import (
+    Lyric,
+    LyricKind,
+    Syllabic,
+    lyrics_by_entry,
+    verse_syllables,
+)
 from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.mus_details import (
     TAG_GFHOLD,
@@ -115,6 +122,8 @@ __all__ = [
     "Entry",
     "EntryLocation",
     "KeySignature",
+    "Lyric",
+    "LyricKind",
     "MalformedEnigmaError",
     "MalformedEntryError",
     "MalformedScoreError",
@@ -128,6 +137,7 @@ __all__ = [
     "Pool",
     "Record",
     "SpelledNote",
+    "Syllabic",
     "SpelledPitch",
     "StaffTransposition",
     "TextsPool",
@@ -158,6 +168,7 @@ __all__ = [
     "duration_from_edu",
     "decrypt",
     "locate_entries",
+    "lyrics_by_entry",
     "parse_enigma",
     "read_entry",
     "read_mus_document",
@@ -168,6 +179,7 @@ __all__ = [
     "read_mus_payload",
     "read_mus_streams",
     "read_transposition",
+    "verse_syllables",
     "score_xml",
     "spell_note",
     "spell_pitch",

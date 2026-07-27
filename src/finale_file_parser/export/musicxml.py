@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 from fractions import Fraction
 
 from finale_file_parser.errors import FinaleFileError
-from finale_file_parser.ir import Event, Measure, Part, Pitch, Score, Voice
+from finale_file_parser.ir import Event, Lyric, Measure, Part, Pitch, Score, Voice
 
 __all__ = ["MUSICXML_VERSION", "ExportError", "to_musicxml"]
 
@@ -247,3 +247,16 @@ def _append_note(
             ET.SubElement(notations, "tied", type="stop")
         if event.tie_start:
             ET.SubElement(notations, "tied", type="start")
+    # Schema order puts <lyric> last, after <notations>. Only on a chord's
+    # principal note: the syllable is sung once, not once per pitch.
+    if not chord:
+        for lyric in event.lyrics:
+            _append_lyric(note, lyric)
+
+
+def _append_lyric(note: ET.Element, lyric: Lyric) -> None:
+    element = ET.SubElement(note, "lyric", number=str(lyric.number))
+    ET.SubElement(element, "syllabic").text = lyric.syllabic
+    ET.SubElement(element, "text").text = lyric.text
+    if lyric.extend:
+        ET.SubElement(element, "extend")

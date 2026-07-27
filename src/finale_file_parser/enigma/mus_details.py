@@ -57,6 +57,13 @@ ignoring it leaves the walk short by that much. A record therefore occupies
 TAG_GFHOLD = 1044
 """`gfhold` -- confirmed by payload, not only by key sequence."""
 
+TAG_LYRIC_VERSE = 1108
+"""`lyrDataVerse` — confirmed by payload against every paired document's lyrics.
+
+One record per entry rather than one per verse: the payload is a run of 20-byte
+groups, one per verse the entry sings, so its length is 20, 40 or 60.
+"""
+
 TAG_TUPLET_DEF = 1072
 """`tupletDef` -- keyed by entry, not by a (staff, measure) pair. See `entry_key`."""
 

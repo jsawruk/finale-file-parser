@@ -120,7 +120,9 @@ limit is verified by mutation, because no real corpus archive trips one.
       rhythm all match exactly. Sounded durations and tuplet ratios match too. The
       remaining gaps are all instrument-derived — transposing staves, 22 clefs — plus part names.
       See `enigma.UNTRANSLATED`.
-- [ ] Beams, articulations, lyrics, repeats, part groups.
+- [x] **Lyrics** — `enigma/lyrics.py`, both containers, schema-validated. 12,912 syllables
+      across 85 corpus documents.
+- [ ] Beams, articulations, repeats, part groups.
 
 ## Later
 

@@ -25,7 +25,18 @@ from finale_file_parser.enigma.document import EnigmaDocument
 __all__ = ["StaffNames", "file_info", "plain_text", "staff_names", "text_block"]
 
 _MARKUP = re.compile(r"\^[A-Za-z]+\([^)]*\)")
-"""An Enigma text command: a caret, a name, and parenthesised arguments."""
+"""An Enigma text command as EnigmaXML writes it: a caret, a name, and
+parenthesised arguments."""
+
+_BINARY_MARKUP = re.compile(r"\^[\u0080-\u00ff].{4}", re.DOTALL)
+"""The same command in the dialect a `.mus` text stream uses: a caret, a
+high-byte opcode, and four argument bytes.
+
+A `.mus` writes `^\x85\x01\x01\x02\x08` where a `.musx` writes `^size(13)`.
+Both are commands rather than content, so both are stripped. The pattern is
+deliberately narrow -- caret, one byte in 0x80-0xFF, then exactly four -- so a
+caret in real lyric or title text is left alone.
+"""
 
 _TEXT_BLOCK = "textBlock"
 _BLOCK_TEXT = "blockText"
@@ -48,8 +59,11 @@ def plain_text(markup: str) -> str:
     both are commands rather than content. A block that is *only* inserts
     therefore yields an empty string -- which is the correct answer: it has no
     literal text of its own.
+
+    Handles both dialects: EnigmaXML's `^name(args)` and the binary
+    `^<opcode><4 bytes>` a `.mus` text stream uses.
     """
-    return _MARKUP.sub("", markup).strip()
+    return _BINARY_MARKUP.sub("", _MARKUP.sub("", markup)).strip()
 
 
 def text_block(document: EnigmaDocument, number: int) -> str | None:

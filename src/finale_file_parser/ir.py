@@ -21,6 +21,7 @@ from fractions import Fraction
 
 __all__ = [
     "Event",
+    "Lyric",
     "Measure",
     "Part",
     "Pitch",
@@ -50,6 +51,24 @@ class TimeSignature:
 
     beats: int
     beat_type: int
+
+
+@dataclass(frozen=True)
+class Lyric:
+    """One syllable sung by one event, in one verse.
+
+    `syllabic` says where the syllable sits in its word -- "single", "begin",
+    "middle" or "end". Enigma stores only the hyphens, so this is derived; see
+    `enigma.lyrics`.
+    """
+
+    number: int
+    """Verse number. Several lyrics on one event are several verses."""
+
+    text: str
+    syllabic: str = "single"
+    extend: bool = False
+    """A word extension: the line drawn under a syllable held across notes."""
 
 
 @dataclass(frozen=True)
@@ -88,6 +107,9 @@ class Event:
     tuplet_ratio: Fraction | None = None
     """Sounded over written, when this event is inside a tuplet. 2/3 for a
     triplet. None outside one."""
+
+    lyrics: tuple[Lyric, ...] = ()
+    """Syllables sung on this event, one per verse, in verse order."""
 
     @property
     def is_rest(self) -> bool:

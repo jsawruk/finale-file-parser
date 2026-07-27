@@ -16,13 +16,24 @@ from finale_file_parser.enigma.clef import Clef, ClefSign, clef_definitions, cle
 from finale_file_parser.enigma.document import EnigmaDocument, Record
 from finale_file_parser.enigma.key import Mode, decode_key
 from finale_file_parser.enigma.location import locate_entries
+from finale_file_parser.enigma.lyrics import Lyric as EnigmaLyric
+from finale_file_parser.enigma.lyrics import lyrics_by_entry
 from finale_file_parser.enigma.music import read_entry
 from finale_file_parser.enigma.pitch import StaffTransposition, read_transposition, spell_note
 from finale_file_parser.enigma.text import file_info, staff_names
 from finale_file_parser.enigma.timesig import TimeSignature as EnigmaTimeSignature
 from finale_file_parser.enigma.timesig import time_signatures
 from finale_file_parser.enigma.tuplet import entry_chain, sounded_durations, tuplets_by_entry
-from finale_file_parser.ir import Event, Measure, Part, Pitch, Score, TimeSignature, Voice
+from finale_file_parser.ir import (
+    Event,
+    Lyric,
+    Measure,
+    Part,
+    Pitch,
+    Score,
+    TimeSignature,
+    Voice,
+)
 
 __all__ = ["build_score"]
 
@@ -79,6 +90,7 @@ def build_score(document: EnigmaDocument) -> Score:
     sounded = sounded_durations(chain, tuplets_by_entry(document))
     records = {int(r.attrs["entnum"]): r for r in document.entries.of_tag("entry")}
     transpositions = _transpositions(document)
+    lyrics = lyrics_by_entry(document)
 
     # One pass, in chain order, so a measure's notes come out in playing order
     # rather than document order.
@@ -99,6 +111,7 @@ def build_score(document: EnigmaDocument) -> Score:
                 transposition=transpositions.get(here.staff, _NO_TRANSPOSITION),
                 written_edu=chain.written_edu[entnum],
                 sounded_edu=sounded[entnum],
+                lyrics=lyrics.get(entnum, ()),
             )
         )
 
@@ -160,6 +173,7 @@ def _event(
     transposition: StaffTransposition,
     written_edu: int,
     sounded_edu: Fraction,
+    lyrics: tuple[EnigmaLyric, ...] = (),
 ) -> Event:
     entry = read_entry(record)
     key = decode_key(key_raw)
@@ -185,6 +199,16 @@ def _event(
         tie_end=any(note.tie_end for note in entry.notes),
         tuplet_ratio=ratio,
         is_grace="graceNote" in record.fields,
+        # Verse order, so a multi-verse note emits its lyrics top to bottom.
+        lyrics=tuple(
+            Lyric(
+                number=lyric.number,
+                text=lyric.text,
+                syllabic=lyric.syllabic.value,
+                extend=lyric.extend,
+            )
+            for lyric in sorted(lyrics, key=lambda item: item.number)
+        ),
     )
 
 
