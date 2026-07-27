@@ -434,7 +434,7 @@ container.
 
 **It is an MVP and translates only the record types whose payloads are decoded**: `frameSpec`
 (startEntry, endEntry), `measSpec` (keySig.key, beats, divbeat), `gfhold` (clefID, frame1, frame2),
-`clefOptions` (the clef table — see "Known format facts — clefs"), and entries. A record type it does not understand is **absent** from the document rather than
+`clefOptions` (the clef table), `tupletDef`, and entries. A record type it does not understand is **absent** from the document rather than
 present and wrong. `enigma.UNTRANSLATED` names each remaining gap and its consequence.
 
 **The clef table** comes from `others` tag 109 under cmper `0xFFFE`, Enigma's sentinel for a
@@ -463,13 +463,23 @@ field (`tests/enigma/test_mus_to_ir_corpus_sweep.py`). Over 73 same-content pair
 | parts, measures and events, one for one | **no differences** |
 | key signatures and time signatures | **no differences** |
 | written duration, dots, ties, grace notes | **no differences** |
-| sounded duration | 1,092 events differ — every one a tuplet (`tupletDef` untranslated) |
+| sounded duration and tuplet ratio | **no differences** |
 | pitch | 4,140 differ; 4,138 on transposing staves (`staffSpec` untranslated), 2 are known content revisions |
 | clef | 22 measures differ, all instrument-derived (see below); was 327 before the clef table was decoded |
 
 The structural row is the load-bearing one: a difference there would mean entries placed in the
-wrong measure, which produces plausible output nobody notices. The rest are known gaps with pinned
-sizes, so closing one shows up as a number moving.
+wrong measure, which produces plausible output nobody notices.
+
+**Every remaining difference is instrument-derived.** The `.musx` materialises some staff defaults
+from its instrument identity (`instUuid`), and the `.mus` does not store them: staves the `.musx`
+gives transpositions an octave apart have byte-identical `.mus` `staffSpec` payloads, and the 22
+clef measures are `gfhold.clefID` 0 ("use the staff's `defaultClef`") where the `.mus` `staffSpec`
+also holds 0. Closing either needs an instrument table found elsewhere in the file, if one exists.
+
+`tupletDef` (details tag 1072) is keyed by **entry**, not by a (staff, measure) pair: entry-attached
+details pack the 32-bit `entnum` into the two key fields, high word first. Its four fields all have
+a single value corpus-wide, so the layout rests on ETF's field order plus the end-to-end duration
+check rather than on an offset sweep.
 
 One document fails to build: its `.mus` frame chain references an entry its pool does not hold. It
 is the same document whose `.musx` carries three `frameSpec` records its `.mus` does not, so the two

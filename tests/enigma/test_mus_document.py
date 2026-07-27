@@ -8,15 +8,18 @@ translation rather than writing a zero.
 from __future__ import annotations
 
 from collections.abc import Callable
+from fractions import Fraction
 
 import pytest
 
+from finale_file_parser.enigma import mus_details
 from finale_file_parser.enigma import mus_document as adapter
 from finale_file_parser.enigma.clef import ClefSign, clef_definitions
 from finale_file_parser.enigma.document import Record
-from finale_file_parser.enigma.mus_details import MusDetailRecord
+from finale_file_parser.enigma.mus_details import TAG_TUPLET_DEF, MusDetailRecord
 from finale_file_parser.enigma.mus_document import read_mus_document
 from finale_file_parser.enigma.mus_others import OPTIONS_CMPER, TAG_CLEF_OPTIONS, MusOther
+from finale_file_parser.enigma.tuplet import tuplets_by_entry
 
 PATH = "unused.mus"
 """Every reader is stubbed, so no file is ever opened."""
@@ -209,6 +212,36 @@ def test_skips_the_clef_table_when_the_era_is_unknown(pools: Callable[..., None]
         year=None,
     )
     assert clef_definitions(read_mus_document(PATH)) == {}
+
+
+def tuplet_payload(sym_num: int, sym_dur: int, ref_num: int, ref_dur: int) -> bytes:
+    return b"".join(v.to_bytes(2, "little") for v in (sym_num, sym_dur, ref_num, ref_dur)) + bytes(
+        22
+    )
+
+
+def test_translates_a_tuplet_and_keys_it_by_entry(pools: Callable[..., None]) -> None:
+    """A detail hanging off an entry packs the 32-bit entnum into the two key
+    fields, high word first."""
+    pools(details=(MusDetailRecord(TAG_TUPLET_DEF, 1, 4660, 0, tuplet_payload(3, 512, 2, 512)),))
+    record = mus_details.entry_key(MusDetailRecord(TAG_TUPLET_DEF, 1, 4660, 0, b""))
+    assert record == 70196
+    tuplets = tuplets_by_entry(read_mus_document(PATH))
+    assert list(tuplets) == [70196]
+    assert tuplets[70196][0].ratio == Fraction(2, 3)
+
+
+def test_a_tuplet_ratio_is_not_inverted(pools: Callable[..., None]) -> None:
+    """Every corpus tuplet is 3:2, so nothing in the data distinguishes
+    `symbolicNum` from `refNum`. A 5:4 case would come out 4/5 if the pairs were
+    swapped, and 5/4 if not."""
+    pools(details=(MusDetailRecord(TAG_TUPLET_DEF, 0, 9, 0, tuplet_payload(5, 256, 4, 256)),))
+    assert tuplets_by_entry(read_mus_document(PATH))[9][0].ratio == Fraction(4, 5)
+
+
+def test_skips_a_tuplet_payload_too_short_for_its_fields(pools: Callable[..., None]) -> None:
+    pools(details=(MusDetailRecord(TAG_TUPLET_DEF, 0, 9, 0, b"\x03\x00"),))
+    assert tuplets_by_entry(read_mus_document(PATH)) == {}
 
 
 def test_reports_what_it_does_not_translate() -> None:

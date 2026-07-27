@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.mus_payload import read_mus_streams
 
-__all__ = ["MusDetailRecord", "TAG_GFHOLD", "read_mus_details"]
+__all__ = ["MusDetailRecord", "TAG_GFHOLD", "TAG_TUPLET_DEF", "read_mus_details", "entry_key"]
 
 _HEADER = 12
 """tag (2) + cmper1 (2) + cmper2 (2) + inci (2) + length (4)."""
@@ -49,6 +49,9 @@ _TRAILER = 4
 
 TAG_GFHOLD = 1044
 """`gfhold` -- confirmed by payload, not only by key sequence."""
+
+TAG_TUPLET_DEF = 1072
+"""`tupletDef` -- keyed by entry, not by a (staff, measure) pair. See `entry_key`."""
 
 _MAX_PAYLOAD = 64 * 1024
 """Refuse a record claiming more than 64 KiB.
@@ -85,6 +88,18 @@ class MusDetailRecord:
     cmper2: int
     inci: int
     payload: bytes
+
+
+def entry_key(record: MusDetailRecord) -> int:
+    """The 32-bit entry number a detail is attached to.
+
+    Details that hang off an *entry* rather than a (staff, measure) reuse the two
+    key fields as one number, **high word first**: `cmper1` is the top sixteen
+    bits. Confirmed against the paired `.musx` on every `tupletDef` in the
+    corpus; the little-endian reading matches none of them, so the order is not
+    a guess.
+    """
+    return (record.cmper1 << 16) | record.cmper2
 
 
 def read_mus_details(path: str | os.PathLike[str]) -> tuple[MusDetailRecord, ...]:
