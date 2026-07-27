@@ -76,6 +76,17 @@ OPTIONS_CMPER = 0xFFFE
 34: the `.mus` split is finer, so the two pools' record counts do not correspond.
 """
 
+_PADDING = frozenset({0x0000, 0xFFFF})
+"""Two-byte filler words that separate sections, skipped rather than parsed.
+
+`0x0000` was always handled. **`0xFFFF` is filler too**, and missing that was
+what stopped the walk on seven corpus documents: a run of `0xFFFF` words parses
+as a record whose declared length is 0, so the walk fell four bytes short of the
+next one each time and eventually landed mid-record. Treating it as filler lands
+exactly on the next real record. No tag in either pool is 65535, and the format
+already uses the same family of sentinels elsewhere (`OPTIONS_CMPER` is 0xFFFE).
+"""
+
 _MAX_PAYLOAD = 64 * 1024
 """Refuse a record claiming more than 64 KiB.
 
@@ -151,8 +162,8 @@ def _walk(stream: bytes) -> tuple[MusOther, ...] | None:
     records: list[MusOther] = []
     position = 0
     while position + _HEADER <= len(stream):
-        if not _u16(stream, position):
-            position += 2  # inter-section padding
+        if _u16(stream, position) in _PADDING:
+            position += 2
             continue
         length = _u32(stream, position + 6)
         end = position + _HEADER + length + _TRAILER

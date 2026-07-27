@@ -76,6 +76,21 @@ def test_skips_two_byte_padding_between_sections(streams: Callable[..., None]) -
     assert [r.tag for r in read_mus_details(PATH)[:2]] == [1044, 1043]
 
 
+def test_skips_all_ones_filler_as_well_as_zeros(streams: Callable[..., None]) -> None:
+    """A run of 0xFFFF parses as records of declared length 0, which leaves the
+    walk four bytes short of the next real record each time. Seven corpus
+    documents stopped here before it was recognised as filler."""
+    streams(pool(record(1044, 1, 1, 0, b""), b"\xff\xff" * 10, record(1043, 2, 1, 0, b"")))
+    assert [r.tag for r in read_mus_details(PATH)[:2]] == [1044, 1043]
+
+
+def test_all_ones_filler_yields_no_record(streams: Callable[..., None]) -> None:
+    """Filler must vanish, not become a tag-65535 record: the old walk produced
+    four such phantoms in one corpus document."""
+    streams(pool(b"\xff\xff" * 12))
+    assert all(r.tag != 0xFFFF for r in read_mus_details(PATH))
+
+
 def test_picks_the_stream_that_tiles_exactly(streams: Callable[..., None]) -> None:
     streams(b"\x01\x02\x03", pool(record(1044, 1, 1, 0, bytes(20))))
     assert read_mus_details(PATH)[0].tag == 1044

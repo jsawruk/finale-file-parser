@@ -66,6 +66,12 @@ def test_skips_two_byte_padding_between_sections(streams: Callable[..., None]) -
     assert tags == [146, 147]
 
 
+def test_skips_all_ones_filler_as_well_as_zeros(streams: Callable[..., None]) -> None:
+    """0xFFFF is filler, like 0x0000 -- see the details reader's test for why."""
+    streams(pool(record(146, 3, 0, b""), b"\xff\xff" * 10, record(147, 4, 0, b"")))
+    assert [r.tag for r in read_mus_others(PATH)[:2]] == [146, 147]
+
+
 def test_picks_the_stream_that_tiles_exactly(streams: Callable[..., None]) -> None:
     streams(b"\x01\x02\x03", pool(record(146, 3, 0, b"")))
     assert read_mus_others(PATH)[0].tag == 146
