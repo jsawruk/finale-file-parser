@@ -25,6 +25,7 @@ Translated:
 | details | `gfhold` (1044) | `clefID`, `frame1`, `frame2` |
 | options | `clefOptions` (109) | the clef table: `adjust`, `clefChar`, `clefYDisp`, `shapeID` |
 | details | `tupletDef` (1072) | `symbolicNum`, `symbolicDur`, `refNum`, `refDur` |
+| others | `staffSpec` (231) | `transposition.keysig.adjust` only — see below |
 
 Every field above is confirmed against paired `.musx` files; see
 `docs/formats/mus-binary-notes.md` for the evidence behind each.
@@ -57,6 +58,7 @@ from finale_file_parser.enigma.mus_others import (
     TAG_CLEF_OPTIONS,
     TAG_FRAME_SPEC,
     TAG_MEAS_SPEC,
+    TAG_STAFF_SPEC,
     MusOther,
     read_mus_others,
 )
@@ -65,13 +67,16 @@ from finale_file_parser.version import mus as mus_header
 __all__ = ["UNTRANSLATED", "read_mus_document"]
 
 UNTRANSLATED = (
-    "staffSpec: part names and staff transposition. The record is located (others "
-    "tag 231) but the transposition's octave is provably NOT in it -- staves the "
-    ".musx gives intervals an octave apart have byte-identical .mus payloads, "
-    "differing only in the .musx's instUuid. So transposing staves cannot be "
-    "spelled correctly from a .mus until an instrument table is found, if one "
-    "exists. Parts fall back to positional names. See docs/formats/"
-    "mus-binary-notes.md.",
+    "staffSpec transposition interval: the octave is provably NOT in the record -- "
+    "staves the .musx gives intervals an octave apart have byte-identical .mus "
+    "payloads. The key alteration IS recovered, which is all the written pitch "
+    "needs, so note letters are right; what stays wrong is the octave on those "
+    "staves, and the concert pitch spell_note returns alongside the written one. "
+    "See docs/formats/mus-binary-notes.md.",
+    "staffSpec part names: fullName and abbrvName are at +30 and +32 and are "
+    "non-zero exactly where the .musx names a staff, but they reference .mus "
+    "text blocks whose numbering is not yet resolved. Parts fall back to "
+    "positional names.",
     "Instrument-derived clefs: where a gfhold stores clefID 0 it means 'use the "
     "staff's defaultClef', and for some staves the .mus stores 0 there too while "
     "the .musx materialises a real clef. Those measures come out treble. Same "
@@ -109,6 +114,17 @@ _CLEF_FIELD_OFFSETS = {
 }
 """Field offsets within a clef entry, per stride. 2012 inserts two bytes after
 `clefChar` and two more before `shapeID`; everything else is shared."""
+
+_STAFF_TRANSPOSITION = 20
+"""Offset of `staffSpec`'s `transposition` field, per ETF's documented field
+order (`... topBarlineOffset transposition instflag dw_wRest ...`)."""
+
+_ALTERATION_MAGNITUDE = 0x07
+_ALTERATION_SIGN = 0x08
+"""The transposition's key alteration is its low nibble, read the way
+`eeppd.txt` documents a note TCD's alteration: sign and magnitude, bit 3 being
+the sign, not two's complement. Every corpus value is positive, so the two
+readings agree here -- the TCD is what decides which to use, not the corpus."""
 
 _CLEF_SIGNED = {"adjust", "clefYDisp"}
 """`clefChar` and `shapeID` are unsigned; the two displacements are not."""
@@ -218,7 +234,34 @@ def _others_records(records: tuple[MusOther, ...]) -> list[Record]:
             out.append(
                 Record(tag="measSpec", attrs=attrs, text="", fields=_meas_spec(record.payload))
             )
+        elif record.tag == TAG_STAFF_SPEC and len(record.payload) >= _STAFF_TRANSPOSITION + 2:
+            out.append(
+                Record(tag="staffSpec", attrs=attrs, text="", fields=_staff_spec(record.payload))
+            )
     return out
+
+
+def _staff_spec(payload: bytes) -> dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]]:
+    """Only the transposition's key alteration -- which is all written pitch needs.
+
+    `transpose_key` uses `adjust` alone; `interval` is accepted "for symmetry
+    with transpose_pitch and does not affect the key". So recovering `adjust`
+    fixes the written key, and with it every transposing staff's note letters,
+    without the octave the `.mus` does not store.
+
+    **`interval` is deliberately left absent, which reads as 0.** That is
+    correct for the written pitch the IR uses and *wrong* for the concert pitch
+    `spell_note` also returns -- a `.mus` cannot supply it. See UNTRANSLATED.
+    """
+    raw = _u16(payload, _STAFF_TRANSPOSITION)
+    magnitude = raw & _ALTERATION_MAGNITUDE
+    adjust = -magnitude if raw & _ALTERATION_SIGN else magnitude
+    if not adjust:
+        return {}
+    keysig = Record(tag="keysig", attrs={}, text="", fields={"adjust": str(adjust)})
+    return {
+        "transposition": Record(tag="transposition", attrs={}, text="", fields={"keysig": keysig})
+    }
 
 
 def _meas_spec(payload: bytes) -> dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]]:

@@ -18,7 +18,13 @@ from finale_file_parser.enigma.clef import ClefSign, clef_definitions
 from finale_file_parser.enigma.document import Record
 from finale_file_parser.enigma.mus_details import TAG_TUPLET_DEF, MusDetailRecord
 from finale_file_parser.enigma.mus_document import read_mus_document
-from finale_file_parser.enigma.mus_others import OPTIONS_CMPER, TAG_CLEF_OPTIONS, MusOther
+from finale_file_parser.enigma.mus_others import (
+    OPTIONS_CMPER,
+    TAG_CLEF_OPTIONS,
+    TAG_STAFF_SPEC,
+    MusOther,
+)
+from finale_file_parser.enigma.pitch import read_transposition
 from finale_file_parser.enigma.tuplet import tuplets_by_entry
 
 PATH = "unused.mus"
@@ -147,8 +153,10 @@ def test_passes_entry_records_through(pools: Callable[..., None]) -> None:
 
 def test_skips_record_types_it_cannot_translate(pools: Callable[..., None]) -> None:
     """An undecoded payload is left out, never guessed at."""
+    # 140 is fretboardSymbol and 1043 fretboard: both identified by key
+    # sequence only, so neither is translated.
     pools(
-        others=(MusOther(231, 1, 0, bytes(84)),),
+        others=(MusOther(140, 1, 0, bytes(84)),),
         details=(MusDetailRecord(1043, 1, 1, 0, bytes(40)),),
     )
     document = read_mus_document(PATH)
@@ -242,6 +250,53 @@ def test_a_tuplet_ratio_is_not_inverted(pools: Callable[..., None]) -> None:
 def test_skips_a_tuplet_payload_too_short_for_its_fields(pools: Callable[..., None]) -> None:
     pools(details=(MusDetailRecord(TAG_TUPLET_DEF, 0, 9, 0, b"\x03\x00"),))
     assert tuplets_by_entry(read_mus_document(PATH)) == {}
+
+
+def staff_spec_payload(transposition: int) -> bytes:
+    payload = bytearray(84)
+    payload[20:22] = transposition.to_bytes(2, "little")
+    return bytes(payload)
+
+
+@pytest.mark.parametrize(
+    ("stored", "adjust"),
+    [(0x0000, 0), (0x0101, 1), (0x0042, 2), (0x0F83, 3)],
+)
+def test_reads_the_transposition_key_alteration(
+    pools: Callable[..., None], stored: int, adjust: int
+) -> None:
+    """The alteration is the low nibble; the upper bits are something else and
+    are deliberately not interpreted."""
+    pools(others=(MusOther(TAG_STAFF_SPEC, 1, 0, staff_spec_payload(stored)),))
+    record = read_mus_document(PATH).others.get("staffSpec", 1)
+    assert record is not None
+    assert read_transposition(record).adjust == adjust
+
+
+def test_a_negative_alteration_is_sign_and_magnitude(pools: Callable[..., None]) -> None:
+    """Bit 3 is the sign, as `eeppd.txt` documents for a note TCD -- not two's
+    complement, under which 0x9 would read as -7 rather than -1. Every corpus
+    value is positive, so nothing in the corpus distinguishes these."""
+    pools(others=(MusOther(TAG_STAFF_SPEC, 1, 0, staff_spec_payload(0x0009)),))
+    record = read_mus_document(PATH).others.get("staffSpec", 1)
+    assert record is not None
+    assert read_transposition(record).adjust == -1
+
+
+def test_the_transposition_interval_is_left_absent(pools: Callable[..., None]) -> None:
+    """The `.mus` does not store it. Absent reads as 0, which is right for the
+    written pitch and wrong for the concert pitch -- see UNTRANSLATED."""
+    pools(others=(MusOther(TAG_STAFF_SPEC, 1, 0, staff_spec_payload(0x0042)),))
+    record = read_mus_document(PATH).others.get("staffSpec", 1)
+    assert record is not None
+    assert read_transposition(record).interval == 0
+
+
+def test_a_concert_staff_gets_no_transposition_record(pools: Callable[..., None]) -> None:
+    pools(others=(MusOther(TAG_STAFF_SPEC, 1, 0, staff_spec_payload(0)),))
+    record = read_mus_document(PATH).others.get("staffSpec", 1)
+    assert record is not None
+    assert "transposition" not in record.fields
 
 
 def test_reports_what_it_does_not_translate() -> None:

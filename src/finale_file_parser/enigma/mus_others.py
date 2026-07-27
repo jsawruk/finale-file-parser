@@ -42,6 +42,7 @@ __all__ = [
     "TAG_CLEF_OPTIONS",
     "TAG_FRAME_SPEC",
     "TAG_MEAS_SPEC",
+    "TAG_STAFF_SPEC",
     "MusOther",
     "read_mus_others",
 ]
@@ -55,6 +56,10 @@ TAG_FRAME_SPEC = 146
 """`frameSpec` — confirmed by payload, not only by key sequence."""
 TAG_MEAS_SPEC = 176
 """`measSpec` — confirmed by payload, not only by key sequence."""
+
+TAG_STAFF_SPEC = 231
+"""`staffSpec` — confirmed by payload (rest offsets, staff lines, repeat-dot
+offsets), not by key sequence."""
 
 TAG_CLEF_OPTIONS = 109
 """The clef definition table — confirmed by payload.
