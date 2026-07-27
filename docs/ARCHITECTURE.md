@@ -482,6 +482,13 @@ on exactly the staves where `harm_lev_octave_shift` is non-zero. The **`interval
 which is correct for the written pitch and wrong for the concert pitch `spell_note` returns
 alongside it: a `.mus` cannot supply that.
 
+**Why it cannot.** Finale normalises a staff's transposition into a residue of −4..+2 and keeps the
+octave count separately; the `.mus` stores only the residue, so intervals 0 and 7 both store
+`0x0000`, 1 and 8 both `0x0042`, 5 and 12 both `0x0F83`. The octave is absent from the file rather
+than hidden in it — which is also why `harm_lev_octave_shift`'s boundary sits at interval 5: its
+`+ 2` is the normalisation boundary, not a fitted constant. See `harm_lev_octave_shift` and
+`docs/formats/mus-binary-notes.md`.
+
 `tupletDef` (details tag 1072) is keyed by **entry**, not by a (staff, measure) pair: entry-attached
 details pack the 32-bit `entnum` into the two key fields, high word first. Its four fields all have
 a single value corpus-wide, so the layout rests on ETF's field order plus the end-to-end duration

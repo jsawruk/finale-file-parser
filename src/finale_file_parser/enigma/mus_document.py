@@ -67,12 +67,16 @@ from finale_file_parser.version import mus as mus_header
 __all__ = ["UNTRANSLATED", "read_mus_document"]
 
 UNTRANSLATED = (
-    "staffSpec transposition interval: the octave is provably NOT in the record -- "
-    "staves the .musx gives intervals an octave apart have byte-identical .mus "
-    "payloads. The key alteration IS recovered, which is all the written pitch "
-    "needs, so note letters are right; what stays wrong is the octave on those "
-    "staves, and the concert pitch spell_note returns alongside the written one. "
-    "See docs/formats/mus-binary-notes.md.",
+    "staffSpec transposition octave: Finale normalises a staff's transposition into "
+    "a residue of -4..+2 and keeps the octaves separately, and the .mus stores "
+    "only the residue -- so staves whose transpositions differ by an octave hold "
+    "byte-identical payloads. The octave is absent from the file rather than "
+    "hidden in it, and a .mus therefore fixes a transposing staff's written pitch "
+    "only up to an octave. The key alteration IS recovered, which is all the "
+    "written pitch needs otherwise, so note letters and accidentals are right; "
+    "what stays wrong is the octave on those staves, and the concert pitch "
+    "spell_note returns alongside the written one. See harm_lev_octave_shift and "
+    "docs/formats/mus-binary-notes.md.",
     "staffSpec part names: the reference at +30/+32 does not resolve to a text "
     "block -- the best candidate chain matches 16 of 59 staves, and by hand it "
     "picks a trumpet block for a saxophone part. The .musx is only a fuzzy oracle "

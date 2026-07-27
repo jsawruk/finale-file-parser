@@ -90,21 +90,40 @@ def harm_lev_octave_shift(interval: int) -> int:
     a non-transposing staff, where the shift is 0.
 
     `read_mus_entries` does **not** apply this, because the entry pool carries no
-    staff information -- the transposition lives in the `others` pool. That pool
-    is now readable (`read_mus_others`), but `staffSpec`'s payload layout is not
-    yet decoded, so the transposition is still not reachable from a `.mus`.
-    Apply this at the point where the staff is known.
+    staff information. `read_mus_document` does not either, because the `.mus`
+    cannot supply the `interval` this needs -- see below. Apply it at the point
+    where the staff transposition is known, which in practice means a `.musx`.
 
-    The rule is **empirical, not derived**. Measured across every confirmed
-    `.mus`/`.musx` pair -- 30,891 notes over seven distinct transpositions:
+    **This is the octave count of the normalised transposition, not an empirical
+    fudge.** Finale folds the sounding interval into a residue in -4..+2 and keeps
+    the octaves separately; `.mus` stores only the residue. Writing the sounding
+    direction as `d = -interval`, the residue is `d - 7 * octaves` and this
+    function returns `7 * octaves`:
 
-        interval 0, 1, 4          ->   0
-        interval 5, 7, 8          ->  -7
-        interval 12               -> -14
+        interval  sounding  residue  octaves  shift
+               0         0        0        0      0
+               1        -1       -1        0      0
+               4        -4       -4        0      0
+               5        -5        2       -1     -7
+               7        -7        0       -1     -7
+               8        -8       -1       -1     -7
+              12       -12        2       -2    -14
 
-    Applying it makes 30,888 of 30,891 notes agree exactly. *Why* the octave moves
-    at interval 5 rather than 7 is not understood; see
-    `docs/formats/mus-binary-notes.md`.
+    So a major 6th down is stored as a minor 3rd up less an octave, and a major
+    9th down as a major 2nd down less an octave. That is why the octave moves at
+    interval 5 rather than 7 -- the `+ 2` below is the normalisation boundary, not
+    a fitted constant. Earlier revisions of this docstring called the rule
+    empirical and the boundary unexplained; it is neither.
+
+    The consequence for `.mus` is structural: staves whose transpositions share a
+    residue store **byte-identical** `staffSpec` payloads -- intervals 0 and 7
+    both store 0x0000, 1 and 8 both 0x0042, 5 and 12 both 0x0F83. The octave is
+    not hidden in the file, it is absent from it, so a `.mus` determines a
+    transposing staff's written pitch only up to an octave. Finale pinned it down
+    when it wrote the `.musx`, using its instrument definition.
+
+    Verified across every confirmed `.mus`/`.musx` pair: applying this makes
+    30,888 of 30,891 notes agree exactly. See `docs/formats/mus-binary-notes.md`.
     """
     return -7 * ((interval + 2) // 7)
 

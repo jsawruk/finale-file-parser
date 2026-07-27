@@ -128,6 +128,72 @@ the same case: the `gfhold` stores `clefID` 0, meaning "use the staff's `default
 instrument-derived gap already documented below, not a decode error — so 22 is a floor until an
 instrument table is found.
 
+## ✅ SOLVED: the `.mus` stores the transposition **normalised to within an octave**
+
+This retires two things at once: the long-standing "the octave shift's boundary at interval 5 is
+empirical, why unknown", and the framing of the transposing-staff gap as *instrument-derived data
+we failed to locate*. Neither survives.
+
+**Finale folds a staff's sounding interval into a residue in −4..+2 and keeps the octaves
+separately. The `.mus` stores only the residue.** Writing the sounding direction as `d = −interval`:
+
+| stored word | residue | intervals sharing it | octaves | `harm_lev_octave_shift` |
+| --- | --- | --- | --- | --- |
+| `0x0000` | 0 | **0** and **7** | 0, −1 | 0, −7 |
+| `0x0042` | −1 | **1** and **8** | 0, −1 | 0, −7 |
+| `0x0101` | −4 | 4 | 0 | 0 |
+| `0x0F83` | +2 | **5** and **12** | −1, −2 | −7, −14 |
+
+`7 × octaves == harm_lev_octave_shift(interval)` on every row. So a major 6th down is stored as a
+minor 3rd up less an octave, and a major 9th down as a major 2nd down less an octave.
+
+### What this explains
+
+- **The `+ 2` in `−7 · ((interval + 2) // 7)` is the normalisation boundary**, not a fitted
+  constant. The octave moves at interval 5 rather than 7 because that is where the residue wraps.
+  The rule is derived, not empirical.
+- **Why the byte-by-byte search found nothing.** The staves whose `staffSpec` payloads are
+  byte-identical are exactly those sharing a residue. The octave is not hidden in the file; it is
+  **absent from it**. A `.mus` determines a transposing staff's written pitch only *up to an
+  octave*, and Finale pinned it down when writing the `.musx`, from its instrument definition.
+- **The residue is the real decodable field.** It yields `interval mod 7` from the format itself,
+  which is a sounder basis for any future work than the `(adjust, clef)` correlation below.
+
+### ⛔ REFUTED: that the octave follows from the key's tonic
+
+`eeppd.txt` places `harm_lev` 0 at "the tonic of the current key in the octave from middle C to the
+C above", so referencing the same written pitch to the concert key rather than the written key would
+shift it by `7 · ⌊(tonic index + interval) / 7⌋` — a whole octave, exactly the observed shape. It is
+still wrong. Predicting the difference that way scores **30,477** of 30,891 notes against the
+existing formula's **30,888**: tonic B♭ and tonic E♭ staves both give 0 at interval 1 and 7 at
+interval 5, so the difference does not depend on the key at all. Recorded because the hypothesis is
+a natural one and the arithmetic looks right.
+
+### The `(adjust, clef)` correlation — a lead, and its limits
+
+Across all 401 corpus documents, `(adjust, clef)` determines the octave shift for **8 of 10**
+combinations, covering ~15 named instruments: `(2,F)` → −7 (Tenor Sax, B♭ Bass Clarinet), `(3,G)` →
+−7 (Alto Sax), `(3,F)` → −14 (Baritone Sax), `(1,G)` → 0 (Horn in F, English Horn), `(2,G)` → 0
+(B♭ Trumpet, Clarinet in B♭).
+
+The two it cannot resolve are **exactly the pure-octave transposers**, and that is structural rather
+than accidental: an octave transposition does not change the key signature, so `adjust` is 0 by
+definition.
+
+- `(0, F)`: Double Bass / Bass / Acoustic Bass (−7) against Cello, Trombone, Tuba, Bassoon (0)
+- `(0, G)`: Guitar / Classical Guitar (−7) and **Xylophone (+7**, the corpus's only octave-up
+  transposer) against Flute, Oboe, Violin, Voice (0)
+
+**Nothing in the `.mus` separates them.** No byte, 2-byte or 4-byte field anywhere in `staffSpec`'s
+84 bytes has disjoint values between the 5 Double Bass staves and 170 concert staves — `instflag`
+at +22 is 256 for Double Bass and for 62 concert staves — and no byte of `gfhold`'s 20 separates 225
+octave-transposing records from 7,852 concert ones. Those are the only two per-staff record types in
+the file, so that is the entire surface.
+
+Note also that the clef carries no octave information of its own: `(2,F)` → −7 works because B♭
+instruments written in bass clef happen to be the low ones. That is an orchestration convention, not
+a fact in the format, and a B♭ trumpet part notated in bass clef would break it.
+
 ## ✅ The transposition's key alteration IS recoverable — and it is all written pitch needs
 
 The instrument hunt (below) established that the transposition's **octave** is not in the file. That
