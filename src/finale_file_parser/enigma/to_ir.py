@@ -9,10 +9,11 @@ working.
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from fractions import Fraction
 
 from finale_file_parser.enigma.articulations import articulations_by_entry
+from finale_file_parser.enigma.beams import BeamedNote, beams_for
 from finale_file_parser.enigma.clef import Clef, ClefSign, clef_definitions, clefs_by_measure
 from finale_file_parser.enigma.document import EnigmaDocument, Record
 from finale_file_parser.enigma.key import Mode, decode_key
@@ -79,6 +80,10 @@ class _Cell:
 
     events_by_layer: dict[int, list[Event]]
     key_raw: int
+    starts_beam: dict[int, list[bool]] = field(default_factory=lambda: defaultdict(list))
+    """Enigma's beam bit per event, parallel to `events_by_layer`. Kept beside
+    the events rather than on them: it is an Enigma detail the IR has no need
+    of once the beams themselves are worked out."""
 
 
 def build_score(document: EnigmaDocument) -> Score:
@@ -106,6 +111,7 @@ def build_score(document: EnigmaDocument) -> Score:
             (here.staff, here.measure),
             _Cell(events_by_layer=defaultdict(list), key_raw=here.key_signature),
         )
+        cell.starts_beam[here.layer].append("beam" in record.fields)
         cell.events_by_layer[here.layer].append(
             _event(
                 record=record,
@@ -117,6 +123,9 @@ def build_score(document: EnigmaDocument) -> Score:
                 articulations=articulations.get(entnum, ()),
             )
         )
+
+    for cell in cells.values():
+        _apply_beams(cell)
 
     signatures = time_signatures(document)
     clef_table = clef_definitions(document)
@@ -156,6 +165,30 @@ def build_score(document: EnigmaDocument) -> Score:
         composer=info.get("composer", ""),
         metadata={k: v for k, v in info.items() if k not in {"title", "composer"}},
     )
+
+
+def _apply_beams(cell: _Cell) -> None:
+    """Replace each layer's events with the same events carrying their beams.
+
+    Beaming is a property of a run of notes, not of one note, so it can only be
+    worked out once a layer's events are all in playing order -- which is why
+    this is a second pass rather than part of `_event`.
+    """
+    for layer, events in cell.events_by_layer.items():
+        flags = cell.starts_beam[layer]
+        notes = [
+            BeamedNote(
+                written_duration=event.written_duration,
+                dots=event.dots,
+                is_rest=event.is_rest,
+                starts_group=starts,
+            )
+            for event, starts in zip(events, flags, strict=True)
+        ]
+        cell.events_by_layer[layer] = [
+            replace(event, beams=tuple(beams)) if beams else event
+            for event, beams in zip(events, beams_for(notes), strict=True)
+        ]
 
 
 def _transpositions(document: EnigmaDocument) -> dict[int, StaffTransposition]:

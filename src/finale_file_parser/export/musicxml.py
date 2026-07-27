@@ -241,6 +241,12 @@ def _append_note(
         # triplet sounds 2/3, and is 3 notes in the time of 2.
         ET.SubElement(modification, "actual-notes").text = str(event.tuplet_ratio.denominator)
         ET.SubElement(modification, "normal-notes").text = str(event.tuplet_ratio.numerator)
+    # Schema order puts <beam> after <time-modification> and before
+    # <notations>. Only on a chord's principal note: the beam belongs to the
+    # stem, and the schema allows at most eight per note.
+    if not chord:
+        for beam in event.beams:
+            ET.SubElement(note, "beam", number=str(beam.number)).text = beam.type
     # One <notations> holds both, in schema order: tied before articulations.
     # A chord's marks belong to the event, so only its principal note carries
     # them -- repeating per pitch would print the staccato three times.

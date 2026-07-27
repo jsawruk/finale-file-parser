@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 
 from finale_file_parser.enigma.models import CorruptScoreError
-from finale_file_parser.enigma.mus_entries import harm_lev_octave_shift, read_mus_entries
+from finale_file_parser.enigma.mus_entries import (
+    harm_lev_octave_shift,
+    read_mus_entries,
+    read_mus_entry_records,
+)
 from finale_file_parser.enigma.music import NoteValue
 
 SLOT = 38
@@ -18,6 +22,7 @@ SETBIT = 0x80000000
 NOTEBIT = 0x40000000
 TIE_START = 0x40000000
 TIE_END = 0x20000000
+BEATBIT = 0x00000800
 
 
 def _slot(entnum: int, index: int, payload: bytes) -> bytes:
@@ -90,6 +95,22 @@ def test_rest_has_no_notes_even_though_a_placeholder_is_stored(tmp_path: Path) -
     entries = read_mus_entries(path)
     assert entries[0].is_rest
     assert entries[0].notes == ()
+
+
+def test_the_beam_bit_is_surfaced(tmp_path: Path) -> None:
+    """`BEATBIT` says the entry starts a beam group. Nothing downstream can
+    recover it, so dropping it silently loses every beam in the file -- and the
+    typed `Entry` does not carry it, so only the record view can be checked."""
+    pool = (
+        _entry_slot(1, dura=512, flag=SETBIT | NOTEBIT | BEATBIT, notes=[(0x0000, SETBIT)])
+        + _entry_slot(2, dura=512, flag=SETBIT | NOTEBIT, notes=[(0x0000, SETBIT)])
+        + _pool(150)
+    )
+    path = tmp_path / "beam.mus"
+    path.write_bytes(_mus_file(pool))
+    records = read_mus_entry_records(path)
+    assert "beam" in records[0].fields
+    assert "beam" not in records[1].fields
 
 
 @pytest.mark.parametrize(

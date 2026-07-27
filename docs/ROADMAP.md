@@ -125,7 +125,9 @@ limit is verified by mutation, because no real corpus archive trips one.
 - [x] **Articulations** — `enigma/articulations.py`, both containers. 22,821 marks across 273
       documents, from the five music-font characters with cross-font evidence; fingerings and the
       other 24 characters are deliberately not guessed at.
-- [ ] Beams, repeats, part groups, fingerings.
+- [x] **Beams** — `enigma/beams.py`, both containers. 84,620 beams across 366 documents, with
+      secondary beams and hooks; Enigma stores only a "starts a group" bit, so the rest is derived.
+- [ ] Repeats, part groups, fingerings.
 
 ## Later
 

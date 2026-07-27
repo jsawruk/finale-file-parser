@@ -6,6 +6,7 @@ from finale_file_parser.enigma.articulations import (
     ARTICULATION_CHARACTERS,
     articulations_by_entry,
 )
+from finale_file_parser.enigma.beams import BeamedNote, beams_for
 from finale_file_parser.enigma.blast import CorruptDclStreamError, blast_decompress
 from finale_file_parser.enigma.clef import (
     Clef,
@@ -112,6 +113,7 @@ from finale_file_parser.enigma.tuplet import (
 
 __all__ = [
     "ARTICULATION_CHARACTERS",
+    "BeamedNote",
     "MAX_INFLATED",
     "MAX_MUS_PAYLOAD",
     "UNTRANSLATED",
@@ -148,6 +150,7 @@ __all__ = [
     "TextsPool",
     "UnsupportedKeyError",
     "articulations_by_entry",
+    "beams_for",
     "blast_decompress",
     "EntryChain",
     "Tuplet",
