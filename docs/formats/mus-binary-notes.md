@@ -165,10 +165,17 @@ statistics suggest — in a Tenor Sax part, `staffSpec` +30 is 93, tag 183 (the 
 at cmper 93 holds 22, and **block 22 is "B♭ Trumpet"**. Shipping that would label a saxophone part
 as a trumpet: plausible, wrong, and invisible without checking.
 
-**2. The `.musx` is not a valid oracle here.** The two containers hold *different strings* for the
-same staff. The `.musx` says "Tenor Sax"; the `.mus` blocks say "Tenor Saxophone" (block 12) and
-"B♭ Tenor Saxophone" (block 28). So even a resolution that worked could not be validated against
-the paired file, because the paired file disagrees about the text itself.
+**2. The `.musx` is a *fuzzy* oracle, not an exact one.** The two containers hold different strings
+for the same staff: the `.musx` says "Tenor Sax" where the `.mus` blocks say "Tenor Saxophone"
+(block 12) and "B♭ Tenor Saxophone" (block 28).
+
+**These are synonyms, not a disagreement** — an earlier draft of this section called the `.musx`
+unusable here, which was too strong. A name match has to tolerate abbreviation ("Tenor Sax" is a
+substring of "Tenor Saxophone"; "Vc." and "Cello" are not related by substring at all), so the
+oracle exists but is approximate, and a scoring search must be written to allow it. The 16-of-59
+result above already used substring matching with a first-word fallback, so it is not an artifact
+of demanding exact equality. What it cannot do is distinguish "close enough" from "wrong" at the
+margin, which is why the trumpet-for-saxophone case is the decisive evidence rather than the ratio.
 
 ### What the text stream does hold — for whoever picks this up
 
