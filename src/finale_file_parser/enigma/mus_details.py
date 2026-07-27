@@ -44,8 +44,15 @@ __all__ = ["MusDetailRecord", "TAG_GFHOLD", "TAG_TUPLET_DEF", "read_mus_details"
 
 _HEADER = 12
 """tag (2) + cmper1 (2) + cmper2 (2) + inci (2) + length (4)."""
-_TRAILER = 4
-"""Four bytes follow every payload before the next record's header."""
+_EXTRA_LENGTH = 4
+"""Size of the second length field, which follows the payload.
+
+What earlier revisions called a fixed four-byte trailer is really the length of
+an **extra block**. It is zero on 99.4% of corpus records, which is why a fixed
+trailer worked for so long; where it is not zero it is 24, 48 or 96, and
+ignoring it leaves the walk short by that much. A record therefore occupies
+`header + length + 4 + extra`.
+"""
 
 TAG_GFHOLD = 1044
 """`gfhold` -- confirmed by payload, not only by key sequence."""
@@ -64,11 +71,19 @@ exactly on the next real record. No tag in either pool is 65535, and the format
 already uses the same family of sentinels elsewhere (`OPTIONS_CMPER` is 0xFFFE).
 """
 
-_MAX_PAYLOAD = 64 * 1024
-"""Refuse a record claiming more than 64 KiB.
+_MAX_PAYLOAD = 1024 * 1024
+"""Refuse a record claiming more than 1 MiB.
 
-Matches the `others` reader's cap for the same reason: it bounds a hostile
-length field while leaving ample room over any real record.
+**The previous 64 KiB cap was measured circularly** and was itself the reason
+six corpus documents would not read: the "largest payload is 7,008 bytes" figure
+came from the documents that already walked, which by construction excluded the
+one record that exceeds it. The real maximum is 110,664 bytes -- a font-style
+string table under tag 158 -- so the old cap rejected a perfectly valid record
+and the sample that justified it could never have contained one.
+
+1 MiB leaves ~9x headroom over the true maximum. The cap is defence in depth
+rather than the primary bound: a payload is already limited by the stream, and
+the stream by `MAX_MUS_PAYLOAD`.
 """
 
 _MAX_RECORDS = 1_000_000
@@ -99,6 +114,14 @@ class MusDetailRecord:
     cmper2: int
     inci: int
     payload: bytes
+
+    extra: bytes = b""
+    """The record's second block, verbatim, empty on 99.4% of corpus records.
+
+    Kept rather than skipped: it is real record data (24, 48 or 96 bytes where
+    present) and what it means is not yet known, so dropping it would lose
+    something a later reader has no way to recover.
+    """
 
 
 def entry_key(record: MusDetailRecord) -> int:
@@ -157,8 +180,12 @@ def _walk(stream: bytes) -> tuple[MusDetailRecord, ...] | None:
             position += 2
             continue
         length = _u32(stream, position + 8)
-        end = position + _HEADER + length + _TRAILER
-        if length > _MAX_PAYLOAD or end > len(stream):
+        payload_end = position + _HEADER + length
+        if length > _MAX_PAYLOAD or payload_end + _EXTRA_LENGTH > len(stream):
+            return None
+        extra = _u32(stream, payload_end)
+        end = payload_end + _EXTRA_LENGTH + extra
+        if extra > _MAX_PAYLOAD or end > len(stream):
             return None
         if len(records) >= _MAX_RECORDS:
             return None
@@ -170,6 +197,7 @@ def _walk(stream: bytes) -> tuple[MusDetailRecord, ...] | None:
                 cmper2=_u16(stream, position + 4),
                 inci=_u16(stream, position + 6),
                 payload=stream[payload_at : payload_at + length],
+                extra=stream[payload_end + _EXTRA_LENGTH : end],
             )
         )
         position = end

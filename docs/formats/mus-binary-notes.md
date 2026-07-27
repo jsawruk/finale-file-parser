@@ -128,6 +128,59 @@ the same case: the `gfhold` stores `clefID` 0, meaning "use the staff's `default
 instrument-derived gap already documented below, not a decode error — so 22 is a floor until an
 instrument table is found.
 
+## ✅ SOLVED: tag 158, and both pools now read 91 of 91 documents
+
+Two separate causes, and **the larger one was self-inflicted**.
+
+### 1. The payload cap was measured circularly
+
+Six documents halted at tag 158, cmper 2, whose length field reads **110,664** — and the walk
+rejected it against a 64 KiB cap. That cap was justified in its own docstring as "the largest
+payload in the corpus is 7,008 bytes, so this leaves ~9x headroom". **That figure was measured over
+the documents that already walked**, which by construction excluded the one record exceeding it.
+The sample that justified the cap could never have contained a counter-example, and the cap was the
+sole reason those documents would not read.
+
+Raising it to 1 MiB fixes all six. The true maximum is 110,664 bytes — a font-style string table
+(`", Big Band & Marching "`, `"Default Prefs"`), which is exactly the sort of record that gets large.
+
+**The lesson generalises past this bug: a limit derived from data that the limit itself filters is
+not evidence.** Measure the bound on the population you are about to reject, not on the survivors.
+
+### 2. The "four-byte trailer" is a second length field
+
+What every earlier revision called a fixed trailer after the payload is the **length of an extra
+block**. A record occupies:
+
+```
+header + length + 4 + extra          (others  header 10, details header 12)
+```
+
+It is **zero on 99.4%** of corpus records, which is why a fixed trailer worked for so long. Where it
+is not zero it is 24, 48 or 96, and ignoring it leaves the walk short by that much.
+
+The block's **contents are kept**, on `MusOther.extra` and `MusDetailRecord.extra`. What they mean is
+not known; discarding them would lose something a later reader has no way to recover.
+
+Verified safe: across 181 streams, honouring the field leaves **180 byte-identical** and changes
+one — dropping **six phantom records** with implausible tags (48, 12288) that the old walk had
+manufactured by parsing an extra block as records, and gaining none.
+
+### Effect
+
+| | before | after |
+| --- | --- | --- |
+| `others` pool tiles | 84/91 | **91/91** |
+| `details` pool tiles | 91/91 | 91/91 |
+| IR-against-IR pairs compared | 76 | **81** |
+
+The five newly compared documents add **no differences of any kind**. Two documents still fail to
+build a score — both with `frameSpec N chain references missing entry M`, the same class, one of
+them newly readable.
+
+**Every `.mus` record in the corpus now parses.** What remains unknown is what individual payloads
+*mean*, not how to walk them.
+
 ## ✅ SOLVED: the `.mus` stores the transposition **normalised to within an octave**
 
 This retires two things at once: the long-standing "the octave shift's boundary at interval 5 is

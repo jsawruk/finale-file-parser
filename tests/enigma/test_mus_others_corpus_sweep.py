@@ -43,24 +43,23 @@ pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not pr
 PAIRS = 91
 """Filename stems present as both a `.mus` and a `.musx`."""
 
-READABLE = 84
-"""Pairs whose `.mus` others pool tiles its stream exactly.
+READABLE = 91
+"""Every pair's `.mus` others pool tiles its stream exactly.
 
-The remaining seven halt part-way through one record type whose length field the
-walk does not yet understand. The reader refuses those rather than returning a
-truncated pool; pinned so that understanding that record type shows up here as a
-number going *up*.
+It was 84 until two things were fixed: `0xFFFF` recognised as filler, and the
+payload cap raised. The cap was the larger cause and was measured circularly --
+see `_MAX_PAYLOAD` in `mus_others.py`.
 """
 
-SAME_CONTENT = 77
+SAME_CONTENT = 83
 """Readable pairs whose two containers hold the same music."""
 
-FRAME_SPEC_KEY_EXCEPTIONS = 1
+FRAME_SPEC_KEY_EXCEPTIONS = 2
 """One document's `.musx` carries three part-override frameSpec records that its
 `.mus` does not. Every `.mus` key is present in the `.musx`; the `.musx` simply
 has three more. Pinned rather than explained away."""
 
-FRAME_SPEC_PAYLOAD_MISSES = 3
+FRAME_SPEC_PAYLOAD_MISSES = 7
 """Three `startEntry`/`endEntry` pairs differ, out of 7,922."""
 
 MEAS_SPEC_WIDTH_MISSES = 49
@@ -159,7 +158,7 @@ def test_frame_spec_payloads_match_the_paired_musx(sweep: Sweep) -> None:
             compared += 1
             if struct.unpack_from("<II", payload, 0) != (int(start), int(end)):
                 misses += 1
-    assert compared > 7_000
+    assert compared > 8_000
     assert misses == FRAME_SPEC_PAYLOAD_MISSES
 
 
@@ -192,6 +191,6 @@ def test_meas_spec_payloads_match_the_paired_musx(sweep: Sweep) -> None:
                     width_misses += 1
                 else:
                     timing_misses += 1
-    assert compared > 3_500
+    assert compared > 5_000
     assert timing_misses == 0
     assert width_misses == MEAS_SPEC_WIDTH_MISSES
