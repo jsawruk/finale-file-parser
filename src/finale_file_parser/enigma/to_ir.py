@@ -12,6 +12,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from fractions import Fraction
 
+from finale_file_parser.enigma.articulations import articulations_by_entry
 from finale_file_parser.enigma.clef import Clef, ClefSign, clef_definitions, clefs_by_measure
 from finale_file_parser.enigma.document import EnigmaDocument, Record
 from finale_file_parser.enigma.key import Mode, decode_key
@@ -91,6 +92,7 @@ def build_score(document: EnigmaDocument) -> Score:
     records = {int(r.attrs["entnum"]): r for r in document.entries.of_tag("entry")}
     transpositions = _transpositions(document)
     lyrics = lyrics_by_entry(document)
+    articulations = articulations_by_entry(document)
 
     # One pass, in chain order, so a measure's notes come out in playing order
     # rather than document order.
@@ -112,6 +114,7 @@ def build_score(document: EnigmaDocument) -> Score:
                 written_edu=chain.written_edu[entnum],
                 sounded_edu=sounded[entnum],
                 lyrics=lyrics.get(entnum, ()),
+                articulations=articulations.get(entnum, ()),
             )
         )
 
@@ -174,6 +177,7 @@ def _event(
     written_edu: int,
     sounded_edu: Fraction,
     lyrics: tuple[EnigmaLyric, ...] = (),
+    articulations: tuple[str, ...] = (),
 ) -> Event:
     entry = read_entry(record)
     key = decode_key(key_raw)
@@ -209,6 +213,7 @@ def _event(
             )
             for lyric in sorted(lyrics, key=lambda item: item.number)
         ),
+        articulations=articulations,
     )
 
 

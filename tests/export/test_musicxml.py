@@ -221,3 +221,49 @@ def test_lyric_comes_after_notations_as_the_schema_requires() -> None:
     )
     xml = to_musicxml(score).decode()
     assert xml.index("<notations>") < xml.index("<lyric ")
+
+
+def test_articulations_are_emitted_inside_notations() -> None:
+    score = _score(
+        Event(
+            duration=Fraction(1, 4),
+            written_duration=Fraction(1, 4),
+            pitches=(Pitch(step="C", alteration=0, octave=4),),
+            articulations=("staccato", "accent"),
+        )
+    )
+    xml = to_musicxml(score).decode()
+    assert "<articulations>" in xml
+    assert xml.index("<staccato />") < xml.index("<accent />")
+
+
+def test_ties_and_articulations_share_one_notations_element() -> None:
+    """The schema allows one <notations> per note, with <tied> before
+    <articulations>."""
+    score = _score(
+        Event(
+            duration=Fraction(1, 4),
+            written_duration=Fraction(1, 4),
+            pitches=(Pitch(step="C", alteration=0, octave=4),),
+            tie_start=True,
+            articulations=("staccato",),
+        )
+    )
+    xml = to_musicxml(score).decode()
+    assert xml.count("<notations>") == 1
+    assert xml.index("<tied ") < xml.index("<articulations>")
+
+
+def test_a_chord_carries_its_articulation_once() -> None:
+    score = _score(
+        Event(
+            duration=Fraction(1, 4),
+            written_duration=Fraction(1, 4),
+            pitches=(
+                Pitch(step="C", alteration=0, octave=4),
+                Pitch(step="E", alteration=0, octave=4),
+            ),
+            articulations=("staccato",),
+        )
+    )
+    assert to_musicxml(score).decode().count("<staccato />") == 1

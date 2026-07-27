@@ -241,12 +241,20 @@ def _append_note(
         # triplet sounds 2/3, and is 3 notes in the time of 2.
         ET.SubElement(modification, "actual-notes").text = str(event.tuplet_ratio.denominator)
         ET.SubElement(modification, "normal-notes").text = str(event.tuplet_ratio.numerator)
-    if event.tie_start or event.tie_end:
+    # One <notations> holds both, in schema order: tied before articulations.
+    # A chord's marks belong to the event, so only its principal note carries
+    # them -- repeating per pitch would print the staccato three times.
+    marks = () if chord else event.articulations
+    if event.tie_start or event.tie_end or marks:
         notations = ET.SubElement(note, "notations")
         if event.tie_end:
             ET.SubElement(notations, "tied", type="stop")
         if event.tie_start:
             ET.SubElement(notations, "tied", type="start")
+        if marks:
+            articulations = ET.SubElement(notations, "articulations")
+            for name in marks:
+                ET.SubElement(articulations, name)
     # Schema order puts <lyric> last, after <notations>. Only on a chord's
     # principal note: the syllable is sung once, not once per pitch.
     if not chord:

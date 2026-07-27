@@ -27,6 +27,8 @@ Translated:
 | details | `tupletDef` (1072) | `symbolicNum`, `symbolicDur`, `refNum`, `refDur` |
 | others | `staffSpec` (231) | `transposition.keysig.adjust` only — see below |
 | details | `lyrDataVerse` (1108) | `lyricNumber`, `syll`, `wext`, per 20-byte group |
+| details | `articAssign` (1009) | `articDef` |
+| others | `articDef` (121) | `charMain` — at +0 (2011) or +2 (2012) |
 | texts | `verse` | the `^verse(N)…^end` sections of the text stream |
 
 Every field above is confirmed against paired `.musx` files; see
@@ -49,6 +51,7 @@ from finale_file_parser.enigma.document import (
     TextsPool,
 )
 from finale_file_parser.enigma.mus_details import (
+    TAG_ARTIC_ASSIGN,
     TAG_GFHOLD,
     TAG_LYRIC_VERSE,
     TAG_TUPLET_DEF,
@@ -59,6 +62,7 @@ from finale_file_parser.enigma.mus_details import (
 from finale_file_parser.enigma.mus_entries import read_mus_entry_records
 from finale_file_parser.enigma.mus_others import (
     OPTIONS_CMPER,
+    TAG_ARTIC_DEF,
     TAG_CLEF_OPTIONS,
     TAG_FRAME_SPEC,
     TAG_MEAS_SPEC,
@@ -95,6 +99,11 @@ UNTRANSLATED = (
     "root cause as the transposition gap above -- the value lives with the "
     "instrument, not in the file.",
     "measSpec display time signatures (useDisplayTimesig, dispBeats, dispDivbeat).",
+    "Fingerings: the corpus stores them as articulations whose character is a "
+    "numeral in a text font, so telling them from a music-font numeral needs "
+    "articDef's fontMain -- whose offset varies within a single era, so a .mus "
+    "does not reliably give one. Reading them would make the containers "
+    "disagree.",
     "Chorus and section lyrics: the .mus tag for lyrDataVerse is identified, but "
     "no paired corpus document uses a chorus or section track, so their tags are "
     "unknown and those lyrics are absent from a .mus-derived score.",
@@ -129,6 +138,18 @@ _CLEF_FIELD_OFFSETS = {
 }
 """Field offsets within a clef entry, per stride. 2012 inserts two bytes after
 `clefChar` and two more before `shapeID`; everything else is shared."""
+
+_ARTIC_CHAR_OFFSET = {48: 0, 60: 2}
+"""Where `charMain` sits in an `articDef` payload, by payload length.
+
+The same era split as the clef table: 2011 writes 48 bytes with the character
+first, 2012 writes 60 with two bytes ahead of it. Keyed by length rather than by
+banner year because the length is right there and the two agree on every corpus
+record -- 4,841 at 48 bytes, all 2011, and 311 at 60, all 2012.
+"""
+
+_ARTIC_DEF_REFERENCE = 0
+"""Where an `articAssign` payload names its definition."""
 
 _LYRIC_GROUP = 20
 """Bytes per verse assignment inside a `lyrDataVerse` payload."""
@@ -313,6 +334,17 @@ def _others_records(records: tuple[MusOther, ...]) -> list[Record]:
             out.append(
                 Record(tag="measSpec", attrs=attrs, text="", fields=_meas_spec(record.payload))
             )
+        elif record.tag == TAG_ARTIC_DEF:
+            offset = _ARTIC_CHAR_OFFSET.get(len(record.payload))
+            if offset is not None:
+                out.append(
+                    Record(
+                        tag="articDef",
+                        attrs=attrs,
+                        text="",
+                        fields={"charMain": str(_u16(record.payload, offset))},
+                    )
+                )
         elif record.tag == TAG_STAFF_SPEC and len(record.payload) >= _STAFF_TRANSPOSITION + 2:
             out.append(
                 Record(tag="staffSpec", attrs=attrs, text="", fields=_staff_spec(record.payload))
@@ -446,6 +478,7 @@ def _details_records(records: tuple[MusDetailRecord, ...]) -> list[Record]:
     out: list[Record] = []
     lyric_incidence: dict[int, int] = {}
     lyric_seen: set[tuple[int, int]] = set()
+    artic_seen: set[tuple[int, int]] = set()
     for record in records:
         if record.tag == TAG_GFHOLD and len(record.payload) >= 10:
             out.append(
@@ -454,6 +487,24 @@ def _details_records(records: tuple[MusDetailRecord, ...]) -> list[Record]:
                     attrs={"cmper1": str(record.cmper1), "cmper2": str(record.cmper2)},
                     text="",
                     fields=_gfhold(record.payload),
+                )
+            )
+        elif record.tag == TAG_ARTIC_ASSIGN and len(record.payload) >= 2:
+            entnum = entry_key(record)
+            definition = _u16(record.payload, _ARTIC_DEF_REFERENCE)
+            # A `.mus` repeats an assignment the way it repeats a lyric: 23
+            # corpus entries carry the same articDef twice. No `.musx` ever
+            # does (0 of 11,404), so a repeat is a storage artifact and
+            # emitting it would print the accent twice.
+            if (entnum, definition) in artic_seen:
+                continue
+            artic_seen.add((entnum, definition))
+            out.append(
+                Record(
+                    tag="articAssign",
+                    attrs={"entnum": str(entnum), "inci": str(record.inci)},
+                    text="",
+                    fields={"articDef": str(definition)},
                 )
             )
         elif record.tag == TAG_LYRIC_VERSE:
