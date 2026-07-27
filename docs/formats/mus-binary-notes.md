@@ -85,6 +85,77 @@ the same case: the `gfhold` stores `clefID` 0, meaning "use the staff's `default
 instrument-derived gap already documented below, not a decode error — so 22 is a floor until an
 instrument table is found.
 
+## ✅ The transposition's key alteration IS recoverable — and it is all written pitch needs
+
+The instrument hunt (below) established that the transposition's **octave** is not in the file. That
+made the gap look unfixable. It is not, because of a fact about the spelling code rather than the
+format: **`transpose_key` uses `adjust` alone.** Its own docstring says `interval` "is accepted for
+symmetry with `transpose_pitch` and does not affect the key". The IR takes `SpelledNote.written`,
+which is `spell_pitch(note, written_key)` — so the written pitch depends on `adjust` and not on
+`interval` at all.
+
+And `adjust` **is** stored. ETF's documented `^SS` field order —
+`... topBarlineOffset transposition instflag dw_wRest h_otherRest stemReversal fullName abbrvName` —
+puts `transposition` exactly where the corpus says it is:
+
+```
++20  transposition (u16): low nibble = key alteration, sign and magnitude
+```
+
+**181 of 181 records.** The low nibble is read the way `eeppd.txt` documents a note TCD's
+alteration — bit 3 is the sign, not two's complement. Every corpus value is positive, so the corpus
+cannot distinguish the two readings; the TCD is what decides it, and a unit test pins the negative
+case the corpus lacks.
+
+The **upper bits are deliberately not interpreted.** Observed values are 0x0000, 0x0042, 0x0101,
+0x0F83 and 0x4000, and they do **not** distinguish interval 1 from 8 or 5 from 12 — the same
+transposition u16 appears for both members of each pair, which is the octave finding again from a
+different direction.
+
+### Effect: 4,140 pitch differences → 2,494, and every one is now octave-only
+
+| interval | remaining differences | `harm_lev_octave_shift` |
+| --- | --- | --- |
+| 0, 1, 4 | none | 0 |
+| 5 | 675 | −7 |
+| 7 | 844 | −7 |
+| 8 | 823 | −7 |
+| 12 | 148 | −14 |
+
+**The set of staves that still differ is exactly the set where the octave shift is non-zero.** That
+correspondence is the check that what remains is the missing octave and nothing else — letters and
+accidentals are now right everywhere.
+
+Three differences are not clean octaves: two notes spelled enharmonically (F♭ against E, C♭ against
+B) and one entry storing a different note count. All three are `.mus`/`.musx` content differences
+already pinned by the entry-pool sweep.
+
+### `interval` stays absent, and that has a consequence worth stating
+
+`read_mus_document` emits the `adjust` and leaves `interval` absent, which reads as 0. That is
+**correct for the written pitch the IR uses and wrong for the concert pitch `spell_note` returns
+alongside it.** A `.mus` cannot supply the concert pitch of a transposing staff.
+
+### Part names are at +30 and +32 after all
+
+The earlier "not at a fixed offset" refutation compared *values* across the two containers, which
+use different text-block numbering. Comparing **presence** instead: `fullName` at +30 is non-zero on
+**64 of 64** records whose `.musx` names the staff, and `abbrvName` at +32 on **60 of 60** — with
+zeros on 107 of 117 and 112 of 121 of the records without one. ETF's field order puts them exactly
+there. Resolving the `.mus` text-block numbering to the strings (which are present — staff names
+were found in stream 3 of 28 of 34 documents checked) is the remaining step.
+
+## ⛔ The instrument table: not found, and the search was systematic
+
+Only **two** record types are keyed per staff in the entire `.mus`: `staffSpec` (others 231) and
+`gfhold` (details 1044). There is no third per-staff record for an instrument to hide in, and
+`staffSpec` is byte-identical between staves whose `.musx` transpositions differ by an octave. The
+`.musx` distinguishes them by `instUuid`, a Finale-2014 concept with no `.mus` counterpart.
+
+Staff *names* are in the file (stream 3), so an instrument could in principle be inferred from its
+name — but that needs Finale's instrument database, which is not in the file either. **Deriving a
+transposition octave from a name would be guessing, and this project does not.**
+
 ## ⚠️ `staffSpec` located — but the transposition octave is NOT in it
 
 `staffSpec` is **others tag 231**, payload 84 bytes (161 records) or 96 (20). Confirmed by content

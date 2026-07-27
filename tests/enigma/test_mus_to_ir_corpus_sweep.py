@@ -24,7 +24,6 @@ from finale_file_parser.enigma.document import parse_enigma
 from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.mus_document import read_mus_document
 from finale_file_parser.enigma.mus_entries import read_mus_entries
-from finale_file_parser.enigma.pitch import read_transposition
 from finale_file_parser.enigma.score import score_xml
 from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.ir import Event, Score
@@ -55,19 +54,25 @@ would invert every ratio. Sounded durations agreeing end to end is what rules
 that out.
 """
 
-TRANSPOSED_PITCHES = 4138
-"""Pitches differing on a transposing staff, from `staffSpec` being untranslated.
+OCTAVE_ONLY_PITCHES = 2491
+"""Pitches whose letter and accidental are right and only the octave is wrong.
 
-Both causes are the missing transposition: it selects the written key, so
-letters shift as well as octaves, and it feeds `harm_lev_octave_shift`.
+Down from 4,140 total differences once the transposition's key alteration was
+recovered: `transpose_key` needs only `adjust`, so the written key -- and with
+it every letter -- is now correct. What remains is the octave, which needs the
+transposition's *interval*, and the `.mus` provably does not store it.
+
+Every one of these sits on a staff whose interval is 5, 7, 8 or 12 -- exactly
+the intervals where `harm_lev_octave_shift` is non-zero. That the set matches
+the shift's own boundary is the check that this is the missing octave and not
+something else.
 """
 
-OTHER_PITCHES = 2
-"""The two pitch differences not on a transposing staff.
-
-Both are known `.mus`/`.musx` content revisions already pinned by the entry-pool
-sweep -- one entry storing two notes against one, and one note an octave apart.
-"""
+OTHER_PITCHES = 3
+"""Differences that are not a clean octave: two notes spelled enharmontically
+(F-flat against E, C-flat against B) and one entry storing a different number of
+notes in the two containers. All three are `.mus`/`.musx` content differences
+already pinned by the entry-pool sweep, not decode errors."""
 
 CLEF_MEASURES = 22
 """Measures whose clef differs, down from 327 before the clef table was decoded.
@@ -89,7 +94,7 @@ class Tally:
     events: int = 0
     tuplet_events: int = 0
     tuplet_ratios: int = 0
-    transposed_pitches: int = 0
+    octave_only_pitches: int = 0
     other_pitches: int = 0
     clef_measures: int = 0
 
@@ -111,22 +116,11 @@ def rhythm(event: Event) -> tuple[object, ...]:
     )
 
 
-def transposing_staves(document: object) -> set[int]:
-    out = set()
-    for record in document.others.of_tag("staffSpec"):  # type: ignore[attr-defined]
-        if "part" in record.attrs:
-            continue
-        transposition = read_transposition(record)
-        if transposition is not None and transposition.interval:
-            out.add(int(record.attrs["cmper"]))
-    return out
-
-
-def compare(mine: Score, theirs: Score, transposed: set[int], tally: Tally) -> None:
+def compare(mine: Score, theirs: Score, tally: Tally) -> None:
     if len(mine.parts) != len(theirs.parts):
         tally.structure += 1
         return
-    for index, (part, other) in enumerate(zip(mine.parts, theirs.parts, strict=True), start=1):
+    for part, other in zip(mine.parts, theirs.parts, strict=True):
         if len(part.measures) != len(other.measures):
             tally.structure += 1
             continue
@@ -151,11 +145,16 @@ def compare(mine: Score, theirs: Score, transposed: set[int], tally: Tally) -> N
                     tally.tuplet_events += 1
                 if event.tuplet_ratio != want.tuplet_ratio:
                     tally.tuplet_ratios += 1
-                if event.pitches != want.pitches:
-                    if index in transposed:
-                        tally.transposed_pitches += 1
-                    else:
-                        tally.other_pitches += 1
+                if event.pitches == want.pitches:
+                    continue
+                same_letters = len(event.pitches) == len(want.pitches) and all(
+                    a.step == b.step and a.alteration == b.alteration
+                    for a, b in zip(event.pitches, want.pitches, strict=True)
+                )
+                if same_letters:
+                    tally.octave_only_pitches += 1
+                else:
+                    tally.other_pitches += 1
 
 
 @pytest.fixture(scope="module")
@@ -174,7 +173,7 @@ def tally() -> Tally:
             out.unbuildable += 1
             continue
         out.compared += 1
-        compare(mine, theirs, transposing_staves(document), out)
+        compare(mine, theirs, out)
     return out
 
 
@@ -207,14 +206,11 @@ def test_sounded_durations_and_tuplet_ratios_match_exactly(tally: Tally) -> None
     assert tally.tuplet_ratios == 0
 
 
-def test_pitch_differences_are_confined_to_transposing_staves(tally: Tally) -> None:
-    """The gap this measures is `staffSpec`, and nothing else.
-
-    `other_pitches` is the meaningful number: it counts pitch differences that
-    the missing transposition does *not* explain, and both of its two are
-    content revisions already pinned by the entry-pool sweep.
-    """
-    assert tally.transposed_pitches == TRANSPOSED_PITCHES
+def test_every_pitch_letter_is_right_and_only_octaves_remain(tally: Tally) -> None:
+    """`other_pitches` is the meaningful number: it counts differences the
+    missing transposition interval does *not* explain, and all three of them are
+    content differences already pinned by the entry-pool sweep."""
+    assert tally.octave_only_pitches == OCTAVE_ONLY_PITCHES
     assert tally.other_pitches == OTHER_PITCHES
 
 

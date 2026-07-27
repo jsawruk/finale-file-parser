@@ -470,11 +470,17 @@ field (`tests/enigma/test_mus_to_ir_corpus_sweep.py`). Over 73 same-content pair
 The structural row is the load-bearing one: a difference there would mean entries placed in the
 wrong measure, which produces plausible output nobody notices.
 
-**Every remaining difference is instrument-derived.** The `.musx` materialises some staff defaults
-from its instrument identity (`instUuid`), and the `.mus` does not store them: staves the `.musx`
-gives transpositions an octave apart have byte-identical `.mus` `staffSpec` payloads, and the 22
-clef measures are `gfhold.clefID` 0 ("use the staff's `defaultClef`") where the `.mus` `staffSpec`
-also holds 0. Closing either needs an instrument table found elsewhere in the file, if one exists.
+**Every remaining difference is instrument-derived**, and there is no instrument table to find: only
+two record types are keyed per staff in the whole `.mus` (`staffSpec` and `gfhold`), so there is no
+third place for one to hide. The `.musx` materialises these values from its `instUuid`, which has no
+`.mus` counterpart.
+
+The transposition's **key alteration** is recovered (`staffSpec` +20, low nibble, sign-and-magnitude
+as `eeppd.txt` documents for a note TCD), and that is all the *written* pitch needs — `transpose_key`
+uses `adjust` alone. So every note letter and accidental is now right, and only the octave is wrong,
+on exactly the staves where `harm_lev_octave_shift` is non-zero. The **`interval` is left absent**,
+which is correct for the written pitch and wrong for the concert pitch `spell_note` returns
+alongside it: a `.mus` cannot supply that.
 
 `tupletDef` (details tag 1072) is keyed by **entry**, not by a (staff, measure) pair: entry-attached
 details pack the 32-bit `entnum` into the two key fields, high word first. Its four fields all have
