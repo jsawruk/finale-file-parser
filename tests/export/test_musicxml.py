@@ -10,6 +10,7 @@ from defusedxml import ElementTree as DET
 from finale_file_parser.export.musicxml import ExportError, to_musicxml
 from finale_file_parser.ir import (
     Beam,
+    Ending,
     Event,
     Lyric,
     Measure,
@@ -313,3 +314,61 @@ def test_a_chord_beams_once() -> None:
         )
     )
     assert to_musicxml(score).decode().count("<beam ") == 1
+
+
+def _barline(score: Score, location: str):  # type: ignore[no-untyped-def]
+    measure = _tree(score).find("./part/measure")
+    assert measure is not None
+    return measure.find(f'./barline[@location="{location}"]')
+
+
+def test_a_forward_repeat_opens_the_measure() -> None:
+    barline = _barline(_score(_note(), repeat_forward=True), "left")
+    assert barline is not None
+    assert barline.findtext("bar-style") == "heavy-light"
+    repeat = barline.find("repeat")
+    assert repeat is not None and repeat.get("direction") == "forward"
+
+
+def test_a_backward_repeat_closes_the_measure() -> None:
+    barline = _barline(_score(_note(), repeat_backward=True), "right")
+    assert barline is not None
+    assert barline.findtext("bar-style") == "light-heavy"
+    repeat = barline.find("repeat")
+    assert repeat is not None and repeat.get("direction") == "backward"
+
+
+def test_the_repeat_barline_goes_at_the_right_end_of_the_measure() -> None:
+    """A left barline before the notes and a right one after them -- swapping
+    them turns a repeat into one that sends the player somewhere else."""
+    score = _score(_note(), repeat_forward=True, repeat_backward=True)
+    xml = to_musicxml(score).decode()
+    assert xml.index('location="left"') < xml.index("<note>") < xml.index('location="right"')
+
+
+def test_total_passes_are_written_only_when_they_are_not_the_default() -> None:
+    """MusicXML already defaults to two, so writing `times="2"` says nothing."""
+    assert 'times="2"' not in to_musicxml(_score(_note(), repeat_backward=True)).decode()
+    assert (
+        'times="4"' in to_musicxml(_score(_note(), repeat_backward=True, repeat_passes=4)).decode()
+    )
+
+
+def test_an_ending_bracket_carries_its_number_and_its_text() -> None:
+    score = _score(_note(), endings=(Ending(numbers=(1, 2), type="start"),))
+    xml = to_musicxml(score).decode()
+    assert 'number="1,2"' in xml
+    assert 'type="start"' in xml
+    assert ">1., 2.<" in xml
+
+
+def test_an_ending_is_written_before_the_repeat_it_meets() -> None:
+    """Schema order inside a barline is bar-style, ending, repeat; the other
+    order is rejected outright."""
+    score = _score(_note(), repeat_backward=True, endings=(Ending(numbers=(1,), type="stop"),))
+    xml = to_musicxml(score).decode()
+    assert xml.index("<bar-style>") < xml.index("<ending ") < xml.index("<repeat ")
+
+
+def test_a_measure_without_repeats_writes_no_barline() -> None:
+    assert "<barline" not in to_musicxml(_score(_note())).decode()

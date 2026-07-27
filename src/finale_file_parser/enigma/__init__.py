@@ -88,6 +88,7 @@ from finale_file_parser.enigma.pitch import (
     transpose_key,
     transpose_pitch,
 )
+from finale_file_parser.enigma.repeats import MeasureRepeats, Repeats, repeats_for
 from finale_file_parser.enigma.score import MAX_INFLATED, score_xml
 from finale_file_parser.enigma.text import (
     StaffNames,
@@ -114,6 +115,8 @@ from finale_file_parser.enigma.tuplet import (
 __all__ = [
     "ARTICULATION_CHARACTERS",
     "BeamedNote",
+    "MeasureRepeats",
+    "Repeats",
     "MAX_INFLATED",
     "MAX_MUS_PAYLOAD",
     "UNTRANSLATED",
@@ -151,6 +154,7 @@ __all__ = [
     "UnsupportedKeyError",
     "articulations_by_entry",
     "beams_for",
+    "repeats_for",
     "blast_decompress",
     "EntryChain",
     "Tuplet",

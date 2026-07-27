@@ -127,7 +127,11 @@ limit is verified by mutation, because no real corpus archive trips one.
       other 24 characters are deliberately not guessed at.
 - [x] **Beams** — `enigma/beams.py`, both containers. 84,620 beams across 366 documents, with
       secondary beams and hooks; Enigma stores only a "starts a group" bit, so the rest is derived.
-- [ ] Repeats, part groups, fingerings.
+- [x] **Repeats** — `enigma/repeats.py`, both containers. Forward and backward repeat barlines,
+      total passes, and ending brackets. 109 forward, 121 backward and 142 brackets across 109
+      documents; identical from `.mus` and `.musx` on all 19 same-content pairs that use them.
+      Jumps (D.C., D.S., Fine, To Coda) are a separate slice and are not read.
+- [ ] Part groups, fingerings, jumps and barline styles.
 
 ## Later
 

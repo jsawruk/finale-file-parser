@@ -1,4 +1,4 @@
-"""Validate lyric, articulation and beam export, and the containers against each other.
+"""Validate lyric, articulation, beam and repeat export, and the containers against each other.
 
 Skipped wherever corpus/ is absent (e.g. CI). Two independent checks:
 
@@ -16,6 +16,7 @@ Report counts only -- never a corpus filename, title, or lyric.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 
@@ -64,6 +65,23 @@ revision the entry-pool sweep already pins -- and a bit that opens a group
 changes the beams of the note on each side of the break.
 """
 
+REPEAT_DOCUMENTS = 109
+FORWARD_REPEATS = 109
+BACKWARD_REPEATS = 121
+ENDING_BRACKETS = 142
+"""Repeat barlines and ending brackets exported across the corpus.
+
+Measures rather than parts: every part of a score carries the same barline, so
+counting rows would measure how many staves the repertoire uses.
+
+All three match the raw element counts in the `.musx` pool -- 109 `forRepBar`,
+121 `bacRepBar`, 142 `repeatEndingStart` -- which is the check that nothing is
+invented or lost between the pool and the IR.
+"""
+
+PAIRED_WITH_REPEATS = 19
+"""Same-content pairs where either container carries a repeat."""
+
 PAIRED_WITH_LYRICS = 6
 """Same-content pairs where the `.musx` carries lyrics, so the two containers
 can be compared. Small, but it is the only oracle for the `.mus` side."""
@@ -77,6 +95,32 @@ def pairs() -> list[tuple[Path, Path]]:
     mus = {p.stem: p for p in CORPUS.rglob("*.mus")}
     musx = {p.stem: p for p in CORPUS.rglob("*.musx")}
     return [(mus[s], musx[s]) for s in sorted(set(mus) & set(musx))]
+
+
+class MeasureRepeat(NamedTuple):
+    forward: bool
+    backward: bool
+    passes: int | None
+    endings: tuple[tuple[tuple[int, ...], str], ...]
+
+
+def all_repeats(score: Score) -> dict[int, MeasureRepeat]:
+    """One entry per measure carrying a repeat, keyed by measure number.
+
+    Keyed by measure, not accumulated per part, so the comparison is not
+    inflated by scores that happen to have many staves.
+    """
+    return {
+        measure.number: MeasureRepeat(
+            measure.repeat_forward,
+            measure.repeat_backward,
+            measure.repeat_passes if measure.repeat_backward else None,
+            tuple((ending.numbers, ending.type) for ending in measure.endings),
+        )
+        for part in score.parts
+        for measure in part.measures
+        if measure.repeat_forward or measure.repeat_backward or measure.endings
+    }
 
 
 def all_beams(score: Score) -> list[tuple[object, ...]]:
@@ -187,6 +231,63 @@ def articulation_agreement() -> tuple[int, int, int]:
             else:
                 different += 1
     return documents, identical, different
+
+
+@pytest.fixture(scope="module")
+def repeat_coverage() -> tuple[int, int, int, int]:
+    documents = forward = backward = brackets = 0
+    for path in musx_files():
+        try:
+            score = build_score(parse_enigma(score_xml(path)))
+        except CorruptScoreError:
+            continue
+        repeats = all_repeats(score)
+        if not repeats:
+            continue
+        documents += 1
+        forward += sum(1 for row in repeats.values() if row.forward)
+        backward += sum(1 for row in repeats.values() if row.backward)
+        brackets += sum(1 for row in repeats.values() for _, kind in row.endings if kind == "start")
+    return documents, forward, backward, brackets
+
+
+@pytest.fixture(scope="module")
+def repeat_agreement() -> tuple[int, int]:
+    documents = different = 0
+    for mus_path, musx_path in pairs():
+        try:
+            document = parse_enigma(score_xml(musx_path))
+            if len(read_mus_entries(mus_path)) != len(document.entries.records):
+                continue
+            theirs = build_score(document)
+            mine = build_score(read_mus_document(mus_path))
+        except CorruptScoreError:
+            continue
+        except Exception:  # noqa: BLE001 - counted, not diagnosed
+            continue
+        ours, expected = all_repeats(mine), all_repeats(theirs)
+        if not ours and not expected:
+            continue
+        documents += 1
+        if ours != expected:
+            different += 1
+    return documents, different
+
+
+def test_the_corpus_exports_repeats(repeat_coverage: tuple[int, int, int, int]) -> None:
+    documents, forward, backward, brackets = repeat_coverage
+    assert documents == REPEAT_DOCUMENTS
+    assert forward == FORWARD_REPEATS
+    assert backward == BACKWARD_REPEATS
+    assert brackets == ENDING_BRACKETS
+
+
+def test_both_containers_produce_the_same_repeats(repeat_agreement: tuple[int, int]) -> None:
+    """A bracket's extent is reconstructed from three records and a flag; if
+    either container read any of them differently this would not be zero."""
+    documents, different = repeat_agreement
+    assert documents == PAIRED_WITH_REPEATS
+    assert different == 0
 
 
 @pytest.fixture(scope="module")
