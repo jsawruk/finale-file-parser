@@ -498,6 +498,32 @@ One document fails to build: its `.mus` frame chain references an entry its pool
 is the same document whose `.musx` carries three `frameSpec` records its `.mus` does not, so the two
 containers disagree about its frames rather than the adapter mis-reading them.
 
+### Known format facts — beams
+
+**Enigma does not store beams.** It stores one bit per entry — `BEATBIT` in `eeppd.txt`, surfaced by
+EnigmaXML as a `beam` field — meaning *this entry starts a beam group*. Everything else follows from
+the durations: consecutive beamable entries belong to the group opened by the last entry carrying
+the bit.
+
+Confirmed against the corpus: a measure of eight eighth notes carries the bit on the first and the
+fifth — exactly two groups of four. It matches the `.mus` `BEATBIT` on 30,819 of 30,820 paired
+entries, the one exception being the `.mus`/`.musx` revision the entry-pool sweep already pins.
+
+`enigma/beams.py` turns that into what MusicXML asks for, which is more: each note carries one
+`<beam>` per level — an eighth has one, a sixteenth two — saying whether that level begins,
+continues or ends there. Where a level covers a single note the beam becomes a **hook**, the stub on
+the sixteenth of a dotted-eighth pair; it points forward if the note opens the group and backward
+otherwise. 93% of corpus groups are one duration throughout and need no hooks; the other 6.6% are
+why they exist.
+
+Three decisions worth knowing. Dots are divided out before counting beams, so a dotted eighth (3/16)
+beams once like the eighth it is. A group of one gets **no** beam, because a lone eighth is written
+with a flag. And a rest breaks a group — MusicXML can beam over one, but Enigma's bit says where
+groups *start*, not where they survive a rest, so that is the reading the data supports.
+
+Because beams are computed rather than stored, the two containers agreeing (30,072 of 30,074 events)
+shows they feed the same bit and the same durations into the same rule.
+
 ### Known format facts — articulations
 
 Two records again. An `articAssign` entry detail names an `articDef`, and the definition says what

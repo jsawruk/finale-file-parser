@@ -31,6 +31,7 @@ from finale_file_parser.version import models as version_models
 
 EXPECTED_PUBLIC_NAMES = {
     "ARTICULATION_CHARACTERS",
+    "BeamedNote",
     "MAX_INFLATED",
     "MAX_MUS_PAYLOAD",
     "UNTRANSLATED",
@@ -105,6 +106,7 @@ EXPECTED_PUBLIC_NAMES = {
     "decode_key",
     "harm_lev_octave_shift",
     "articulations_by_entry",
+    "beams_for",
     "blast_decompress",
     "read_mus_document",
     "read_mus_details",

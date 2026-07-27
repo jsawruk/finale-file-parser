@@ -9,6 +9,7 @@ from defusedxml import ElementTree as DET
 
 from finale_file_parser.export.musicxml import ExportError, to_musicxml
 from finale_file_parser.ir import (
+    Beam,
     Event,
     Lyric,
     Measure,
@@ -267,3 +268,48 @@ def test_a_chord_carries_its_articulation_once() -> None:
         )
     )
     assert to_musicxml(score).decode().count("<staccato />") == 1
+
+
+def test_beams_are_emitted_with_their_level() -> None:
+    score = _score(
+        Event(
+            duration=Fraction(1, 16),
+            written_duration=Fraction(1, 16),
+            pitches=(Pitch(step="C", alteration=0, octave=4),),
+            beams=(Beam(number=1, type="begin"), Beam(number=2, type="begin")),
+        )
+    )
+    xml = to_musicxml(score).decode()
+    assert '<beam number="1">begin</beam>' in xml
+    assert '<beam number="2">begin</beam>' in xml
+
+
+def test_a_beam_comes_before_notations() -> None:
+    """Schema order: <beam> after <time-modification>, before <notations>."""
+    score = _score(
+        Event(
+            duration=Fraction(1, 8),
+            written_duration=Fraction(1, 8),
+            pitches=(Pitch(step="C", alteration=0, octave=4),),
+            beams=(Beam(number=1, type="begin"),),
+            articulations=("staccato",),
+        )
+    )
+    xml = to_musicxml(score).decode()
+    assert xml.index("<beam ") < xml.index("<notations>")
+
+
+def test_a_chord_beams_once() -> None:
+    """The beam belongs to the stem, not to each pitch."""
+    score = _score(
+        Event(
+            duration=Fraction(1, 8),
+            written_duration=Fraction(1, 8),
+            pitches=(
+                Pitch(step="C", alteration=0, octave=4),
+                Pitch(step="E", alteration=0, octave=4),
+            ),
+            beams=(Beam(number=1, type="begin"),),
+        )
+    )
+    assert to_musicxml(score).decode().count("<beam ") == 1

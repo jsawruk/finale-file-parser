@@ -70,6 +70,10 @@ _NOTEBIT = 0x40000000
 does not decide whether an entry has pitch content."""
 _FLOATREST = 0x01000000
 """A "floating" rest: it sits at the staff midline and has no pitch content."""
+_BEATBIT = 0x00000800
+"""eeppd.txt: "used to determine beaming". The entry starts a beam group;
+EnigmaXML surfaces the same bit as a `beam` field. Matches the paired `.musx`
+on 30,819 of 30,820 corpus entries."""
 _GRACENOTE = 0x00800000
 """eeppd.txt: set for grace notes. Surfaced as a `graceNote` field so the
 duration model gives them zero sounded time, as it does for a `.musx`."""
@@ -261,6 +265,8 @@ def _entry_record(stream: bytes, offset: int, stored_count: int) -> Record:
         "dura": str(edu),
         "numNotes": str(note_count),
     }
+    if flag & _BEATBIT:
+        fields["beam"] = ""
     if flag & _GRACENOTE:
         # Presence is the signal, as it is in EnigmaXML's `<graceNote/>`.
         fields["graceNote"] = ""

@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 
 __all__ = [
+    "Beam",
     "Event",
     "Lyric",
     "Measure",
@@ -51,6 +52,17 @@ class TimeSignature:
 
     beats: int
     beat_type: int
+
+
+@dataclass(frozen=True)
+class Beam:
+    """One beam level on one note, and what it does there."""
+
+    number: int
+    """1 is the primary beam, 2 the sixteenth's second, and so on."""
+
+    type: str
+    """MusicXML's vocabulary: begin, continue, end, forward hook, backward hook."""
 
 
 @dataclass(frozen=True)
@@ -110,6 +122,10 @@ class Event:
 
     lyrics: tuple[Lyric, ...] = ()
     """Syllables sung on this event, one per verse, in verse order."""
+
+    beams: tuple[Beam, ...] = ()
+    """One entry per beam level: 1 is the primary beam. Empty on a note that
+    carries a flag rather than a beam."""
 
     articulations: tuple[str, ...] = ()
     """MusicXML articulation names -- "staccato", "accent", "tenuto",
