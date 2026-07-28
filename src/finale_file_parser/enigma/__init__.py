@@ -29,6 +29,7 @@ from finale_file_parser.enigma.document import (
     TextsPool,
     parse_enigma,
 )
+from finale_file_parser.enigma.fingerings import fingerings_by_entry
 from finale_file_parser.enigma.groups import StaffGroup, staff_groups, staff_order
 from finale_file_parser.enigma.jumps import jumps_by_measure
 from finale_file_parser.enigma.key import (
@@ -189,6 +190,7 @@ __all__ = [
     "duration_from_edu",
     "decrypt",
     "effective_keys",
+    "fingerings_by_entry",
     "jumps_by_measure",
     "locate_entries",
     "lyrics_by_entry",

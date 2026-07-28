@@ -115,6 +115,23 @@ always has somewhere to be drawn.
 PAIRED_WITH_REPEATS = 19
 """Same-content pairs where either container carries a repeat."""
 
+FINGERING_DOCUMENTS = 18
+FINGERINGS = 834
+"""Fingerings exported from the `.musx` corpus.
+
+The distribution corroborates the reading: 3 is most common (261), then 1 (219),
+2 (174), 4 (126) and 5 (54) -- the shape you would expect of keyboard and string
+music.
+"""
+
+MUS_FINGERING_DOCUMENTS = 5
+MUS_FINGERINGS = 218
+"""The legacy reader's own count. Pinned separately because **no paired
+document verifies it**: six pairs carry a fingering in the `.musx`, four have a
+`.mus` that does not read and two are a different arrangement. What is verified
+is the field -- `articDef.charMain` agrees across 72 pairs -- not these values.
+"""
+
 BARLINE_DOCUMENTS = 89
 BARLINE_STYLES = {"light-light": 216, "light-heavy": 110}
 """Double and final bars exported, counted per measure.
@@ -349,6 +366,53 @@ def group_agreement() -> tuple[int, int, int]:
         elif all_groups(mine) != all_groups(theirs):
             name_only += 1
     return documents, shape_differences, name_only
+
+
+def test_the_corpus_exports_fingerings() -> None:
+    documents = 0
+    digits: collections.Counter[str] = collections.Counter()
+    for path in musx_files():
+        try:
+            score = build_score(parse_enigma(score_xml(path)))
+        except CorruptScoreError:
+            continue
+        found = [
+            digit
+            for part in score.parts
+            for measure in part.measures
+            for voice in measure.voices
+            for event in voice.events
+            for digit in event.fingerings
+        ]
+        if found:
+            documents += 1
+            digits.update(found)
+    assert documents == FINGERING_DOCUMENTS
+    assert sum(digits.values()) == FINGERINGS
+    assert set(digits) <= {"1", "2", "3", "4", "5"}
+
+
+def test_the_legacy_reader_finds_fingerings_too() -> None:
+    """Unverifiable against a `.musx`, so pinned on its own: a change here means
+    the legacy `articDef` reading moved."""
+    documents = total = 0
+    for path in sorted(CORPUS.rglob("*.mus")):
+        try:
+            score = build_score(read_mus_document(path))
+        except Exception:  # noqa: BLE001 - the .mus reader's failures are pinned elsewhere
+            continue
+        found = sum(
+            len(event.fingerings)
+            for part in score.parts
+            for measure in part.measures
+            for voice in measure.voices
+            for event in voice.events
+        )
+        if found:
+            documents += 1
+            total += found
+    assert documents == MUS_FINGERING_DOCUMENTS
+    assert total == MUS_FINGERINGS
 
 
 def test_the_corpus_exports_barline_styles() -> None:

@@ -271,3 +271,34 @@ reserved-staff exclusion, so the repeat sweep matches the pool exactly again.
 Carrying clefs forward cut the `.mus`/`.musx` clef disagreement from 22 measures to **10**, without
 touching the clef reading itself: half of those 22 were one container having a `gfhold` where the
 other did not, rather than the two disagreeing about a clef.
+
+
+## 2026-07-28 — RESOLVED: the transposition octave is not missing from a `.mus`
+
+**Context.** The project recorded that a `.mus` cannot supply a transposing staff's octave, and that
+2,491 written pitches were therefore an octave wrong. The first half is now proven exhaustively; the
+second was the wrong conclusion drawn from it.
+
+**Finding.** The octave is **baked into every note's `harm_lev`**. Finale folds the octaves out of a
+transposition into a residue in −4..+2 and folds the same octaves into `harm_lev`; the two are a
+matched pair. A `.mus` stores the residue with an unshifted `harm_lev`, a `.musx` the full interval
+with a `harm_lev` shifted to match. Measured across 30,000+ notes, the delta is exactly seven
+diatonic steps per octave, with no exceptions. **Neither container needs an octave field**, which is
+how Finale displays a `.mus` correctly.
+
+Undoing the fold on the `.musx` side takes the containers from 27,931 identical / 2,493 octave-only
+to **30,423 identical / 1 octave-only**.
+
+**Decision.** Document it; change no code yet. Reconciling the two containers does not say which
+frame is the true written pitch, and the obvious external check — where notes land on the staff —
+cannot adjudicate: four candidate models each fit some intervals and none fits all, and a
+transposing instrument has its own tessitura, so the non-transposing baseline is not a fair
+comparison for the staves in question. Changing it would move the octave of every transposing staff
+in the output.
+
+See `docs/formats/transposition-octave.md` for the full evidence and for what would settle it.
+
+- **OPEN — which octave frame is the true written pitch?** Settling it needs a score whose correct
+  written pitches are known independently of Finale: a public-domain transposing part entered by
+  hand and saved in both formats. The corpus cannot supply one, because every `.musx` in it was
+  produced by Finale from the matching `.mus`, so the two are not independent witnesses.
