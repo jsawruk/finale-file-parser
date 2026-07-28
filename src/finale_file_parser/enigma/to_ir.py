@@ -16,6 +16,7 @@ from finale_file_parser.enigma.articulations import articulations_by_entry
 from finale_file_parser.enigma.beams import BeamedNote, beams_for
 from finale_file_parser.enigma.clef import Clef, ClefSign, clef_definitions, clefs_by_measure
 from finale_file_parser.enigma.document import EnigmaDocument, Record
+from finale_file_parser.enigma.groups import staff_groups
 from finale_file_parser.enigma.key import Mode, decode_key
 from finale_file_parser.enigma.location import locate_entries
 from finale_file_parser.enigma.lyrics import Lyric as EnigmaLyric
@@ -32,6 +33,7 @@ from finale_file_parser.ir import (
     Lyric,
     Measure,
     Part,
+    PartGroup,
     Pitch,
     Score,
     TimeSignature,
@@ -164,10 +166,41 @@ def build_score(document: EnigmaDocument) -> Score:
     ]
     return Score(
         parts=tuple(parts),
+        groups=_groups(document, [part.id for part in parts]),
         title=info.get("title", ""),
         composer=info.get("composer", ""),
         metadata={k: v for k, v in info.items() if k not in {"title", "composer"}},
     )
+
+
+def _groups(document: EnigmaDocument, part_ids: list[str]) -> tuple[PartGroup, ...]:
+    """Staff groups whose staves form a contiguous run of the score's parts.
+
+    A group is **dropped** where its staves are not contiguous here, which
+    happens when the document lays its staves out in an order their numbers do
+    not follow: 14 of 230 corpus groups. `build_score` orders parts by staff
+    number, so for those documents a `<part-group>` would brace a run of parts
+    the score does not group -- worse than no bracket at all. Fixing it properly
+    means ordering parts by `staff_order`, which is a change to every part's
+    position and belongs in its own slice.
+    """
+    at = {part_id: index for index, part_id in enumerate(part_ids)}
+    out: list[PartGroup] = []
+    for group in staff_groups(document):
+        ids = [f"P{staff}" for staff in group.staves]
+        positions = [at[part_id] for part_id in ids if part_id in at]
+        if not positions or sorted(positions) != list(range(min(positions), max(positions) + 1)):
+            continue
+        out.append(
+            PartGroup(
+                part_ids=tuple(part_ids[index] for index in sorted(positions)),
+                symbol=group.symbol,
+                barline=group.barline,
+                name=group.name,
+                abbreviation=group.abbreviation,
+            )
+        )
+    return tuple(out)
 
 
 def _apply_beams(cell: _Cell) -> None:

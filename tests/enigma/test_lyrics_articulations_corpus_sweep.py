@@ -1,4 +1,4 @@
-"""Validate lyric, articulation, beam and repeat export, and the containers against each other.
+"""Validate lyric, articulation, beam, repeat and group export, and the containers.
 
 Skipped wherever corpus/ is absent (e.g. CI). Two independent checks:
 
@@ -15,6 +15,7 @@ Report counts only -- never a corpus filename, title, or lyric.
 
 from __future__ import annotations
 
+import collections
 from pathlib import Path
 from typing import NamedTuple
 
@@ -65,6 +66,28 @@ revision the entry-pool sweep already pins -- and a bit that opens a group
 changes the beams of the note on each side of the break.
 """
 
+GROUP_DOCUMENTS = 155
+GROUPS = 201
+"""Staff groups reaching the IR, of 209 in the pool.
+
+The 8 that do not are groups whose staves are not contiguous once parts are
+ordered by staff number; see `to_ir._groups`. `staff_groups` itself returns
+exactly one per pool record -- that equality is the check that no part-variant
+record is being counted twice.
+"""
+
+GROUP_SYMBOLS = {"brace": 129, "bracket": 65, None: 7}
+"""Only bracket ids with evidence get a symbol; id 8's 7 groups are emitted
+without one rather than guessed at."""
+
+PAIRED_WITH_GROUPS = 15
+GROUP_NAME_ONLY_DIFFERENCES = 4
+"""Pairs differing from their `.musx` in the group name and nothing else.
+
+A `.mus` recovers the name's text-block id but carries no text blocks to
+resolve it against -- the same missing chain as staff names.
+"""
+
 REPEAT_DOCUMENTS = 109
 FORWARD_REPEATS = 109
 BACKWARD_REPEATS = 121
@@ -102,6 +125,17 @@ class MeasureRepeat(NamedTuple):
     backward: bool
     passes: int | None
     endings: tuple[tuple[tuple[int, ...], str], ...]
+
+
+def all_groups(score: Score) -> tuple[tuple[object, ...], ...]:
+    return tuple(
+        (group.part_ids, group.symbol, group.barline, group.name) for group in score.groups
+    )
+
+
+def group_shape(score: Score) -> tuple[tuple[object, ...], ...]:
+    """Everything about a group except its name."""
+    return tuple(row[:3] for row in all_groups(score))
 
 
 def all_repeats(score: Score) -> dict[int, MeasureRepeat]:
@@ -231,6 +265,65 @@ def articulation_agreement() -> tuple[int, int, int]:
             else:
                 different += 1
     return documents, identical, different
+
+
+@pytest.fixture(scope="module")
+def group_coverage() -> tuple[int, int, dict[str | None, int]]:
+    documents = groups = 0
+    symbols: collections.Counter[str | None] = collections.Counter()
+    for path in musx_files():
+        try:
+            score = build_score(parse_enigma(score_xml(path)))
+        except CorruptScoreError:
+            continue
+        if not score.groups:
+            continue
+        documents += 1
+        groups += len(score.groups)
+        symbols.update(group.symbol for group in score.groups)
+    return documents, groups, dict(symbols)
+
+
+@pytest.fixture(scope="module")
+def group_agreement() -> tuple[int, int, int]:
+    documents = shape_differences = name_only = 0
+    for mus_path, musx_path in pairs():
+        try:
+            document = parse_enigma(score_xml(musx_path))
+            if len(read_mus_entries(mus_path)) != len(document.entries.records):
+                continue
+            theirs = build_score(document)
+            mine = build_score(read_mus_document(mus_path))
+        except CorruptScoreError:
+            continue
+        except Exception:  # noqa: BLE001 - counted, not diagnosed
+            continue
+        if not mine.groups and not theirs.groups:
+            continue
+        documents += 1
+        if group_shape(mine) != group_shape(theirs):
+            shape_differences += 1
+        elif all_groups(mine) != all_groups(theirs):
+            name_only += 1
+    return documents, shape_differences, name_only
+
+
+def test_the_corpus_exports_staff_groups(
+    group_coverage: tuple[int, int, dict[str | None, int]],
+) -> None:
+    documents, groups, symbols = group_coverage
+    assert documents == GROUP_DOCUMENTS
+    assert groups == GROUPS
+    assert symbols == GROUP_SYMBOLS
+
+
+def test_both_containers_produce_the_same_groups(group_agreement: tuple[int, int, int]) -> None:
+    """Extent, symbol and barline must match exactly. Names are the one known
+    gap: a `.mus` has no text blocks to resolve them against."""
+    documents, shape_differences, name_only = group_agreement
+    assert documents == PAIRED_WITH_GROUPS
+    assert shape_differences == 0
+    assert name_only == GROUP_NAME_ONLY_DIFFERENCES
 
 
 @pytest.fixture(scope="module")

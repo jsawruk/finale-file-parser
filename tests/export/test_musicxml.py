@@ -15,6 +15,7 @@ from finale_file_parser.ir import (
     Lyric,
     Measure,
     Part,
+    PartGroup,
     Pitch,
     Score,
     TimeSignature,
@@ -372,3 +373,92 @@ def test_an_ending_is_written_before_the_repeat_it_meets() -> None:
 
 def test_a_measure_without_repeats_writes_no_barline() -> None:
     assert "<barline" not in to_musicxml(_score(_note())).decode()
+
+
+def _grouped(*groups: PartGroup, parts: int = 3) -> Score:
+    return Score(
+        parts=tuple(
+            Part(id=f"P{n}", name=f"Staff {n}", measures=(Measure(number=1),))
+            for n in range(1, parts + 1)
+        ),
+        groups=groups,
+    )
+
+
+def _part_list(score: Score):  # type: ignore[no-untyped-def]
+    element = _tree(score).find("part-list")
+    assert element is not None
+    return [
+        (child.tag, child.get("type"), child.get("number") or child.get("id")) for child in element
+    ]
+
+
+def test_a_group_wraps_the_parts_it_covers() -> None:
+    score = _grouped(PartGroup(part_ids=("P1", "P2"), symbol="brace"))
+    assert _part_list(score) == [
+        ("part-group", "start", "1"),
+        ("score-part", None, "P1"),
+        ("score-part", None, "P2"),
+        ("part-group", "stop", "1"),
+        ("score-part", None, "P3"),
+    ]
+
+
+def test_a_group_carries_its_symbol_barline_and_name() -> None:
+    score = _grouped(PartGroup(part_ids=("P1", "P2"), symbol="bracket", barline=True, name="Winds"))
+    start = _tree(score).find("./part-list/part-group")
+    assert start is not None
+    assert start.findtext("group-name") == "Winds"
+    assert start.findtext("group-symbol") == "bracket"
+    assert start.findtext("group-barline") == "yes"
+
+
+def test_an_unmapped_symbol_writes_no_group_symbol() -> None:
+    score = _grouped(PartGroup(part_ids=("P1", "P2"), symbol=None, barline=True))
+    start = _tree(score).find("./part-list/part-group")
+    assert start is not None
+    assert start.find("group-symbol") is None
+    assert start.findtext("group-barline") == "yes"
+
+
+def test_nested_groups_get_distinct_numbers_and_close_innermost_first() -> None:
+    """Two groups open at the same part; the inner one must close first or the
+    brackets interleave, which the schema permits and no reader draws."""
+    score = _grouped(
+        PartGroup(part_ids=("P1", "P2", "P3"), symbol="bracket"),
+        PartGroup(part_ids=("P1", "P2"), symbol="brace"),
+    )
+    assert _part_list(score) == [
+        ("part-group", "start", "1"),
+        ("part-group", "start", "2"),
+        ("score-part", None, "P1"),
+        ("score-part", None, "P2"),
+        ("part-group", "stop", "2"),
+        ("score-part", None, "P3"),
+        ("part-group", "stop", "1"),
+    ]
+
+
+def test_groups_ending_together_close_innermost_first() -> None:
+    """Both end on the same part, so the closing order is decided here rather
+    than by where they start. Closing the outer one first interleaves the
+    brackets."""
+    score = _grouped(
+        PartGroup(part_ids=("P1", "P2", "P3"), symbol="bracket"),
+        PartGroup(part_ids=("P2", "P3"), symbol="brace"),
+    )
+    closes = [n for tag, kind, n in _part_list(score) if tag == "part-group" and kind == "stop"]
+    assert closes == ["2", "1"]
+
+
+def test_a_group_number_is_reused_once_it_closes() -> None:
+    score = _grouped(
+        PartGroup(part_ids=("P1",), symbol="brace"),
+        PartGroup(part_ids=("P2", "P3"), symbol="brace"),
+    )
+    numbers = [n for tag, kind, n in _part_list(score) if tag == "part-group" and kind == "start"]
+    assert numbers == ["1", "1"]
+
+
+def test_a_score_with_no_groups_writes_a_plain_part_list() -> None:
+    assert all(tag == "score-part" for tag, _, _ in _part_list(_grouped()))

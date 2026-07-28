@@ -26,6 +26,7 @@ __all__ = [
     "Lyric",
     "Measure",
     "Part",
+    "PartGroup",
     "Pitch",
     "Score",
     "TimeSignature",
@@ -207,10 +208,31 @@ class Part:
 
 
 @dataclass(frozen=True)
+class PartGroup:
+    """A brace or bracket joining a run of consecutive parts."""
+
+    part_ids: tuple[str, ...]
+    """The parts it joins, in score order. Always contiguous in `Score.parts`."""
+
+    symbol: str | None = None
+    """MusicXML `<group-symbol>` -- "brace", "bracket", "line", "square" -- or
+    None where the source names a shape this project cannot identify."""
+
+    barline: bool = False
+    """Barlines run through the group rather than stopping at each staff."""
+
+    name: str = ""
+    abbreviation: str = ""
+
+
+@dataclass(frozen=True)
 class Score:
     """A whole score."""
 
     parts: tuple[Part, ...] = ()
+    groups: tuple[PartGroup, ...] = ()
+    """Braces and brackets down the left edge, outermost first."""
+
     title: str = ""
     composer: str = ""
     metadata: dict[str, str] = field(default_factory=dict)

@@ -40,7 +40,14 @@ from dataclasses import dataclass
 from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.mus_payload import read_mus_streams
 
-__all__ = ["MusDetailRecord", "TAG_GFHOLD", "TAG_TUPLET_DEF", "read_mus_details", "entry_key"]
+__all__ = [
+    "MusDetailRecord",
+    "TAG_GFHOLD",
+    "TAG_STAFF_GROUP",
+    "TAG_TUPLET_DEF",
+    "read_mus_details",
+    "entry_key",
+]
 
 _HEADER = 12
 """tag (2) + cmper1 (2) + cmper2 (2) + inci (2) + length (4)."""
@@ -67,6 +74,15 @@ TAG_LYRIC_VERSE = 1108
 One record per entry rather than one per verse: the payload is a run of 20-byte
 groups, one per verse the entry sings, so its length is 20, 40 or 60.
 """
+
+TAG_STAFF_GROUP = 1057
+"""`staffGroup` — a brace or bracket over a run of staves, keyed by
+(instrument list, group id).
+
+Identified by key set: across the 16 paired documents that carry a group, tag
+1057's (cmper1, cmper2) pairs equal the `.musx` `staffGroup` keys exactly, and
+no other tag matches even once. Its 40-byte payload lays the fields out in the
+order `etfspec.pdf` documents for the ETF `NG` record; see `enigma.groups`."""
 
 TAG_TUPLET_DEF = 1072
 """`tupletDef` -- keyed by entry, not by a (staff, measure) pair. See `entry_key`."""

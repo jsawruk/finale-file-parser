@@ -131,7 +131,11 @@ limit is verified by mutation, because no real corpus archive trips one.
       total passes, and ending brackets. 109 forward, 121 backward and 142 brackets across 109
       documents; identical from `.mus` and `.musx` on all 19 same-content pairs that use them.
       Jumps (D.C., D.S., Fine, To Coda) are a separate slice and are not read.
-- [ ] Part groups, fingerings, jumps and barline styles.
+- [x] **Part groups** — `enigma/groups.py`, both containers. Braces and brackets, group barlines
+      and names, nested and numbered in the part list. 201 groups across 155 documents; extent,
+      symbol and barline identical from `.mus` and `.musx` on all 15 paired documents that have
+      them, names being the one known `.mus` gap.
+- [ ] Fingerings, jumps, barline styles, and ordering parts by the instrument list.
 
 ## Later
 
