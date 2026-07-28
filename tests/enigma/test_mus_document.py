@@ -564,3 +564,37 @@ def test_a_zero_name_id_becomes_no_field_at_all(pools: Callable[..., None]) -> N
 def test_skips_a_group_payload_too_short_for_its_fields(pools: Callable[..., None]) -> None:
     pools(details=(MusDetailRecord(STAFF_GROUP, 0, 1, 0, bytes(8)),))
     assert read_mus_document(PATH).details.get("staffGroup", 0, 1) is None
+
+
+@pytest.mark.parametrize(("nibble", "expected"), [(1, "normal"), (2, "double")])
+def test_the_barline_style_nibble_is_read(
+    pools: Callable[..., None], nibble: int, expected: str
+) -> None:
+    """The high nibble of the same flags byte the repeat bits live in."""
+    pools(others=(MusOther(MEAS_SPEC, 7, 0, meas_spec_with_flags(nibble << 4)),))
+    record = read_mus_document(PATH).others.get("measSpec", 7)
+    assert record is not None
+    assert record.fields["barline"] == expected
+
+
+def test_an_unknown_barline_nibble_is_not_guessed_at(pools: Callable[..., None]) -> None:
+    """Nibble 3 would be the obvious reading of `final`, and it does not occur
+    once in 4,427 measures across 99 corpus `.mus` documents -- so there is
+    nothing to check a guess against, and a wrong one puts the wrong bar at the
+    end of a piece."""
+    pools(others=(MusOther(MEAS_SPEC, 8, 0, meas_spec_with_flags(3 << 4)),))
+    record = read_mus_document(PATH).others.get("measSpec", 8)
+    assert record is not None
+    assert "barline" not in record.fields
+
+
+def test_the_barline_nibble_does_not_disturb_the_repeat_bits(
+    pools: Callable[..., None],
+) -> None:
+    """They share a byte: reading the style off the whole byte, or the flags
+    off the whole byte, breaks the other."""
+    pools(others=(MusOther(MEAS_SPEC, 9, 0, meas_spec_with_flags((2 << 4) | 0x08)),))
+    record = read_mus_document(PATH).others.get("measSpec", 9)
+    assert record is not None
+    assert record.fields["barline"] == "double"
+    assert "forRepBar" in record.fields

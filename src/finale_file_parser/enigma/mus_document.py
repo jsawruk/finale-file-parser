@@ -21,7 +21,7 @@ Translated:
 | --- | --- | --- |
 | entries | `entry` | via `read_mus_entry_records` |
 | others | `frameSpec` (146) | `startEntry`, `endEntry` |
-| others | `measSpec` (176) | `keySig.key`, `beats`, `divbeat`, the repeat flags at +10 |
+| others | `measSpec` (176) | `keySig.key`, `beats`, `divbeat`, the +10 flags byte |
 | details | `gfhold` (1044) | `clefID`, `frame1`, `frame2` |
 | options | `clefOptions` (109) | the clef table: `adjust`, `clefChar`, `clefYDisp`, `shapeID` |
 | details | `tupletDef` (1072) | `symbolicNum`, `symbolicDur`, `refNum`, `refDur` |
@@ -107,11 +107,12 @@ UNTRANSLATED = (
     "root cause as the transposition gap above -- the value lives with the "
     "instrument, not in the file.",
     "measSpec display time signatures (useDisplayTimesig, dispBeats, dispDivbeat).",
-    "Barline styles: measSpec's flags byte at +10 holds the style in its high "
-    "nibble (1 normal, 2 double), but the paired corpus carries 11 double "
-    "barlines and no final one -- too thin to commit to, so an ordinary barline "
-    "is written everywhere. The repeat bits in the same byte's low nibble ARE "
-    "read; see enigma.repeats.",
+    "Final barlines: measSpec's flags byte at +10 holds the barline style in its "
+    "high nibble, and 1 (normal) and 2 (double) ARE read -- see enigma.barlines. "
+    "A final bar is not: nibble 3 is the obvious reading and it does not occur "
+    "once in 4,427 measures across 99 corpus .mus documents, so nothing checks a "
+    "guess. A .mus therefore ends a piece with an ordinary barline where the "
+    ".musx draws a final one.",
     "Staff group names: a staffGroup's fullID IS recovered, but resolving it "
     "needs the textBlock -> blockText chain, which a .mus does not supply -- "
     "the same missing chain as staffSpec part names. Groups therefore come out "
@@ -225,6 +226,14 @@ only exact candidate. One negative example is thin on its own, but
 style)`, and 0x0400 is the bit that example sets."""
 
 _MEAS_FLAGS = 10
+_MEAS_BARLINE_STYLES = {1: "normal", 2: "double"}
+"""The flags byte's **high nibble** is the barline style, as `.musx` names it.
+
+Paired documents agree on 3,960 ordinary measures and all 11 double bars, with
+no counterexample. **`final` is deliberately absent**: nibble 3 would be the
+obvious reading and it does not occur once in 4,427 measures across 99 `.mus`
+documents, so there is nothing to check it against. See `enigma.barlines`."""
+
 _MEAS_REPEAT_BITS = {"barEnding": 0x02, "bacRepBar": 0x04, "forRepBar": 0x08}
 """`measSpec`'s repeat-barline flags, all in the byte at +10.
 
@@ -485,6 +494,9 @@ def _meas_spec(payload: bytes) -> dict[str, str | tuple[str, ...] | Record | tup
                 # Written as a bare presence, matching the `.musx`, where these
                 # are empty elements rather than values.
                 fields[name] = ""
+        style = _MEAS_BARLINE_STYLES.get(payload[_MEAS_FLAGS] >> 4)
+        if style is not None:
+            fields["barline"] = style
     return fields
 
 

@@ -596,6 +596,26 @@ Three limits, each deliberate:
 Corpus: **6 markings across 3 documents** — "Fine" and "D.C. al Coda". Small, and that is the point:
 the palette would have given hundreds.
 
+### Known format facts — barline styles
+
+`measSpec.barline` names the right barline's style outright in a `.musx`: `normal`, `double` or
+`final`, and nothing else in 21,855 corpus measures. Only the two that are not ordinary need an
+element — `double` → `light-light` (228 measures, 87 documents), `final` → `light-heavy` (110
+measures, 23 documents). Writing `regular` on the other 21,517 would say nothing.
+
+A `.mus` keeps the same thing in the **high nibble of the flags byte at `measSpec` +10**, whose low
+bits are the repeat flags. Nibble 1 is ordinary and 2 is a double bar: paired documents agree on
+3,960 ordinary measures and all 11 double bars, with no counterexample. The two readings share a
+byte, so masking matters in both directions — reading either off the whole byte breaks the other.
+
+**A `.mus` never reports a final barline.** Nibble 3 is the obvious reading and it does not occur
+once in 4,427 measures across 99 `.mus` documents, so there is nothing to check a guess against.
+Either no `.mus` here carries a final bar, or it is not in this nibble, and the corpus cannot say
+which. A wrong guess would put a double bar at the end of pieces that end plainly.
+
+A repeat overrides the style: the repeat's own heavy line is what gets drawn, and four corpus
+measures ask for both.
+
 ### Known format facts — repeats
 
 Repeats live in two places at once, and reconstructing one bracket needs both.

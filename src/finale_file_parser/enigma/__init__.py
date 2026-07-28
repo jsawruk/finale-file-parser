@@ -6,6 +6,7 @@ from finale_file_parser.enigma.articulations import (
     ARTICULATION_CHARACTERS,
     articulations_by_entry,
 )
+from finale_file_parser.enigma.barlines import barline_styles
 from finale_file_parser.enigma.beams import BeamedNote, beams_for
 from finale_file_parser.enigma.blast import CorruptDclStreamError, blast_decompress
 from finale_file_parser.enigma.clef import (
@@ -157,6 +158,7 @@ __all__ = [
     "TextsPool",
     "UnsupportedKeyError",
     "articulations_by_entry",
+    "barline_styles",
     "beams_for",
     "repeats_for",
     "staff_groups",

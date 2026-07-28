@@ -115,6 +115,17 @@ always has somewhere to be drawn.
 PAIRED_WITH_REPEATS = 19
 """Same-content pairs where either container carries a repeat."""
 
+BARLINE_DOCUMENTS = 89
+BARLINE_STYLES = {"light-light": 216, "light-heavy": 110}
+"""Double and final bars exported, counted per measure.
+
+`normal` is not counted: it is the default barline and needs no element.
+"""
+
+PAIRED_WITH_BARLINES = 6
+"""Same-content pairs where either container styles a barline. Small, and it is
+why a `.mus` refuses to guess at `final`: no pair carries one."""
+
 JUMP_DOCUMENTS = 3
 JUMP_MARKINGS = 6
 """Text repeats reaching the export, counted per measure rather than per part.
@@ -338,6 +349,59 @@ def group_agreement() -> tuple[int, int, int]:
         elif all_groups(mine) != all_groups(theirs):
             name_only += 1
     return documents, shape_differences, name_only
+
+
+def test_the_corpus_exports_barline_styles() -> None:
+    documents = 0
+    styles: collections.Counter[str] = collections.Counter()
+    for path in musx_files():
+        try:
+            score = build_score(parse_enigma(score_xml(path)))
+        except CorruptScoreError:
+            continue
+        found = {
+            measure.number: measure.barline_style
+            for part in score.parts
+            for measure in part.measures
+            if measure.barline_style
+        }
+        if found:
+            documents += 1
+            styles.update(found.values())
+    assert documents == BARLINE_DOCUMENTS
+    assert dict(styles) == BARLINE_STYLES
+
+
+def test_both_containers_style_the_same_barlines() -> None:
+    """A `.mus` keeps the style in a nibble of the repeat flags byte, so this
+    also checks the two readings of that byte do not interfere."""
+    documents = different = 0
+    for mus_path, musx_path in pairs():
+        try:
+            document = parse_enigma(score_xml(musx_path))
+            if len(read_mus_entries(mus_path)) != len(document.entries.records):
+                continue
+            scores = (build_score(read_mus_document(mus_path)), build_score(document))
+        except CorruptScoreError:
+            continue
+        except Exception:  # noqa: BLE001 - counted, not diagnosed
+            continue
+        mine, theirs = (
+            {
+                measure.number: measure.barline_style
+                for part in score.parts
+                for measure in part.measures
+                if measure.barline_style
+            }
+            for score in scores
+        )
+        if not mine and not theirs:
+            continue
+        documents += 1
+        if mine != theirs:
+            different += 1
+    assert documents == PAIRED_WITH_BARLINES
+    assert different == 0
 
 
 def test_the_corpus_exports_text_repeats() -> None:

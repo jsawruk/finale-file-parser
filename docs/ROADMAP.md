@@ -146,7 +146,10 @@ limit is verified by mutation, because no real corpus archive trips one.
       Coda" and their kin, printed at their measure. 6 markings across 3 documents; the palette
       every document carries is deliberately not read. Playback semantics, segno/coda signs and the
       `.mus` side are all out of reach on this corpus — see `docs/ARCHITECTURE.md`.
-- [ ] Fingerings, barline styles.
+- [x] **Barline styles** — `enigma/barlines.py`, both containers. Double and final bars: 216 and
+      110 measures across 89 documents, identical from `.mus` and `.musx` on all 6 paired documents
+      that use them. A `.mus` declines to report a final bar; see `docs/ARCHITECTURE.md`.
+- [ ] Fingerings.
 
 ## Later
 

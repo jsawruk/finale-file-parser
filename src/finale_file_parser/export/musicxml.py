@@ -233,7 +233,7 @@ def _append_measure(
 
 
 def _append_barline(element: ET.Element, measure: Measure, location: str) -> None:
-    """A repeat barline and any ending bracket that meets it.
+    """The barline: its style, a repeat, and any ending bracket that meets it.
 
     Left and right are separate elements at opposite ends of the measure, so a
     forward repeat opens the measure and a backward one closes it -- and a
@@ -242,13 +242,20 @@ def _append_barline(element: ET.Element, measure: Measure, location: str) -> Non
     left = location == "left"
     endings = [e for e in measure.endings if (e.type == "start") == left]
     repeat = measure.repeat_forward if left else measure.repeat_backward
-    if not endings and not repeat:
+    # A double or final bar belongs to the right barline only. Where a repeat
+    # meets one -- four corpus measures do -- the repeat's own heavy line is
+    # what gets drawn, which the `elif` below enforces: two `<bar-style>`
+    # elements in one barline is invalid.
+    style = None if left else measure.barline_style
+    if not endings and not repeat and style is None:
         return
 
     barline = ET.SubElement(element, "barline", location=location)
     # Schema order within a barline: bar-style, then ending, then repeat.
     if repeat:
         ET.SubElement(barline, "bar-style").text = "heavy-light" if left else "light-heavy"
+    elif style is not None:
+        ET.SubElement(barline, "bar-style").text = style
     for ending in endings:
         attrs = {"number": ",".join(str(n) for n in ending.numbers), "type": ending.type}
         ET.SubElement(barline, "ending", attrs).text = _ending_text(ending)

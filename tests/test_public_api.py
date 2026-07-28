@@ -109,6 +109,7 @@ EXPECTED_PUBLIC_NAMES = {
     "decode_key",
     "harm_lev_octave_shift",
     "articulations_by_entry",
+    "barline_styles",
     "beams_for",
     "blast_decompress",
     "read_mus_document",
