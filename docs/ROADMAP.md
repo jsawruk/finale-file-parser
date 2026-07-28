@@ -149,6 +149,11 @@ limit is verified by mutation, because no real corpus archive trips one.
 - [x] **Barline styles** — `enigma/barlines.py`, both containers. Double and final bars: 216 and
       110 measures across 89 documents, identical from `.mus` and `.musx` on all 6 paired documents
       that use them. A `.mus` declines to report a final bar; see `docs/ARCHITECTURE.md`.
+- [x] **End-to-end audit** — `tests/export/test_export_audit_corpus_sweep.py`. Invariants asserted
+      on the exported document rather than on any one feature, over the whole corpus and through
+      both readers: the part list agrees with the parts, groups nest, measures line up, beams close,
+      barlines are well formed, and nothing the IR holds is dropped on the way out. Schema
+      validation went from 25 documents to all 398. **No defects found.**
 - [ ] Fingerings.
 
 ## Later

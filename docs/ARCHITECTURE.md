@@ -596,6 +596,23 @@ Three limits, each deliberate:
 Corpus: **6 markings across 3 documents** — "Fine" and "D.C. al Coda". Small, and that is the point:
 the palette would have given hundreds.
 
+### Known format facts — three things that are not invariants
+
+Found by auditing the exported documents rather than any one feature. Each looks like a defect and
+is not, so each is recorded here rather than asserted in a test.
+
+**Finale attaches lyrics to rests.** 165 `lyrDataVerse` records in the corpus name an entry that is a
+rest, against 16,591 naming a note. The export carries them through, because the file says so; the
+count is pinned so that a change means the lyric-to-entry mapping moved rather than that the corpus
+did.
+
+**Ties do not pair.** The corpus carries 7,017 tie starts against 6,990 ends — 27 ties begin and
+never finish. That is in the files, so "every tie start has a stop" cannot be asserted of the output.
+
+**A voice need not fill its measure.** A second layer holding a half note in a whole-note bar is
+ordinary Finale, and MusicXML represents it directly. Requiring every voice in a measure to be the
+same length flags 301 corpus measures that are perfectly correct.
+
 ### Known format facts — barline styles
 
 `measSpec.barline` names the right barline's style outright in a `.musx`: `normal`, `double` or
