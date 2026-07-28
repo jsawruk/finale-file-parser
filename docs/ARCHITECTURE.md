@@ -967,6 +967,26 @@ all 401 archives (`tests/enigma/test_key_corpus_sweep.py`), decoded by `enigma/k
   than guess, since a wrong key would silently misspell every pitch that resolves through it. The
   corpus has 0 such values.
 
+### Known format facts — the transposition octave
+
+**The octave is baked into `harm_lev`, not stored separately.** Finale folds the octaves out of a
+transposition into a residue in −4..+2 and folds the same octaves into every note's `harm_lev`. A
+`.mus` records the residue with an unshifted `harm_lev`; a `.musx` records the full interval with a
+`harm_lev` shifted to match, by exactly seven diatonic steps per octave — measured across 30,000+
+notes with no exceptions. Either pairing determines the same written pitch, so **neither container
+needs an octave field**.
+
+That answers a question this project had recorded as a dead end. The octave genuinely is absent from
+a `.mus` — no byte of `staffSpec` separates staves an octave apart, no field in any staff-keyed
+record holds the interval or the octave count — but it is absent because nothing needs it, not
+because it was lost.
+
+Our `spell_pitch` takes the written octave from `harm_lev` alone and never consults the
+transposition's octave count, which is correct for a `.mus` and off by that count for a `.musx`.
+Undoing the fold reconciles the two containers: 2,493 octave-only differences become 1. Which frame
+is the *true* written pitch is still open, and no code has changed on the strength of it. See
+`docs/formats/transposition-octave.md`.
+
 ### Known format facts — pitch spelling and transposition
 
 Full reference and derivation: `docs/superpowers/specs/2026-07-24-pitch-spelling-design.md`. Turns

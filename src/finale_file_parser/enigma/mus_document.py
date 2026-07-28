@@ -84,16 +84,16 @@ from finale_file_parser.version import mus as mus_header
 __all__ = ["UNTRANSLATED", "read_mus_document"]
 
 UNTRANSLATED = (
-    "staffSpec transposition octave: Finale normalises a staff's transposition into "
-    "a residue of -4..+2 and keeps the octaves separately, and the .mus stores "
-    "only the residue -- so staves whose transpositions differ by an octave hold "
-    "byte-identical payloads. The octave is absent from the file rather than "
-    "hidden in it, and a .mus therefore fixes a transposing staff's written pitch "
-    "only up to an octave. The key alteration IS recovered, which is all the "
-    "written pitch needs otherwise, so note letters and accidentals are right; "
-    "what stays wrong is the octave on those staves, and the concert pitch "
-    "spell_note returns alongside the written one. See harm_lev_octave_shift and "
-    "docs/formats/mus-binary-notes.md.",
+    "staffSpec transposition octave: the octave count is genuinely absent from a "
+    ".mus -- no byte of staffSpec separates staves an octave apart, and no "
+    "staff-keyed record holds the interval or the count. It is absent because "
+    "nothing needs it: Finale folds the octaves into every note's harm_lev as "
+    "well as out of the interval, so the residue and harm_lev are a matched "
+    "pair that fixes the written pitch on their own. What is still open is "
+    "which frame our spell_pitch should use -- undoing the fold on the .musx "
+    "side reconciles the containers (2,493 octave-only differences become 1), "
+    "but nothing here yet says which is the true written pitch. See "
+    "docs/formats/transposition-octave.md.",
     "staffSpec part names: the reference at +30/+32 does not resolve to a text "
     "block -- the best candidate chain matches 16 of 59 staves, and by hand it "
     "picks a trumpet block for a saxophone part. The .musx is only a fuzzy oracle "
