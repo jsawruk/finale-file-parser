@@ -26,7 +26,7 @@ from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.mus_document import read_mus_document
 from finale_file_parser.enigma.mus_entries import read_mus_entries
 from finale_file_parser.enigma.score import score_xml
-from finale_file_parser.enigma.to_ir import build_score
+from finale_file_parser.enigma.to_ir import RESERVED_STAFF, build_score
 from finale_file_parser.ir import Lyric, Score
 
 CORPUS = Path(__file__).parent.parent.parent / "corpus"
@@ -55,7 +55,7 @@ this counts what is understood rather than what is present -- the corpus assigns
 PAIRED_WITH_ARTICULATIONS = 72
 
 BEAM_DOCUMENTS = 366
-BEAMS = 84620
+BEAMS = 84593
 
 PAIRED_WITH_BEAMS = 81
 BEAM_EVENT_DIFFERENCES = 2
@@ -93,22 +93,34 @@ A `.mus` recovers the name's text-block id but carries no text blocks to
 resolve it against -- the same missing chain as staff names.
 """
 
-REPEAT_DOCUMENTS = 109
-FORWARD_REPEATS = 109
-BACKWARD_REPEATS = 121
+REPEAT_DOCUMENTS = 108
+FORWARD_REPEATS = 107
+BACKWARD_REPEATS = 119
 ENDING_BRACKETS = 142
 """Repeat barlines and ending brackets exported across the corpus.
 
 Measures rather than parts: every part of a score carries the same barline, so
 counting rows would measure how many staves the repertoire uses.
 
-All three match the raw element counts in the `.musx` pool -- 109 `forRepBar`,
-121 `bacRepBar`, 142 `repeatEndingStart` -- which is the check that nothing is
-invented or lost between the pool and the IR.
+These count repeats on measures a **part** reaches. The pool holds 109
+`forRepBar`, 121 `bacRepBar` and 142 `repeatEndingStart`; brackets match it
+exactly, and the two barline counts fall two short because 4 measures are
+occupied by no part at all.
+
+Those are measures the reserved staff used to cover on its own -- typically 1
+and 2 of a score whose real staves start at 3. `build_score` builds a measure
+only where a staff has entries, so a measure no part reaches has nowhere to
+carry a barline. That gap is older than the reserved-staff exclusion, which
+merely stopped hiding it; see `RESERVED_STAFF`.
 """
 
 PAIRED_WITH_REPEATS = 19
 """Same-content pairs where either container carries a repeat."""
+
+RESERVED_STAFF_PARTS = 0
+"""Exported parts for staff 32767, which every corpus document declares and
+none lays out. Must stay zero: it was one per document until it was excluded,
+and nothing else in the corpus is absent from the instrument list."""
 
 PAIRED_WITH_LYRICS = 6
 """Same-content pairs where the `.musx` carries lyrics, so the two containers
@@ -313,6 +325,20 @@ def group_agreement() -> tuple[int, int, int]:
     return documents, shape_differences, name_only
 
 
+def test_no_document_exports_the_reserved_staff() -> None:
+    """Asserted over the whole corpus rather than a constructed document,
+    because the claim is about every file Finale writes, not about the rule."""
+    parts = 0
+    for path in musx_files():
+        try:
+            score = build_score(parse_enigma(score_xml(path)))
+        except CorruptScoreError:
+            continue
+        parts += sum(1 for part in score.parts if part.id == f"P{RESERVED_STAFF}")
+        assert score.parts, "excluding the reserved staff must not empty a score"
+    assert parts == RESERVED_STAFF_PARTS
+
+
 def test_the_corpus_exports_staff_groups(
     group_coverage: tuple[int, int, dict[str | None, int]],
 ) -> None:
@@ -442,7 +468,7 @@ def test_both_containers_produce_the_same_beams(
     documents, identical, different = beam_agreement
     assert documents == PAIRED_WITH_BEAMS
     assert different == BEAM_EVENT_DIFFERENCES
-    assert identical > 30_000
+    assert identical > 18_000
 
 
 def test_the_corpus_exports_articulations(articulation_coverage: tuple[int, int]) -> None:
@@ -459,7 +485,7 @@ def test_both_containers_produce_the_same_articulations(
     documents, identical, different = articulation_agreement
     assert documents == PAIRED_WITH_ARTICULATIONS
     assert different == 0
-    assert identical > 25_000
+    assert identical > 16_000
 
 
 def test_the_corpus_exports_lyrics(coverage: tuple[int, int]) -> None:
@@ -476,4 +502,4 @@ def test_both_containers_produce_the_same_syllables(agreement: tuple[int, int, i
     documents, identical, different = agreement
     assert documents == PAIRED_WITH_LYRICS
     assert different == 0
-    assert identical > 1_500
+    assert identical > 1_400

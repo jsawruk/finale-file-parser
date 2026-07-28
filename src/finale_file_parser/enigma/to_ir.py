@@ -173,6 +173,32 @@ def build_score(document: EnigmaDocument) -> Score:
     )
 
 
+RESERVED_STAFF = 0x7FFF
+"""A staff id Finale reserves rather than lays out: 32767, the same sentinel the
+format uses for "to the end" in `staffGroup.endMeas`.
+
+Every one of the 401 corpus documents declares it, and no document treats it as
+part of the score:
+
+* it is **never** in the score's instrument list (0 of 401), which is what
+  `instUsed` is -- the layout of the staves the score shows;
+* it is **never** named by a staff group (0 of 401);
+* its `staffSpec` is a template rather than a description of a part -- 401
+  documents hold just two distinct bodies, all with the same fixed `instUuid`,
+  a one-line `customStaff`, and clefs, key signatures, measure numbers, repeats
+  and repeat barlines all hidden;
+* 376 of 398 give it a single repeated pitch, always in layer 1, and none
+  carries a lyric.
+
+It is also the **only** staff in the corpus absent from the instrument list, so
+excluding it excludes nothing else. What Finale actually uses it for is not
+known and this does not guess; what is established is that it is not a part of
+the score, and exporting it put a spurious "Staff 32767" into every file this
+project produced. Its entries are still placed by `locate_entries`, so nothing
+below the IR is lost.
+"""
+
+
 def _ordered_staves(document: EnigmaDocument, present: set[int]) -> list[int]:
     """The staves carrying music, in the order the score lays them out.
 
@@ -185,11 +211,13 @@ def _ordered_staves(document: EnigmaDocument, present: set[int]) -> list[int]:
 
     A staff with music but no slot in the list keeps a place, after the listed
     ones, rather than being dropped: it has notes, and losing a part is worse
-    than putting it last.
+    than putting it last. The one exception is `RESERVED_STAFF`, which every
+    document declares and none lays out.
     """
     order = staff_order(document)
-    listed = [staff for staff in order if staff in present]
-    return listed + sorted(present - set(order))
+    wanted = present - {RESERVED_STAFF}
+    listed = [staff for staff in order if staff in wanted]
+    return listed + sorted(wanted - set(order))
 
 
 def _groups(document: EnigmaDocument, part_ids: list[str]) -> tuple[PartGroup, ...]:

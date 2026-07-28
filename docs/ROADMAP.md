@@ -138,7 +138,12 @@ limit is verified by mutation, because no real corpus archive trips one.
 - [x] **Part order** — parts follow `instUsed`, the score's own staff layout, rather than staff
       number. 10 documents were laying parts out in the wrong order; fixing it also recovers the 8
       staff groups that were dropped as non-contiguous. See `docs/DECISIONS.md`.
-- [ ] Fingerings, jumps, barline styles, and the staff-32767 question (`docs/DECISIONS.md`).
+- [x] **Staff 32767** — resolved: a reserved staff no score lays out, no longer exported as a part.
+      See `docs/DECISIONS.md`.
+- [ ] **Empty measures** — a part currently skips a measure where its staff is silent, rather than
+      writing a full-measure rest. 1,375 measures across 162 documents reach no part at all. This is
+      the next correctness item; see `docs/DECISIONS.md`.
+- [ ] Fingerings, jumps, barline styles.
 
 ## Later
 

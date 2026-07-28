@@ -191,15 +191,46 @@ part order across containers, because a `.mus` has no instrument-list record and
 numeric order, and no paired document is one of the 10. Staff groups rise from 201 to 209 — every
 group previously dropped for non-contiguity now survives.
 
-- **OPEN — what is staff 32767?** Every one of the 398 buildable corpus documents carries a staff
-  numbered 32767 (0x7FFF, the same sentinel `endMeas` uses for "to the end"). It is not a phantom:
-  it has its own `staffSpec`, its own `gfhold` per measure, and real entries — 92 in a sampled
-  document, against 77/95/97 for that score's three named staves. Its music is unique rather than a
-  copy of another staff, though the sampled one repeats a single pitch, which would fit a percussion
-  or chord staff. It is **absent from `instUsed` in every document**, so it is not part of the
-  score's staff layout.
+- **RESOLVED 2026-07-27 — staff 32767 is not a part.** See the entry below.
 
-  Both containers produce it identically, and it has been exported as a part named "Staff 32767"
-  since the IR was built; this change leaves its position (last) exactly as before. Whether it should
-  be exported at all, and what Finale uses it for, is unresolved — dropping it would discard real
-  entries on a guess, so nothing here does.
+
+## 2026-07-27 — DECIDED: staff 32767 is a reserved staff and is not exported
+
+**Context.** Every one of the 401 corpus documents declares a staff numbered 32767 — 0x7FFF, the same
+sentinel the format uses for "to the end" in `staffGroup.endMeas`. It has its own `staffSpec`, a
+`gfhold` per measure, and real entries, so it is not a phantom of our reading, and it was exported as
+a part named "Staff 32767" in every file this project produced.
+
+**Evidence that it is not part of the score.** Each of these was measured over the whole corpus:
+
+- it is **never** in the score's instrument list (0 of 401) — and `instUsed` is precisely the layout
+  of the staves a score shows;
+- it is **never** named by a staff group (0 of 401);
+- its `staffSpec` is a template, not a description of a part: 401 documents hold only **two** distinct
+  bodies, all with the same fixed `instUuid`, a one-line `customStaff`, and clefs, key signatures,
+  measure numbers, repeats and repeat barlines all hidden;
+- 376 of 398 give it a single repeated pitch, always in layer 1, and none carries a lyric;
+- its entries are **disjoint** from every real staff in all 401 documents, so it is not an alias or a
+  wildcard for one;
+- it is the **only** staff in the corpus absent from the instrument list, so excluding it excludes
+  nothing else.
+
+**Decision.** `build_score` does not make a part for it. The exclusion is by staff id rather than by
+"absent from the instrument list", because a `.mus` has no instrument-list record — excluding it only
+where a list exists would drop the staff from `.musx` and keep it in `.mus`, and the two containers
+would then disagree on every score. All 93 buildable `.mus` documents carry the same staff.
+
+**What is deliberately not claimed.** What Finale uses it for. A hidden one-line staff of repeated
+quarter notes fits a click track, a rhythmic-notation staff, or a chord-symbol carrier, and the
+corpus does not decide between them. The decision rests only on it not being part of the score.
+
+**Consequence.** No `Score` loses all its parts. Beams fall 84,620 → 84,593 (27 of them were on this
+staff); articulations, lyrics and staff groups are unchanged.
+
+- **OPEN — parts have gaps where a staff is empty.** `build_score` makes a measure only where a staff
+  has entries, so a staff silent through a measure gets no `Measure` at all and its part's measure
+  list skips a number. The reserved staff was hiding how much of this there is: it covered 1,375
+  measures across 162 documents that no real staff occupies — typically measures 1 and 2 of a score
+  whose real staves start at 3. Four of those carry a repeat barline that now has no part to be drawn
+  on, which is why the repeat sweep counts 107 forward and 119 backward against a pool holding 109
+  and 121. The fix is to emit a full-measure rest where a part is silent, which is its own slice.

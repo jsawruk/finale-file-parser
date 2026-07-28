@@ -498,6 +498,29 @@ One document fails to build: its `.mus` frame chain references an entry its pool
 is the same document whose `.musx` carries three `frameSpec` records its `.mus` does not, so the two
 containers disagree about its frames rather than the adapter mis-reading them.
 
+### Known format facts — the reserved staff 32767
+
+Every corpus document declares a staff numbered **32767** (0x7FFF, the sentinel the format also uses
+for "to the end" in `staffGroup.endMeas`). It is real data — its own `staffSpec`, a `gfhold` per
+measure, its own entries — but it is not part of the score:
+
+| check | result over 401 documents |
+| --- | --- |
+| in the score's instrument list (`instUsed`) | never |
+| named by a staff group | never |
+| distinct `staffSpec` bodies | **two**, all with one fixed `instUuid` |
+| display features | one-line `customStaff`; clefs, key signatures, measure numbers, repeats and repeat barlines all hidden |
+| its music | a single repeated pitch in 376 of 398, always layer 1, never a lyric |
+| entries shared with a real staff | none — disjoint in all 401 |
+
+It is also the only staff in the corpus absent from the instrument list. `build_score` therefore
+makes no part for it; see `docs/DECISIONS.md` for why the exclusion is by staff id rather than by
+absence from the list (a `.mus` has no such list, and the containers must agree). What Finale uses it
+for is **not** established — a hidden one-line staff of repeated quarter notes would fit a click
+track, rhythmic notation or a chord-symbol carrier equally well.
+
+Its entries are still placed by `locate_entries`, so nothing below the IR is lost.
+
 ### Known format facts — staff groups
 
 A `staffGroup` detail record spans a run of staves and says how they are joined — the braces and
