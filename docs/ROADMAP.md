@@ -125,7 +125,7 @@ limit is verified by mutation, because no real corpus archive trips one.
 - [x] **Articulations** — `enigma/articulations.py`, both containers. 22,821 marks across 273
       documents, from the five music-font characters with cross-font evidence; fingerings and the
       other 24 characters are deliberately not guessed at.
-- [x] **Beams** — `enigma/beams.py`, both containers. 84,620 beams across 366 documents, with
+- [x] **Beams** — `enigma/beams.py`, both containers. 84,593 beams across 366 documents, with
       secondary beams and hooks; Enigma stores only a "starts a group" bit, so the rest is derived.
 - [x] **Repeats** — `enigma/repeats.py`, both containers. Forward and backward repeat barlines,
       total passes, and ending brackets. 109 forward, 121 backward and 142 brackets across 109
@@ -142,7 +142,11 @@ limit is verified by mutation, because no real corpus archive trips one.
       See `docs/DECISIONS.md`.
 - [x] **Empty measures** — every part now covers every measure, with a full-measure rest where it is
       silent. 6,362 rests; 420 of 731 parts had a gap. See `docs/DECISIONS.md`.
-- [ ] Fingerings, jumps, barline styles.
+- [x] **Text repeats (jumps)** — `enigma/jumps.py`, `.musx` only. The words of "Fine", "D.C. al
+      Coda" and their kin, printed at their measure. 6 markings across 3 documents; the palette
+      every document carries is deliberately not read. Playback semantics, segno/coda signs and the
+      `.mus` side are all out of reach on this corpus — see `docs/ARCHITECTURE.md`.
+- [ ] Fingerings, barline styles.
 
 ## Later
 

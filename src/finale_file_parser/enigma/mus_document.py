@@ -124,11 +124,15 @@ UNTRANSLATED = (
     "guess from a wrong one. Staves therefore come out in numeric order, which "
     "is right for every document there is evidence about. Staff groups are read "
     "through that order; see enigma.groups.",
-    "Repeat jumps: repeatBack's target/trigger/action and the textRepeatAssign "
-    "family (D.C., D.S., Fine, To Coda) describe where a repeat sends the "
-    "player rather than what barline is drawn. Neither container's reading is "
-    "implemented, so both are equally silent -- this is a missing feature "
-    "rather than a .mus gap.",
+    "Text repeats (Fine, D.C. al Coda): the .musx reading is implemented, the "
+    ".mus one is not. Exactly one paired document carries a text repeat, with "
+    "two assignments, and a key set that small matches several tags by chance -- "
+    "so no .mus tag can be identified from this corpus. A .mus therefore exports "
+    "no markings. See enigma.jumps.",
+    "Repeat jumps: repeatBack's target/trigger/action, and textRepeatAssign's "
+    "action/target, describe where a repeat sends the player rather than what is "
+    "printed. Neither container reads them, so both are equally silent -- a "
+    "missing feature rather than a .mus gap.",
     "Fingerings: the corpus stores them as articulations whose character is a "
     "numeral in a text font, so telling them from a music-font numeral needs "
     "articDef's fontMain -- whose offset varies within a single era, so a .mus "

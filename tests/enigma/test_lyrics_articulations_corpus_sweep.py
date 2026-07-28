@@ -115,6 +115,16 @@ always has somewhere to be drawn.
 PAIRED_WITH_REPEATS = 19
 """Same-content pairs where either container carries a repeat."""
 
+JUMP_DOCUMENTS = 3
+JUMP_MARKINGS = 6
+"""Text repeats reaching the export, counted per measure rather than per part.
+
+Small on purpose. The corpus holds 17 assignments across 10 documents; 5 name a
+definition whose text the file does not carry, and several more are a music-font
+glyph rather than words. What is left is "Fine" and "D.C. al Coda". The palette
+every document carries is deliberately not counted -- see `enigma.jumps`.
+"""
+
 MEASURE_RESTS = 6362
 """Bars a part rests through, across the corpus.
 
@@ -328,6 +338,28 @@ def group_agreement() -> tuple[int, int, int]:
         elif all_groups(mine) != all_groups(theirs):
             name_only += 1
     return documents, shape_differences, name_only
+
+
+def test_the_corpus_exports_text_repeats() -> None:
+    """Guards the palette trap from the other side: if the definitions were read
+    without their assignments this would be in the hundreds, not 6."""
+    documents = markings = 0
+    for path in musx_files():
+        try:
+            score = build_score(parse_enigma(score_xml(path)))
+        except CorruptScoreError:
+            continue
+        found = {
+            (measure.number, words)
+            for part in score.parts
+            for measure in part.measures
+            for words in measure.directions
+        }
+        if found:
+            documents += 1
+            markings += len(found)
+    assert documents == JUMP_DOCUMENTS
+    assert markings == JUMP_MARKINGS
 
 
 def test_every_part_covers_every_measure() -> None:

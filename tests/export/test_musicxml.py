@@ -485,3 +485,22 @@ def test_an_ordinary_rest_is_not_marked_as_a_measure_rest() -> None:
     rest = note.find("rest")
     assert rest is not None and rest.get("measure") is None
     assert note.findtext("type") == "quarter"
+
+
+def test_a_measure_direction_is_written_above_before_the_notes() -> None:
+    """A direction placed after the notes reads as belonging to the next bar."""
+    measure = Measure(
+        number=1, voices=(Voice(number=1, events=(_note(),)),), directions=("D.C. al Fine",)
+    )
+    score = Score(parts=(Part(id="P1", name="Flute", measures=(measure,)),))
+    element = _tree(score).find("./part/measure")
+    assert element is not None
+    assert [child.tag for child in element] == ["attributes", "direction", "note"]
+    direction = element.find("direction")
+    assert direction is not None
+    assert direction.get("placement") == "above"
+    assert direction.findtext("./direction-type/words") == "D.C. al Fine"
+
+
+def test_a_measure_with_no_direction_writes_none() -> None:
+    assert "<direction" not in to_musicxml(_score(_note())).decode()
