@@ -31,6 +31,7 @@ import pytest
 from defusedxml import ElementTree as DET
 
 from finale_file_parser.enigma.document import parse_enigma
+from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.score import score_xml
 from finale_file_parser.enigma.text import staff_names
 from finale_file_parser.enigma.to_ir import build_score
@@ -42,6 +43,17 @@ pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not pr
 
 SAMPLE = 25
 SCHEMA_ENV = "MUSICXML_XSD"
+
+EXPORTABLE = 398
+"""Corpus documents that export at all; the other three fail to decode."""
+
+_BATCH = 40
+"""Files per `xmllint` invocation. It re-reads the schema each time, so batching
+is the difference between seconds and minutes."""
+
+
+def _all_archives() -> list[Path]:
+    return [p for p in sorted(CORPUS.rglob("*")) if p.is_file() and p.suffix.lower() == ".musx"]
 
 
 def _archives() -> list[Path]:
@@ -132,17 +144,36 @@ def test_titles_and_part_names_resolve() -> None:
 @pytest.mark.skipif(shutil.which("xmllint") is None, reason="xmllint not available")
 @pytest.mark.skipif(not os.environ.get(SCHEMA_ENV), reason=f"{SCHEMA_ENV} not set")
 def test_output_validates_against_the_official_schema(tmp_path: Path) -> None:
+    """Every corpus document, not a sample.
+
+    The schema is the one genuinely external oracle here, and the faults it
+    catches are rare by nature -- it found the grace note written with duration
+    zero. `xmllint` re-parses the 4 MB schema on every invocation, so the files
+    are handed to it in batches; validating them one at a time costs minutes.
+    """
     schema = os.environ[SCHEMA_ENV]
-    failures: list[str] = []
-    for index, path in enumerate(_archives()):
+    targets = []
+    for index, path in enumerate(_all_archives()):
+        try:
+            exported = _export(path)
+        except CorruptScoreError:
+            continue
         target = tmp_path / f"{index:03d}.musicxml"
-        target.write_bytes(_export(path))
+        target.write_bytes(exported)
+        targets.append(target)
+
+    failures: list[str] = []
+    for start in range(0, len(targets), _BATCH):
+        batch = targets[start : start + _BATCH]
         result = subprocess.run(
-            ["xmllint", "--noout", "--nonet", "--schema", schema, str(target)],
+            ["xmllint", "--noout", "--nonet", "--schema", schema, *(str(t) for t in batch)],
             capture_output=True,
             text=True,
             check=False,
         )
         if result.returncode:
-            failures.append(result.stderr.strip().splitlines()[-1] if result.stderr else "failed")
-    assert not failures, f"{len(failures)} of {SAMPLE} failed schema validation: {failures[:3]}"
+            failures.extend(
+                line for line in result.stderr.splitlines() if "fails to validate" in line
+            )
+    assert len(targets) == EXPORTABLE
+    assert not failures, f"{len(failures)} of {len(targets)} failed validation: {failures[:3]}"
