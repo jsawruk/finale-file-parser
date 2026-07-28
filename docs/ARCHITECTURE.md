@@ -706,6 +706,38 @@ groups *start*, not where they survive a rest, so that is the reading the data s
 Because beams are computed rather than stored, the two containers agreeing (30,072 of 30,074 events)
 shows they feed the same bit and the same durations into the same rule.
 
+### Known format facts — fingerings
+
+Finale has no fingering object. A fingering is an ordinary `articDef` whose `charMain` is a numeral,
+which is why `enigma.articulations` cannot pass it through — it would have to call `1` an
+articulation named "1".
+
+**The character alone identifies one**, and the objection to answer is that a music font also has
+glyphs at those code points. It does not arise here:
+
+* every numeral definition in the corpus — 2,062 of them, `1` through `5` — carries an explicit
+  `fontMain`. **Not one uses the document's music font.**
+* those definitions occupy a font of their own. Across the corpus the numerals are assigned under
+  exactly one font id, and no other character is ever assigned under it: 834 assignments, all
+  numerals, nothing else.
+
+That is what unblocks the `.mus`, which this project previously recorded as impossible. `fontMain`'s
+offset in the `.mus` `articDef` genuinely does move within the 2011 era — the best single offset
+matches 363 of 373 paired records, so it cannot be read — but the **character** is already
+recovered, and the character is enough.
+
+`0` is deliberately not read: three definitions carry it, none is ever assigned, and nothing says
+whether it means an open string or an unused slot.
+
+Corpus: **834 fingerings across 18 documents** from the `.musx`, 218 across 5 from the `.mus`. The
+distribution corroborates the reading — 3 (261), 1 (219), 2 (174), 4 (126), 5 (54), the shape you
+would expect of keyboard and string music.
+
+**The `.mus` side is unverified against a paired document.** Six pairs carry a fingering in their
+`.musx`; four have a `.mus` that does not read, and two are a different arrangement. What *is*
+verified is the mechanism — `articDef.charMain` agrees across 72 pairs and 25,000-odd assignments.
+Fingerings add no new field, only different values in the same one.
+
 ### Known format facts — articulations
 
 Two records again. An `articAssign` entry detail names an `articDef`, and the definition says what

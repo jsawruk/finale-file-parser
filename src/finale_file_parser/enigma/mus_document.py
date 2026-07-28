@@ -134,11 +134,10 @@ UNTRANSLATED = (
     "action/target, describe where a repeat sends the player rather than what is "
     "printed. Neither container reads them, so both are equally silent -- a "
     "missing feature rather than a .mus gap.",
-    "Fingerings: the corpus stores them as articulations whose character is a "
-    "numeral in a text font, so telling them from a music-font numeral needs "
-    "articDef's fontMain -- whose offset varies within a single era, so a .mus "
-    "does not reliably give one. Reading them would make the containers "
-    "disagree.",
+    "Fingering fonts: articDef's fontMain cannot be read from a .mus -- its "
+    "offset moves within the 2011 era, and the best single offset matches only "
+    "363 of 373 paired records. Fingerings themselves ARE read, from the "
+    "character alone; see enigma.fingerings for why that is sufficient.",
     "Chorus and section lyrics: the .mus tag for lyrDataVerse is identified, but "
     "no paired corpus document uses a chorus or section track, so their tags are "
     "unknown and those lyrics are absent from a .mus-derived score.",

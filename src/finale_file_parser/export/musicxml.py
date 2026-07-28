@@ -379,7 +379,8 @@ def _append_note(
     # A chord's marks belong to the event, so only its principal note carries
     # them -- repeating per pitch would print the staccato three times.
     marks = () if chord else event.articulations
-    if event.tie_start or event.tie_end or marks:
+    digits = () if chord else event.fingerings
+    if event.tie_start or event.tie_end or marks or digits:
         notations = ET.SubElement(note, "notations")
         if event.tie_end:
             ET.SubElement(notations, "tied", type="stop")
@@ -389,6 +390,15 @@ def _append_note(
             articulations = ET.SubElement(notations, "articulations")
             for name in marks:
                 ET.SubElement(articulations, name)
+        if digits:
+            # All of a chord's fingerings sit on its principal note rather than
+            # one per pitch. Enigma attaches them to the entry, not to a note,
+            # so which finger goes with which pitch is not stored -- and
+            # MusicXML allows several <fingering> in one <technical> for exactly
+            # this case.
+            technical = ET.SubElement(notations, "technical")
+            for digit in digits:
+                ET.SubElement(technical, "fingering").text = digit
     # Schema order puts <lyric> last, after <notations>. Only on a chord's
     # principal note: the syllable is sung once, not once per pitch.
     if not chord:

@@ -122,6 +122,7 @@ EXPECTED_PUBLIC_NAMES = {
     "decrypt",
     "detect_version",
     "effective_keys",
+    "fingerings_by_entry",
     "jumps_by_measure",
     "locate_entries",
     "lyrics_by_entry",

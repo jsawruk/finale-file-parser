@@ -154,7 +154,9 @@ limit is verified by mutation, because no real corpus archive trips one.
       both readers: the part list agrees with the parts, groups nest, measures line up, beams close,
       barlines are well formed, and nothing the IR holds is dropped on the way out. Schema
       validation went from 25 documents to all 398. **No defects found.**
-- [ ] Fingerings.
+- [x] **Fingerings** — `enigma/fingerings.py`, both containers. 834 across 18 documents; the
+      numeral character identifies one, which is what unblocked the `.mus`. See
+      `docs/ARCHITECTURE.md`.
 
 ## Later
 

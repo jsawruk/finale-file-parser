@@ -525,3 +525,34 @@ def test_a_repeat_overrides_the_barline_style() -> None:
 
 def test_an_ordinary_barline_writes_no_element() -> None:
     assert "<barline" not in to_musicxml(_score(_note())).decode()
+
+
+def test_a_fingering_is_written_in_technical() -> None:
+    score = _score(_note(fingerings=("3",)))
+    note = _tree(score).find("./part/measure/note")
+    assert note is not None
+    assert note.findtext("./notations/technical/fingering") == "3"
+
+
+def test_a_chords_fingerings_sit_on_its_principal_note() -> None:
+    """Enigma attaches them to the entry, not to a note, so which finger goes
+    with which pitch is not stored -- and repeating them per pitch would print
+    each one once per chord tone."""
+    score = _score(
+        Event(
+            duration=QUARTER,
+            written_duration=QUARTER,
+            pitches=(
+                Pitch(step="C", alteration=0, octave=4),
+                Pitch(step="E", alteration=0, octave=4),
+            ),
+            fingerings=("1", "3"),
+        )
+    )
+    xml = to_musicxml(score).decode()
+    assert xml.count("<technical>") == 1
+    assert xml.count("<fingering>") == 2
+
+
+def test_a_note_without_fingerings_writes_no_technical() -> None:
+    assert "<technical>" not in to_musicxml(_score(_note())).decode()

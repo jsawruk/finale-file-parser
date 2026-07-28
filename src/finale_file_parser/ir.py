@@ -138,6 +138,10 @@ class Event:
     value at all.
     """
 
+    fingerings: tuple[str, ...] = ()
+    """Which finger plays this note, one entry per fingered pitch, in document
+    order. Digits rather than numbers: MusicXML prints the text as given."""
+
     articulations: tuple[str, ...] = ()
     """MusicXML articulation names -- "staccato", "accent", "tenuto",
     "strong-accent", "breath-mark" -- in document order."""
