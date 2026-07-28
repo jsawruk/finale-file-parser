@@ -323,7 +323,12 @@ def _append_note(
     if chord:
         ET.SubElement(note, "chord")
     if pitch is None:
-        ET.SubElement(note, "rest")
+        # `measure="yes"` is what makes a reader centre one symbol in the bar
+        # rather than draw a rest of some particular value -- and it is why the
+        # note carries no <type>, since the length is the bar's, not a note's.
+        rest = ET.SubElement(note, "rest")
+        if event.is_measure_rest:
+            rest.set("measure", "yes")
     else:
         element_pitch = ET.SubElement(note, "pitch")
         ET.SubElement(element_pitch, "step").text = pitch.step
@@ -342,7 +347,8 @@ def _append_note(
     if event.tie_start:
         ET.SubElement(note, "tie", type="start")
     ET.SubElement(note, "voice").text = str(voice.number)
-    ET.SubElement(note, "type").text = _note_type(event)
+    if not event.is_measure_rest:
+        ET.SubElement(note, "type").text = _note_type(event)
     for _ in range(event.dots):
         ET.SubElement(note, "dot")
     if event.tuplet_ratio is not None:

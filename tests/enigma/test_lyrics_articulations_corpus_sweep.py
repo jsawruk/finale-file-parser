@@ -93,29 +93,34 @@ A `.mus` recovers the name's text-block id but carries no text blocks to
 resolve it against -- the same missing chain as staff names.
 """
 
-REPEAT_DOCUMENTS = 108
-FORWARD_REPEATS = 107
-BACKWARD_REPEATS = 119
+REPEAT_DOCUMENTS = 109
+FORWARD_REPEATS = 109
+BACKWARD_REPEATS = 121
 ENDING_BRACKETS = 142
 """Repeat barlines and ending brackets exported across the corpus.
 
 Measures rather than parts: every part of a score carries the same barline, so
 counting rows would measure how many staves the repertoire uses.
 
-These count repeats on measures a **part** reaches. The pool holds 109
-`forRepBar`, 121 `bacRepBar` and 142 `repeatEndingStart`; brackets match it
-exactly, and the two barline counts fall two short because 4 measures are
-occupied by no part at all.
+All three match the raw element counts in the `.musx` pool -- 109 `forRepBar`,
+121 `bacRepBar`, 142 `repeatEndingStart` -- which is the check that nothing is
+invented or lost between the pool and the IR.
 
-Those are measures the reserved staff used to cover on its own -- typically 1
-and 2 of a score whose real staves start at 3. `build_score` builds a measure
-only where a staff has entries, so a measure no part reaches has nowhere to
-carry a barline. That gap is older than the reserved-staff exclusion, which
-merely stopped hiding it; see `RESERVED_STAFF`.
+The two barline counts briefly fell to 107 and 119, in the window between
+excluding the reserved staff and giving every part every measure: 4 repeats sat
+on bars no part reached. Every measure now belongs to every part, so a barline
+always has somewhere to be drawn.
 """
 
 PAIRED_WITH_REPEATS = 19
 """Same-content pairs where either container carries a repeat."""
+
+MEASURE_RESTS = 6362
+"""Bars a part rests through, across the corpus.
+
+They were absent entirely until parts were given every measure: 420 of 731
+parts skipped at least one, and their measure numbering jumped over it.
+"""
 
 RESERVED_STAFF_PARTS = 0
 """Exported parts for staff 32767, which every corpus document declares and
@@ -323,6 +328,31 @@ def group_agreement() -> tuple[int, int, int]:
         elif all_groups(mine) != all_groups(theirs):
             name_only += 1
     return documents, shape_differences, name_only
+
+
+def test_every_part_covers_every_measure() -> None:
+    """A part that falls silent must still have the bar. Asserted over the
+    corpus because the failure is invisible in a single document -- the output
+    stays well-formed, the numbering simply skips."""
+    rests = 0
+    for path in musx_files():
+        try:
+            score = build_score(parse_enigma(score_xml(path)))
+        except CorruptScoreError:
+            continue
+        lists = {tuple(m.number for m in part.measures) for part in score.parts}
+        assert len(lists) == 1, "parts of one score disagree about which measures exist"
+        numbers = next(iter(lists))
+        assert list(numbers) == list(range(1, len(numbers) + 1)), "measure numbering has a gap"
+        rests += sum(
+            1
+            for part in score.parts
+            for measure in part.measures
+            for voice in measure.voices
+            for event in voice.events
+            if event.is_measure_rest
+        )
+    assert rests == MEASURE_RESTS
 
 
 def test_no_document_exports_the_reserved_staff() -> None:

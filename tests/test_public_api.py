@@ -120,6 +120,7 @@ EXPECTED_PUBLIC_NAMES = {
     "duration_from_edu",
     "decrypt",
     "detect_version",
+    "effective_keys",
     "locate_entries",
     "lyrics_by_entry",
     "open_musx",

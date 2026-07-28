@@ -97,7 +97,7 @@ def locate_entries(doc: EnigmaDocument) -> dict[int, EntryLocation]:
             more than one frame, or a `next`-chain exceeds the guard.
     """
     entries_by_num = {_int(e.attrs.get("entnum"), "entnum"): e for e in doc.entries.of_tag("entry")}
-    key_by_measure = _effective_keys(doc)
+    key_by_measure = effective_keys(doc)
 
     location: dict[int, EntryLocation] = {}
     for gfhold in doc.details.of_tag("gfhold"):
@@ -137,7 +137,7 @@ def locate_entries(doc: EnigmaDocument) -> dict[int, EntryLocation]:
     return location
 
 
-def _effective_keys(doc: EnigmaDocument) -> dict[int, int]:
+def effective_keys(doc: EnigmaDocument) -> dict[int, int]:
     """Effective raw key per measure, carrying the last seen `keySig.key` forward."""
     meas_specs = [r for r in doc.others.of_tag("measSpec") if "part" not in r.attrs]
     by_measure = {_int(r.attrs.get("cmper"), "measSpec cmper"): r for r in meas_specs}

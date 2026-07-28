@@ -140,9 +140,8 @@ limit is verified by mutation, because no real corpus archive trips one.
       staff groups that were dropped as non-contiguous. See `docs/DECISIONS.md`.
 - [x] **Staff 32767** — resolved: a reserved staff no score lays out, no longer exported as a part.
       See `docs/DECISIONS.md`.
-- [ ] **Empty measures** — a part currently skips a measure where its staff is silent, rather than
-      writing a full-measure rest. 1,375 measures across 162 documents reach no part at all. This is
-      the next correctness item; see `docs/DECISIONS.md`.
+- [x] **Empty measures** — every part now covers every measure, with a full-measure rest where it is
+      silent. 6,362 rests; 420 of 731 parts had a gap. See `docs/DECISIONS.md`.
 - [ ] Fingerings, jumps, barline styles.
 
 ## Later

@@ -462,3 +462,26 @@ def test_a_group_number_is_reused_once_it_closes() -> None:
 
 def test_a_score_with_no_groups_writes_a_plain_part_list() -> None:
     assert all(tag == "score-part" for tag, _, _ in _part_list(_grouped()))
+
+
+def test_a_measure_rest_is_marked_and_carries_no_type() -> None:
+    """`measure="yes"` is what centres one symbol in the bar. The `<type>` has
+    to go with it: a 3/4 measure rest has no note value, and asking for one
+    raises."""
+    score = _score(
+        Event(duration=Fraction(3, 4), written_duration=Fraction(3, 4), is_measure_rest=True)
+    )
+    note = _tree(score).find("./part/measure/note")
+    assert note is not None
+    rest = note.find("rest")
+    assert rest is not None and rest.get("measure") == "yes"
+    assert note.find("type") is None
+    assert note.findtext("duration") == "3"
+
+
+def test_an_ordinary_rest_is_not_marked_as_a_measure_rest() -> None:
+    note = _tree(_score(_note(pitches=()))).find("./part/measure/note")
+    assert note is not None
+    rest = note.find("rest")
+    assert rest is not None and rest.get("measure") is None
+    assert note.findtext("type") == "quarter"
