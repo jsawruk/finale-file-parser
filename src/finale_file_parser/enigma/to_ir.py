@@ -13,6 +13,7 @@ from dataclasses import dataclass, field, replace
 from fractions import Fraction
 
 from finale_file_parser.enigma.articulations import articulations_by_entry
+from finale_file_parser.enigma.barlines import barline_styles
 from finale_file_parser.enigma.beams import BeamedNote, beams_for
 from finale_file_parser.enigma.clef import (
     Clef,
@@ -144,6 +145,7 @@ def build_score(document: EnigmaDocument) -> Score:
     info = file_info(document)
     repeats = repeats_for(document)
     directions = jumps_by_measure(document)
+    barlines = barline_styles(document)
 
     staves = _ordered_staves(document, {staff for staff, _ in cells})
     keys = effective_keys(document)
@@ -169,6 +171,7 @@ def build_score(document: EnigmaDocument) -> Score:
                     clef_at=clef_at,
                     repeats=repeats,
                     directions=directions,
+                    barlines=barlines,
                 )
                 for index, number in enumerate(numbers)
             ),
@@ -416,6 +419,7 @@ def _measure(
     clef_at: dict[tuple[int, int], int],
     repeats: Repeats,
     directions: dict[int, tuple[str, ...]] | None = None,
+    barlines: dict[int, str] | None = None,
 ) -> Measure:
     cell = cells.get((staff, number))
 
@@ -459,6 +463,7 @@ def _measure(
         # A marking belongs to the measure, so every part shows it -- which is
         # what a player reading one part needs.
         directions=(directions or {}).get(number, ()),
+        barline_style=(barlines or {}).get(number),
         repeat_forward=here.forward,
         repeat_backward=here.backward,
         repeat_passes=here.passes,

@@ -197,6 +197,11 @@ class Measure:
     what a jump *does* is not modelled, because Enigma's is not read; see
     `enigma.jumps`."""
 
+    barline_style: str | None = None
+    """MusicXML `bar-style` for this measure's right barline -- `light-light`
+    for a double bar, `light-heavy` for a final one. None for an ordinary
+    barline, which needs no element at all."""
+
     repeat_forward: bool = False
     """A forward repeat barline on the left of this measure."""
 

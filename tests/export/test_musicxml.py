@@ -504,3 +504,24 @@ def test_a_measure_direction_is_written_above_before_the_notes() -> None:
 
 def test_a_measure_with_no_direction_writes_none() -> None:
     assert "<direction" not in to_musicxml(_score(_note())).decode()
+
+
+def test_a_double_bar_is_written_on_the_right_barline() -> None:
+    barline = _barline(_score(_note(), barline_style="light-light"), "right")
+    assert barline is not None
+    assert barline.findtext("bar-style") == "light-light"
+    assert _barline(_score(_note(), barline_style="light-light"), "left") is None
+
+
+def test_a_repeat_overrides_the_barline_style() -> None:
+    """The repeat's own heavy line is what gets drawn. Four corpus measures ask
+    for both, and emitting two bar-styles in one barline is invalid."""
+    score = _score(_note(), barline_style="light-light", repeat_backward=True)
+    barline = _barline(score, "right")
+    assert barline is not None
+    assert [child.tag for child in barline] == ["bar-style", "repeat"]
+    assert barline.findtext("bar-style") == "light-heavy"
+
+
+def test_an_ordinary_barline_writes_no_element() -> None:
+    assert "<barline" not in to_musicxml(_score(_note())).decode()
