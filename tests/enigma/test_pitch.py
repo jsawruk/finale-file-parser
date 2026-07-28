@@ -14,6 +14,8 @@ from finale_file_parser.enigma.pitch import (
     spell_pitch,
     transpose_key,
     transpose_pitch,
+    transposition_residue,
+    written_octave_correction,
 )
 
 
@@ -263,3 +265,62 @@ def test_spelled_note_and_staff_transposition_are_frozen() -> None:
         StaffTransposition(0, 0).interval = 1  # type: ignore[misc]
     with pytest.raises(FrozenInstanceError):
         spell_note(_note(0), C_MAJOR, StaffTransposition(0, 0)).written = SpelledPitch("C", 0, 4)  # type: ignore[misc]
+
+
+@pytest.mark.parametrize(
+    ("interval", "residue"),
+    [(-7, 0), (0, 0), (1, -1), (4, -4), (5, 2), (7, 0), (8, -1), (12, 2)],
+)
+def test_the_residue_is_the_sounding_direction_folded_into_its_band(
+    interval: int, residue: int
+) -> None:
+    """Finale keeps a transposition as this residue plus whole octaves."""
+    assert transposition_residue(interval) == residue
+    assert -4 <= transposition_residue(interval) <= 2
+
+
+@pytest.mark.parametrize(
+    ("interval", "correction", "instrument"),
+    [
+        (5, 7, "E-flat alto sax"),
+        (8, 7, "B-flat tenor sax"),
+        (12, 14, "E-flat baritone sax"),
+        (1, 0, "B-flat trumpet: no octave folded"),
+        (4, 0, "F horn: no octave folded"),
+        (7, 0, "double bass: a whole octave, nothing to undo"),
+        (-7, 0, "xylophone: a whole octave, nothing to undo"),
+    ],
+)
+def test_the_written_octave_correction_undoes_only_a_folded_residue(
+    interval: int, correction: int, instrument: str
+) -> None:
+    """The gate is the point: a whole-octave transposition records no residue
+    and no key change, so its `harm_lev` is already at the written octave and
+    correcting it moves the part an octave. Checked against the ranges players
+    read -- the baritone sax goes from 7.3% to 100% inside its published written
+    range, while the double bass and xylophone stay where they were."""
+    assert written_octave_correction(interval) == correction, instrument
+
+
+def test_the_correction_reaches_the_written_pitch() -> None:
+    """`spell_note` must actually apply it. A tenor sax (interval 8) folds one
+    octave into `harm_lev`, so undoing it lifts the spelled pitch by exactly
+    one octave and leaves the letter alone."""
+    note = Note(harm_lev=0, harm_alt=0, tie_start=False, tie_end=False)
+    concert = KeySignature(fifths=0, mode=Mode.MAJOR, tonic="C")
+    tenor = StaffTransposition(interval=8, adjust=2)
+    bare = spell_pitch(note, transpose_key(concert, tenor.interval, tenor.adjust))
+    written = spell_note(note, concert, tenor).written
+    assert written.letter == bare.letter
+    assert written.octave == bare.octave + 1
+
+
+def test_a_whole_octave_transposition_is_spelled_untouched() -> None:
+    """A double bass (interval 7) records no residue and no key change, so its
+    `harm_lev` is already at the written octave -- correcting it would move the
+    part an octave, which is what the residue gate prevents."""
+    note = Note(harm_lev=0, harm_alt=0, tie_start=False, tie_end=False)
+    concert = KeySignature(fifths=0, mode=Mode.MAJOR, tonic="C")
+    bass = StaffTransposition(interval=7, adjust=0)
+    bare = spell_pitch(note, transpose_key(concert, bass.interval, bass.adjust))
+    assert spell_note(note, concert, bass).written == bare

@@ -981,11 +981,23 @@ a `.mus` — no byte of `staffSpec` separates staves an octave apart, no field i
 record holds the interval or the octave count — but it is absent because nothing needs it, not
 because it was lost.
 
-Our `spell_pitch` takes the written octave from `harm_lev` alone and never consults the
-transposition's octave count, which is correct for a `.mus` and off by that count for a `.musx`.
-Undoing the fold reconciles the two containers: 2,493 octave-only differences become 1. Which frame
-is the *true* written pitch is still open, and no code has changed on the strength of it. See
-`docs/formats/transposition-octave.md`.
+`spell_note` therefore adds `written_octave_correction(interval)` to `harm_lev` before spelling the
+written pitch — the folded octaves, undone — **but only where the transposition has a non-octave
+residue**. A whole-octave transposition leaves the residue at zero and the key unchanged, so the
+staff is recorded as though it did not transpose at all, its `harm_lev` is already at the written
+octave, and correcting it would move the part an octave.
+
+Adjudicated against published written ranges rather than against Finale, since every corpus `.musx`
+was produced by Finale *from* its `.mus`. The interval identifies the instrument outright — B♭
+trumpet 1, F horn 4, E♭ alto sax 5, double bass 7, B♭ tenor sax 8, E♭ baritone sax 12, xylophone
+−7 — and notes falling inside the instrument's published written range go from **82.0% to 91.6%**,
+with every instrument improving or untouched (baritone sax 7.3% → 100%). The saxophone family is the
+sharpest check: alto, tenor and baritone read one written range, and before the fix they spelled an
+octave apart.
+
+Container octave-only differences fall 2,491 → 845, and **every one that remains is a whole-octave
+transposition** — the one case a `.mus` cannot record, since nothing distinguishes a double bass
+written at sounding pitch from a non-transposing staff. See `docs/formats/transposition-octave.md`.
 
 ### Known format facts — pitch spelling and transposition
 

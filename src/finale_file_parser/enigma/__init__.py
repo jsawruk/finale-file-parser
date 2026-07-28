@@ -92,6 +92,8 @@ from finale_file_parser.enigma.pitch import (
     spell_pitch,
     transpose_key,
     transpose_pitch,
+    transposition_residue,
+    written_octave_correction,
 )
 from finale_file_parser.enigma.repeats import MeasureRepeats, Repeats, repeats_for
 from finale_file_parser.enigma.score import MAX_INFLATED, score_xml
@@ -210,4 +212,6 @@ __all__ = [
     "spell_pitch",
     "transpose_key",
     "transpose_pitch",
+    "transposition_residue",
+    "written_octave_correction",
 ]

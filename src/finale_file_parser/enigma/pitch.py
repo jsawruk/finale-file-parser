@@ -8,7 +8,7 @@ docs/superpowers/specs/2026-07-24-pitch-spelling-design.md for the evidence.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from finale_file_parser.enigma.document import Record
 from finale_file_parser.enigma.key import (
@@ -25,6 +25,7 @@ _FLAT_ORDER = "BEADGCF"
 _LETTER_SEMITONE = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 _OCTAVE = 7  # diatonic steps per octave
 _MIDDLE_C_OCTAVE = 4  # harm_lev = 0 tonic sits in octave 4 (middle C region)
+_MIN_RESIDUE, _MAX_RESIDUE = -4, 2  # the band Finale folds a transposition into
 
 
 def _key_accidental(letter: str, fifths: int) -> int:
@@ -190,11 +191,65 @@ class SpelledNote:
     """The sounding pitch."""
 
 
+def transposition_residue(interval: int) -> int:
+    """The sounding direction folded into -4..+2, the way Finale normalises it.
+
+    Finale keeps a transposition as this residue plus a whole number of octaves.
+    `interval` is diatonic steps the written pitch sits above concert, so the
+    sounding direction is its negation.
+    """
+    direction = -interval
+    while direction > _MAX_RESIDUE:
+        direction -= _OCTAVE
+    while direction < _MIN_RESIDUE:
+        direction += _OCTAVE
+    return direction
+
+
+def written_octave_correction(interval: int) -> int:
+    """Diatonic steps to add to `harm_lev` before spelling the written pitch.
+
+    Finale folds a transposition's octaves *into `harm_lev`* as well as out of
+    the interval, so `harm_lev` alone does not place the written octave. Undoing
+    the fold recovers it -- but **only where the transposition has a non-octave
+    residue**.
+
+    That gate is not a fudge; the two cases are stored differently:
+
+    * A transposition with a residue -- every ordinary transposing instrument --
+      keeps the residue in the staff record and the octaves in `harm_lev`.
+      Undoing the fold gives the pitch the player reads.
+    * A **whole-octave** transposition leaves the residue at zero and the key
+      unchanged, so the staff is recorded as though it did not transpose at all,
+      with `harm_lev` already at the written octave. There is nothing to undo,
+      and undoing it moves the part an octave.
+
+    Checked against the written ranges players actually read, which owe nothing
+    to Finale. Across 45,000 corpus notes on transposing staves the share
+    falling inside the published written range of the named instrument goes from
+    82.0% to 91.6%; every instrument either improves or is untouched:
+
+        Eb baritone sax (interval 12)    7.3% -> 100.0%
+        Bb tenor sax    (interval  8)   37.9% ->  89.0%
+        Eb alto sax     (interval  5)   87.0% ->  98.8%
+        double bass, guitar (interval  7, residue 0)   87.3%, unchanged
+        xylophone       (interval -7, residue 0)      100.0%, unchanged
+        Bb trumpet, F horn (no octave folded)          unchanged
+
+    See `docs/formats/transposition-octave.md`.
+    """
+    residue = transposition_residue(interval)
+    return interval + residue if residue else 0
+
+
 def spell_note(
     note: Note, concert_key: KeySignature, transposition: StaffTransposition
 ) -> SpelledNote:
     """Spell a note into both its written and concert (sounding) pitch."""
     written_key = transpose_key(concert_key, transposition.interval, transposition.adjust)
-    written = spell_pitch(note, written_key)
+    corrected = replace(
+        note, harm_lev=note.harm_lev + written_octave_correction(transposition.interval)
+    )
+    written = spell_pitch(corrected, written_key)
     concert = transpose_pitch(written, transposition.interval, transposition.adjust)
     return SpelledNote(written=written, concert=concert)

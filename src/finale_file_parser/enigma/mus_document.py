@@ -84,15 +84,13 @@ from finale_file_parser.version import mus as mus_header
 __all__ = ["UNTRANSLATED", "read_mus_document"]
 
 UNTRANSLATED = (
-    "staffSpec transposition octave: the octave count is genuinely absent from a "
-    ".mus -- no byte of staffSpec separates staves an octave apart, and no "
-    "staff-keyed record holds the interval or the count. It is absent because "
-    "nothing needs it: Finale folds the octaves into every note's harm_lev as "
-    "well as out of the interval, so the residue and harm_lev are a matched "
-    "pair that fixes the written pitch on their own. What is still open is "
-    "which frame our spell_pitch should use -- undoing the fold on the .musx "
-    "side reconciles the containers (2,493 octave-only differences become 1), "
-    "but nothing here yet says which is the true written pitch. See "
+    "staffSpec whole-octave transpositions: a transposition that is an exact "
+    "octave leaves Finale's residue at zero and the key unchanged, so the staff "
+    "is recorded as though it did not transpose at all -- nothing distinguishes "
+    "a double bass written at sounding pitch from a concert staff. Those staves "
+    "come out an octave from the .musx (845 notes, all interval 7). Every "
+    "transposition WITH a residue is now recovered: the octaves Finale folds "
+    "into harm_lev are undone by written_octave_correction. See "
     "docs/formats/transposition-octave.md.",
     "staffSpec part names: the reference at +30/+32 does not resolve to a text "
     "block -- the best candidate chain matches 16 of 59 staves, and by hand it "

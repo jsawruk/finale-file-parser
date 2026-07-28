@@ -59,18 +59,22 @@ would invert every ratio. Sounded durations agreeing end to end is what rules
 that out.
 """
 
-OCTAVE_ONLY_PITCHES = 2491
+OCTAVE_ONLY_PITCHES = 845
 """Pitches whose letter and accidental are right and only the octave is wrong.
 
 Down from 4,140 total differences once the transposition's key alteration was
-recovered: `transpose_key` needs only `adjust`, so the written key -- and with
-it every letter -- is now correct. What remains is the octave, which needs the
-transposition's *interval*, and the `.mus` provably does not store it.
+recovered, and from 2,491 once the written octave stopped ignoring the octaves
+Finale folds into `harm_lev` (`written_octave_correction`).
 
-Every one of these sits on a staff whose interval is 5, 7, 8 or 12 -- exactly
-the intervals where `harm_lev_octave_shift` is non-zero. That the set matches
-the shift's own boundary is the check that this is the missing octave and not
-something else.
+**Every one that remains sits on a whole-octave transposition** -- interval 7,
+double basses and guitars -- where the residue is 0. Those staves are the one
+case a `.mus` genuinely cannot recover: a whole-octave transposition leaves the
+residue at zero and the key unchanged, so the staff is recorded as though it did
+not transpose at all, and nothing in the file says otherwise. A transposition
+with a residue is recoverable and no longer differs.
+
+That the remainder is exactly the residue-0 set is the check that the correction
+is the right shape rather than a fitted constant.
 """
 
 OTHER_PITCHES = 3

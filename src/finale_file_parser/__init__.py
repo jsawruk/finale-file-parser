@@ -97,8 +97,10 @@ from finale_file_parser.enigma import (
     time_signatures,
     transpose_key,
     transpose_pitch,
+    transposition_residue,
     tuplets_by_entry,
     verse_syllables,
+    written_octave_correction,
 )
 from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.export import MUSICXML_VERSION, ExportError, to_musicxml
@@ -226,4 +228,6 @@ __all__ = [
     "spell_pitch",
     "transpose_key",
     "transpose_pitch",
+    "transposition_residue",
+    "written_octave_correction",
 ]
