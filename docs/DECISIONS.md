@@ -266,4 +266,8 @@ signature, so a 3/4 measure rest lasts 3/4 and has **no note value at all**. Mus
 
 **Consequence.** All 398 documents now give every part the same contiguous 1..N measure list, with
 6,362 measure rests. This also restores the 4 repeat barlines that reached no part after the
-reserved-staff exclusion.
+reserved-staff exclusion, so the repeat sweep matches the pool exactly again.
+
+Carrying clefs forward cut the `.mus`/`.musx` clef disagreement from 22 measures to **10**, without
+touching the clef reading itself: half of those 22 were one container having a `gfhold` where the
+other did not, rather than the two disagreeing about a clef.
