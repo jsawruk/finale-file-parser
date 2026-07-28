@@ -38,6 +38,7 @@ from finale_file_parser.enigma.key import (
 from finale_file_parser.enigma.location import (
     EntryLocation,
     MalformedScoreError,
+    effective_keys,
     locate_entries,
 )
 from finale_file_parser.enigma.lyrics import (
@@ -184,6 +185,7 @@ __all__ = [
     "harm_lev_octave_shift",
     "duration_from_edu",
     "decrypt",
+    "effective_keys",
     "locate_entries",
     "lyrics_by_entry",
     "parse_enigma",

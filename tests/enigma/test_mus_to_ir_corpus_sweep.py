@@ -79,14 +79,20 @@ OTHER_PITCHES = 3
 notes in the two containers. All three are `.mus`/`.musx` content differences
 already pinned by the entry-pool sweep, not decode errors."""
 
-CLEF_MEASURES = 22
-"""Measures whose clef differs, down from 327 before the clef table was decoded.
+CLEF_MEASURES = 10
+"""Measures whose clef differs, down from 327 before the clef table was decoded
+and from 22 before clefs were carried across a silence.
 
-Every one is the same case: the `gfhold` stores `clefID` 0, meaning "use the
-staff's `defaultClef`", and the `.mus` `staffSpec` stores 0 there as well while
-the `.musx` materialises clef 3. The value lives with the instrument, not in the
-file -- the same root cause as the transposition gap. So this is a floor, not a
-decode error, until an instrument table is found.
+Carrying them forward cut it by 12 without touching the clef reading itself.
+`gfhold` is where a clef lives and a measure a staff rests through has none, so
+half of those 22 were one container having a `gfhold` where the other did not,
+rather than the two disagreeing about a clef.
+
+What is left is the original case: the `gfhold` stores `clefID` 0, meaning "use
+the staff's `defaultClef`", and the `.mus` `staffSpec` stores 0 there as well
+while the `.musx` materialises clef 3. The value lives with the instrument, not
+in the file -- the same root cause as the transposition gap. So this is a floor,
+not a decode error, until an instrument table is found.
 """
 
 

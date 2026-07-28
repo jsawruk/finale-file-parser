@@ -69,11 +69,18 @@ def test_every_score_exports_and_is_well_formed() -> None:
 
 def test_every_note_has_a_type_and_a_duration_unless_it_is_a_grace_note() -> None:
     """The grace-note rule, asserted on real output rather than a constructed case."""
-    notes = grace = 0
+    notes = grace = measure_rests = 0
     for path in _archives():
         document = DET.fromstring(_export(path).decode())
         for note in document.iter("note"):
             notes += 1
+            rest = note.find("rest")
+            if rest is not None and rest.get("measure") == "yes":
+                # A measure rest's length is the bar's, not a note value's, so
+                # it carries no <type> -- see `Event.is_measure_rest`.
+                measure_rests += 1
+                assert note.findtext("duration"), "measure rest without a duration"
+                continue
             assert note.findtext("type"), "note without a type"
             if note.find("grace") is not None:
                 grace += 1
@@ -83,6 +90,7 @@ def test_every_note_has_a_type_and_a_duration_unless_it_is_a_grace_note() -> Non
                 assert duration is not None and int(duration) > 0, "duration must be positive"
     assert notes > 1000
     assert grace > 0, "no grace note in the sample; that path is untested here"
+    assert measure_rests > 0, "no measure rest in the sample; that path is untested here"
 
 
 def test_titles_and_part_names_resolve() -> None:

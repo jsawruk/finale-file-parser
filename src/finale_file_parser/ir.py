@@ -129,6 +129,15 @@ class Event:
     """One entry per beam level: 1 is the primary beam. Empty on a note that
     carries a flag rather than a beam."""
 
+    is_measure_rest: bool = False
+    """A rest filling the whole measure, however long the measure is.
+
+    Distinct from a rest that happens to last a whole note: it is written as one
+    symbol centred in the bar, and its length follows the time signature rather
+    than any note value -- so a 3/4 measure rest is 3/4 long and has no note
+    value at all.
+    """
+
     articulations: tuple[str, ...] = ()
     """MusicXML articulation names -- "staccato", "accent", "tenuto",
     "strong-accent", "breath-mark" -- in document order."""

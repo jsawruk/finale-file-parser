@@ -14,11 +14,17 @@ from fractions import Fraction
 
 from finale_file_parser.enigma.articulations import articulations_by_entry
 from finale_file_parser.enigma.beams import BeamedNote, beams_for
-from finale_file_parser.enigma.clef import Clef, ClefSign, clef_definitions, clefs_by_measure
+from finale_file_parser.enigma.clef import (
+    Clef,
+    ClefSign,
+    clef_definitions,
+    clefs_by_measure,
+    default_clefs,
+)
 from finale_file_parser.enigma.document import EnigmaDocument, Record
 from finale_file_parser.enigma.groups import staff_groups, staff_order
 from finale_file_parser.enigma.key import Mode, decode_key
-from finale_file_parser.enigma.location import locate_entries
+from finale_file_parser.enigma.location import effective_keys, locate_entries
 from finale_file_parser.enigma.lyrics import Lyric as EnigmaLyric
 from finale_file_parser.enigma.lyrics import lyrics_by_entry
 from finale_file_parser.enigma.music import read_entry
@@ -138,7 +144,9 @@ def build_score(document: EnigmaDocument) -> Score:
     repeats = repeats_for(document)
 
     staves = _ordered_staves(document, {staff for staff, _ in cells})
-    numbers = sorted({measure for _, measure in cells})
+    keys = effective_keys(document)
+    numbers = _measure_numbers(keys, cells)
+    clef_at = _carried_clefs(document, staves, numbers, clef_at)
     parts = [
         Part(
             id=f"P{staff}",
@@ -153,13 +161,13 @@ def build_score(document: EnigmaDocument) -> Score:
                     number=number,
                     previous=numbers[index - 1] if index else None,
                     cells=cells,
+                    keys=keys,
                     signatures=signatures,
                     clef_table=clef_table,
                     clef_at=clef_at,
                     repeats=repeats,
                 )
                 for index, number in enumerate(numbers)
-                if (staff, number) in cells
             ),
         )
         for staff in staves
@@ -197,6 +205,66 @@ the score, and exporting it put a spurious "Staff 32767" into every file this
 project produced. Its entries are still placed by `locate_entries`, so nothing
 below the IR is lost.
 """
+
+
+def _measure_numbers(keys: dict[int, int], cells: dict[tuple[int, int], _Cell]) -> list[int]:
+    """Every measure of the score, in order.
+
+    The list comes from `measSpec` -- which `effective_keys` already walks, one
+    entry per measure -- and **not** from where the music happens to be. It runs
+    1..N with no gaps in all 398 buildable corpus documents and nothing sounds
+    outside it, whereas the measures that hold entries omit every bar in which
+    the whole ensemble rests: 1,375 of them across 162 documents.
+
+    A document with no `measSpec` at all falls back to the measures that hold
+    entries, so a malformed file still exports what it has.
+    """
+    return sorted(keys) or sorted({measure for _, measure in cells})
+
+
+def _measure_rest(signature: EnigmaTimeSignature | None) -> Event:
+    """One rest filling the bar.
+
+    A part silent through a measure still has that measure -- MusicXML gives
+    every part every measure, and a reader that meets a gap in the numbering has
+    no way to tell a silent bar from a missing one. Its length is the time
+    signature's, which is why this is not just a whole-note rest: a 3/4 measure
+    rest lasts 3/4 and has no note value.
+    """
+    length = (
+        Fraction(signature.numerator, signature.denominator)
+        if signature is not None
+        else Fraction(1)
+    )
+    return Event(
+        duration=length,
+        written_duration=length,
+        pitches=(),
+        is_measure_rest=True,
+    )
+
+
+def _carried_clefs(
+    document: EnigmaDocument,
+    staves: list[int],
+    numbers: list[int],
+    clef_at: dict[tuple[int, int], int],
+) -> dict[tuple[int, int], int]:
+    """The clef in force at every (staff, measure), not only where notes are.
+
+    `clefs_by_measure` reads `gfhold`, and a measure a staff rests through has
+    no `gfhold` at all -- so without carrying the last one forward a part would
+    lose its clef the moment it fell silent, and re-announce it on returning.
+    Before the first `gfhold` the staff's own `defaultClef` applies.
+    """
+    defaults = default_clefs(document)
+    out = dict(clef_at)
+    for staff in staves:
+        current = defaults.get(staff, 0)
+        for number in numbers:
+            current = clef_at.get((staff, number), current)
+            out[(staff, number)] = current
+    return out
 
 
 def _ordered_staves(document: EnigmaDocument, present: set[int]) -> list[int]:
@@ -339,13 +407,13 @@ def _measure(
     number: int,
     previous: int | None,
     cells: dict[tuple[int, int], _Cell],
+    keys: dict[int, int],
     signatures: dict[int, EnigmaTimeSignature],
     clef_table: dict[int, Clef],
     clef_at: dict[tuple[int, int], int],
     repeats: Repeats,
 ) -> Measure:
-    cell = cells[(staff, number)]
-    previous_cell = cells.get((staff, previous)) if previous is not None else None
+    cell = cells.get((staff, number))
 
     signature = signatures.get(number)
     previous_signature = signatures.get(previous) if previous is not None else None
@@ -354,15 +422,22 @@ def _measure(
     clef = clef_table.get(clef_index) if clef_index is not None else None
     clef_changed = clef is not None and clef_index != previous_clef_index
 
-    key = decode_key(cell.key_raw)
-    key_changed = previous_cell is None or cell.key_raw != previous_cell.key_raw
+    # The key comes from the measure, not from the staff's notes, so a measure
+    # in which this part is silent still knows what key it is in.
+    key_raw = keys.get(number, cell.key_raw if cell is not None else 0)
+    key = decode_key(key_raw)
+    key_changed = previous is None or keys.get(previous) != key_raw
     here = repeats.get(number)
 
     return Measure(
         number=number,
-        voices=tuple(
-            Voice(number=layer, events=tuple(events))
-            for layer, events in sorted(cell.events_by_layer.items())
+        voices=(
+            tuple(
+                Voice(number=layer, events=tuple(events))
+                for layer, events in sorted(cell.events_by_layer.items())
+            )
+            if cell is not None
+            else (Voice(number=1, events=(_measure_rest(signature),)),)
         ),
         # Emit an attribute only where it changes: that is what MusicXML expects,
         # and it keeps the output readable.

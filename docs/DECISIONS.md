@@ -227,10 +227,47 @@ corpus does not decide between them. The decision rests only on it not being par
 **Consequence.** No `Score` loses all its parts. Beams fall 84,620 → 84,593 (27 of them were on this
 staff); articulations, lyrics and staff groups are unchanged.
 
-- **OPEN — parts have gaps where a staff is empty.** `build_score` makes a measure only where a staff
+- **RESOLVED 2026-07-27 — parts have gaps where a staff is empty.** Fixed; see the entry below. Was: `build_score` makes a measure only where a staff
   has entries, so a staff silent through a measure gets no `Measure` at all and its part's measure
   list skips a number. The reserved staff was hiding how much of this there is: it covered 1,375
   measures across 162 documents that no real staff occupies — typically measures 1 and 2 of a score
   whose real staves start at 3. Four of those carry a repeat barline that now has no part to be drawn
   on, which is why the repeat sweep counts 107 forward and 119 backward against a pool holding 109
   and 121. The fix is to emit a full-measure rest where a part is silent, which is its own slice.
+
+
+## 2026-07-27 — DECIDED: every part gets every measure, silent bars included
+
+**Context.** `build_score` made a `Measure` only where a staff had entries, so a part silent through
+a bar skipped it and its measure numbering jumped. **6,362 measures were missing across 420 of 731
+corpus parts** — 57% of parts. The output stayed well-formed, which is why it went unnoticed: a
+reader meeting a gap in the numbering cannot tell a silent bar from a lost one.
+
+**Decision.** A part covers every measure of the score, and a bar it rests through carries one
+full-measure rest.
+
+Three pieces make that work:
+
+- **The measure list comes from `measSpec`**, not from where the music is. It runs 1..N with no gaps
+  in all 398 buildable corpus documents and nothing sounds outside it. Using the measures that hold
+  entries loses every bar in which the whole ensemble rests.
+- **The key comes from the measure** (`effective_keys`, promoted to public), not from the staff's
+  notes — so a part silent through the opening bars is not reported as being in C major there.
+- **Clefs carry forward.** `clefs_by_measure` reads `gfhold`, and a measure a staff rests through has
+  no `gfhold` at all; without carrying the last one forward a part loses its clef the moment it falls
+  silent and re-announces it on returning. Before the first `gfhold`, the staff's `defaultClef`
+  applies.
+
+**Why a measure rest is its own thing.** `Event.is_measure_rest` is not "a rest that happens to last
+a whole note": it is written as one symbol centred in the bar and its length follows the time
+signature, so a 3/4 measure rest lasts 3/4 and has **no note value at all**. MusicXML spells that
+`<rest measure="yes"/>` with a duration and no `<type>` — and asking `_note_type` for the type of a
+3/4 event raises, which is the check that the two stay in step.
+
+**Consequence.** All 398 documents now give every part the same contiguous 1..N measure list, with
+6,362 measure rests. This also restores the 4 repeat barlines that reached no part after the
+reserved-staff exclusion, so the repeat sweep matches the pool exactly again.
+
+Carrying clefs forward cut the `.mus`/`.musx` clef disagreement from 22 measures to **10**, without
+touching the clef reading itself: half of those 22 were one container having a `gfhold` where the
+other did not, rather than the two disagreeing about a clef.
