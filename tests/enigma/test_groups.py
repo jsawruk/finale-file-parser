@@ -19,7 +19,7 @@ from finale_file_parser.enigma.document import (
     TextsPool,
 )
 from finale_file_parser.enigma.groups import staff_groups, staff_order
-from finale_file_parser.enigma.to_ir import _groups
+from finale_file_parser.enigma.to_ir import _groups, _ordered_staves
 
 EMPTY: tuple[Record, ...] = ()
 
@@ -184,3 +184,32 @@ def test_a_group_whose_parts_are_not_contiguous_is_dropped() -> None:
 def test_a_contiguous_group_survives_the_same_check() -> None:
     doc = document(others=inst_used(1, 2, 14), details=(group(1, 2),))
     assert [g.part_ids for g in _groups(doc, ["P1", "P2", "P14"])] == [("P1", "P2")]
+
+
+def test_parts_follow_the_instrument_list_rather_than_staff_number() -> None:
+    """10 corpus documents list their staves in an order the numbers do not
+    follow. Sorting instead puts those parts down the page in the wrong
+    places -- silently, since every part is still present."""
+    doc = document(others=inst_used(1, 2, 14, 3))
+    assert _ordered_staves(doc, {1, 2, 3, 14}) == [1, 2, 14, 3]
+
+
+def test_a_staff_with_music_but_no_slot_keeps_a_place() -> None:
+    """It has notes; losing a part is worse than putting it last."""
+    doc = document(others=inst_used(1, 2))
+    assert _ordered_staves(doc, {1, 2, 7}) == [1, 2, 7]
+
+
+def test_ordering_falls_back_to_numeric_without_an_instrument_list() -> None:
+    """The `.mus` path, where the list record is unidentified."""
+    doc = document(others=(staff(3), staff(1), staff(2)))
+    assert _ordered_staves(doc, {1, 2, 3}) == [1, 2, 3]
+
+
+def test_a_group_out_of_numeric_order_now_survives() -> None:
+    """This is what the reordering buys: staves 2 and 14 sit side by side in the
+    score, so the group over them is contiguous and can be bracketed. Ordering
+    parts numerically splits them and the group has to be dropped."""
+    doc = document(others=inst_used(1, 2, 14, 3), details=(group(2, 14),))
+    staves = _ordered_staves(doc, {1, 2, 3, 14})
+    assert [g.part_ids for g in _groups(doc, [f"P{s}" for s in staves])] == [("P2", "P14")]

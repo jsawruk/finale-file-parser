@@ -67,18 +67,23 @@ changes the beams of the note on each side of the break.
 """
 
 GROUP_DOCUMENTS = 155
-GROUPS = 201
-"""Staff groups reaching the IR, of 209 in the pool.
+GROUPS = 209
+"""Staff groups reaching the IR -- every one of the 209 in the pool.
 
-The 8 that do not are groups whose staves are not contiguous once parts are
-ordered by staff number; see `to_ir._groups`. `staff_groups` itself returns
-exactly one per pool record -- that equality is the check that no part-variant
-record is being counted twice.
+It was 201 while parts were ordered by staff number, which left 8 groups
+spanning a non-contiguous run; ordering parts by the document's own staff
+layout makes all of them contiguous. The equality with the pool count is also
+the check that no part-variant record is counted twice.
 """
 
-GROUP_SYMBOLS = {"brace": 129, "bracket": 65, None: 7}
-"""Only bracket ids with evidence get a symbol; id 8's 7 groups are emitted
-without one rather than guessed at."""
+GROUP_SYMBOLS = {"brace": 129, "bracket": 72, None: 8}
+"""Only bracket ids with evidence get a symbol; id 8's groups are emitted
+without one rather than guessed at.
+
+The 8 groups recovered by ordering parts along the score's staff layout are 7
+brackets and 1 unmapped -- section brackets over staves the numeric order split
+apart. No brace was ever affected, which fits: all 132 span two adjacent staves
+of one instrument."""
 
 PAIRED_WITH_GROUPS = 15
 GROUP_NAME_ONLY_DIFFERENCES = 4

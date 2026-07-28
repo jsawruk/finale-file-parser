@@ -122,7 +122,10 @@ def rhythm(event: Event) -> tuple[object, ...]:
 
 
 def compare(mine: Score, theirs: Score, tally: Tally) -> None:
-    if len(mine.parts) != len(theirs.parts):
+    # Compare the part *sequences*, not just their lengths: parts now follow the
+    # document's staff layout rather than staff number, so a positional zip
+    # could quietly line up two different staves and report them as matching.
+    if [part.id for part in mine.parts] != [part.id for part in theirs.parts]:
         tally.structure += 1
         return
     for part, other in zip(mine.parts, theirs.parts, strict=True):

@@ -135,7 +135,10 @@ limit is verified by mutation, because no real corpus archive trips one.
       and names, nested and numbered in the part list. 201 groups across 155 documents; extent,
       symbol and barline identical from `.mus` and `.musx` on all 15 paired documents that have
       them, names being the one known `.mus` gap.
-- [ ] Fingerings, jumps, barline styles, and ordering parts by the instrument list.
+- [x] **Part order** — parts follow `instUsed`, the score's own staff layout, rather than staff
+      number. 10 documents were laying parts out in the wrong order; fixing it also recovers the 8
+      staff groups that were dropped as non-contiguous. See `docs/DECISIONS.md`.
+- [ ] Fingerings, jumps, barline styles, and the staff-32767 question (`docs/DECISIONS.md`).
 
 ## Later
 
