@@ -498,6 +498,51 @@ One document fails to build: its `.mus` frame chain references an entry its pool
 is the same document whose `.musx` carries three `frameSpec` records its `.mus` does not, so the two
 containers disagree about its frames rather than the adapter mis-reading them.
 
+### Known format facts — staff groups
+
+A `staffGroup` detail record spans a run of staves and says how they are joined — the braces and
+brackets down the left edge of a score. Its field order is **documented**: `etfspec.pdf` describes
+the ETF `NG` record as `startInst endInst fullNameID fullXadj fullYadj | bracketType bracPos bracTop
+bracBot bracFlag | flag abrvNameID …`, and the `.mus` binary lays those out in exactly that order.
+Six offsets were confirmed independently against the paired `.musx`, each with one candidate, and
+each landed where the spec predicts.
+
+**`startInst` and `endInst` are staff numbers, not slots in the instrument list.** The two readings
+agree wherever a document numbers its slots and staves alike, which is most of them; the 31 corpus
+documents where they differ are the ones that decide, and there all 75 groups name a staff.
+
+The staves a group covers are the run **in instrument-list order** (`instUsed`), not the numeric
+range between its endpoints. Those differ in 14 of 230 corpus groups, because a score may lay its
+staves out in an order its staff numbers do not follow.
+
+Bracket shapes are an enum with partial evidence:
+
+| id | reading | evidence |
+| --- | --- | --- |
+| 3 | `brace` | `etfspec.pdf`: "bracket type: 3 (piano brace)". All 132 span exactly two staves, none nests, none is named. |
+| 6 | `bracket` | The only id that ever contains another group (14 of 78), the only one spanning more than two staves (34 of 78), the only one carrying a name (31 of 78). |
+| 8 | *unmapped* | All 20 sit nested inside another group and none is named — a sub-group marker, but MusicXML's `square` and `brace` are both consistent with that. |
+
+The id-6 argument is about the grammar of a score rather than what this repertoire contains: a brace
+cannot span five staves or wrap another group, and a bracket can. Id 8's groups are still exported,
+with their extent and barline; only the symbol is withheld.
+
+`groupBarlineStyle` is `group` where barlines run through the whole group and absent otherwise; only
+the positive is read. In a `.mus` it is bit `0x0400` of the flag word at +20 — the only exact
+candidate against the paired corpus, and independently the bit `etfspec.pdf`'s worked example sets
+when it reads `flag: 1088 = 0x0440 (barline through all staves…)`.
+
+Corpus: 209 group records, 201 reaching the IR across 155 documents. The 8 that do not are groups
+whose staves are not contiguous once parts are ordered by staff number — `build_score` orders parts
+numerically, so bracing them would join a run of parts the score does not group. Ordering parts by
+the instrument list instead would fix those 8 and is a change to every part's position, so it is its
+own slice.
+
+`.mus` gaps: the instrument list itself is unidentified (**no** paired document distinguishes a
+right guess from a wrong one, since all of them number slots and staves alike), so staves fall back
+to numeric order; and a group's name resolves through the `textBlock → blockText` chain a `.mus`
+does not supply, the same missing chain as staff names.
+
 ### Known format facts — repeats
 
 Repeats live in two places at once, and reconstructing one bracket needs both.

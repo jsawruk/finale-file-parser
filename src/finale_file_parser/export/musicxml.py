@@ -14,7 +14,17 @@ import xml.etree.ElementTree as ET
 from fractions import Fraction
 
 from finale_file_parser.errors import FinaleFileError
-from finale_file_parser.ir import Ending, Event, Lyric, Measure, Part, Pitch, Score, Voice
+from finale_file_parser.ir import (
+    Ending,
+    Event,
+    Lyric,
+    Measure,
+    Part,
+    PartGroup,
+    Pitch,
+    Score,
+    Voice,
+)
 
 __all__ = ["MUSICXML_VERSION", "ExportError", "to_musicxml"]
 
@@ -57,10 +67,7 @@ def to_musicxml(score: Score) -> bytes:
     root = ET.Element("score-partwise", version=MUSICXML_VERSION)
     _append_identification(root, score)
 
-    part_list = ET.SubElement(root, "part-list")
-    for part in score.parts:
-        score_part = ET.SubElement(part_list, "score-part", id=part.id)
-        ET.SubElement(score_part, "part-name").text = part.name or part.id
+    _append_part_list(root, score)
 
     for part in score.parts:
         _append_part(root, part)
@@ -68,6 +75,66 @@ def to_musicxml(score: Score) -> bytes:
     ET.indent(root, space="  ")
     body = ET.tostring(root, encoding="unicode")
     return f'<?xml version="1.0" encoding="UTF-8"?>\n{_DOCTYPE}\n{body}\n'.encode()
+
+
+def _append_part_list(root: ET.Element, score: Score) -> None:
+    """The part list, with each group's brace or bracket wrapped around it.
+
+    MusicXML expresses a group as a matched pair of `<part-group>` elements
+    surrounding the `<score-part>`s it covers, identified by a `number` rather
+    than by nesting. The number is reused once a group closes, which is what
+    lets an arbitrarily deep score use few of them.
+    """
+    part_list = ET.SubElement(root, "part-list")
+    starting, stopping = _group_edges(score)
+    open_numbers: dict[int, str] = {}
+    for index, part in enumerate(score.parts):
+        for group_index in starting.get(index, ()):
+            number = _lowest_free(open_numbers)
+            open_numbers[group_index] = number
+            _append_group(part_list, score.groups[group_index], number, "start")
+        score_part = ET.SubElement(part_list, "score-part", id=part.id)
+        ET.SubElement(score_part, "part-name").text = part.name or part.id
+        # Innermost first, so groups close in the reverse of the order they
+        # opened even where several end on the same part.
+        for group_index in reversed(stopping.get(index, ())):
+            number = open_numbers.pop(group_index)
+            ET.SubElement(part_list, "part-group", number=number, type="stop")
+
+
+def _group_edges(score: Score) -> tuple[dict[int, list[int]], dict[int, list[int]]]:
+    """Which groups start and stop at each part index, in opening order."""
+    at = {part.id: index for index, part in enumerate(score.parts)}
+    starting: dict[int, list[int]] = {}
+    stopping: dict[int, list[int]] = {}
+    for group_index, group in enumerate(score.groups):
+        positions = [at[part_id] for part_id in group.part_ids if part_id in at]
+        if not positions:
+            continue
+        starting.setdefault(min(positions), []).append(group_index)
+        stopping.setdefault(max(positions), []).append(group_index)
+    return starting, stopping
+
+
+def _lowest_free(open_numbers: dict[int, str]) -> str:
+    taken = set(open_numbers.values())
+    number = 1
+    while str(number) in taken:
+        number += 1
+    return str(number)
+
+
+def _append_group(part_list: ET.Element, group: PartGroup, number: str, kind: str) -> None:
+    element = ET.SubElement(part_list, "part-group", number=number, type=kind)
+    # Schema order: group-name, group-abbreviation, group-symbol, group-barline.
+    if group.name:
+        ET.SubElement(element, "group-name").text = group.name
+    if group.abbreviation:
+        ET.SubElement(element, "group-abbreviation").text = group.abbreviation
+    if group.symbol:
+        ET.SubElement(element, "group-symbol").text = group.symbol
+    if group.barline:
+        ET.SubElement(element, "group-barline").text = "yes"
 
 
 def _append_identification(root: ET.Element, score: Score) -> None:

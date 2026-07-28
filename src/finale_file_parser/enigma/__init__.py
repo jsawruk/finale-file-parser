@@ -28,6 +28,7 @@ from finale_file_parser.enigma.document import (
     TextsPool,
     parse_enigma,
 )
+from finale_file_parser.enigma.groups import StaffGroup, staff_groups, staff_order
 from finale_file_parser.enigma.key import (
     KeySignature,
     Mode,
@@ -117,6 +118,7 @@ __all__ = [
     "BeamedNote",
     "MeasureRepeats",
     "Repeats",
+    "StaffGroup",
     "MAX_INFLATED",
     "MAX_MUS_PAYLOAD",
     "UNTRANSLATED",
@@ -155,6 +157,8 @@ __all__ = [
     "articulations_by_entry",
     "beams_for",
     "repeats_for",
+    "staff_groups",
+    "staff_order",
     "blast_decompress",
     "EntryChain",
     "Tuplet",

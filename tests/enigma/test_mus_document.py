@@ -496,3 +496,71 @@ def test_translates_an_ending_start_and_its_pass_number(pools: Callable[..., Non
     assert document.others.get("repeatEndingStart", 21) is not None
     passes = document.others.get("repeatPassList", 21)
     assert passes is not None and passes.fields["act"] == "2"
+
+
+STAFF_GROUP = 1057
+
+
+def staff_group_payload(
+    start: int,
+    end: int,
+    *,
+    full_id: int = 0,
+    bracket: int = 3,
+    barline: bool = False,
+) -> bytes:
+    """A 40-byte `staffGroup`, in the field order etfspec.pdf documents."""
+    out = bytearray(40)
+    for offset, value in ((0, start), (2, end), (4, full_id), (10, bracket)):
+        out[offset : offset + 2] = value.to_bytes(2, "little")
+    if barline:
+        out[21] |= 0x04
+    return bytes(out)
+
+
+def test_translates_a_staff_group(pools: Callable[..., None]) -> None:
+    pools(details=(MusDetailRecord(STAFF_GROUP, 0, 1, 0, staff_group_payload(2, 3, bracket=6)),))
+    record = read_mus_document(PATH).details.get("staffGroup", 0, 1)
+    assert record is not None
+    assert (record.fields["startInst"], record.fields["endInst"]) == ("2", "3")
+    bracket = record.fields["bracket"]
+    assert isinstance(bracket, Record) and bracket.fields["id"] == "6"
+
+
+def test_the_group_barline_bit_is_read(pools: Callable[..., None]) -> None:
+    """0x0400 of the flag word at +20 -- the bit etfspec.pdf's worked example
+    sets and glosses as "barline through all staves"."""
+    pools(details=(MusDetailRecord(STAFF_GROUP, 0, 1, 0, staff_group_payload(1, 2, barline=True)),))
+    record = read_mus_document(PATH).details.get("staffGroup", 0, 1)
+    assert record is not None
+    assert record.fields["groupBarlineStyle"] == "group"
+
+
+def test_a_group_without_the_barline_bit_says_nothing(pools: Callable[..., None]) -> None:
+    """The flag word carries more than this one bit, so the byte has to be
+    masked rather than tested whole -- ETF's own example reads 0x0440, two bits
+    set, of which only 0x0400 is the barline."""
+    other_bits = bytearray(staff_group_payload(1, 2))
+    other_bits[21] = 0x08
+    pools(details=(MusDetailRecord(STAFF_GROUP, 0, 1, 0, bytes(other_bits)),))
+    record = read_mus_document(PATH).details.get("staffGroup", 0, 1)
+    assert record is not None
+    assert "groupBarlineStyle" not in record.fields
+
+
+def test_a_zero_name_id_becomes_no_field_at_all(pools: Callable[..., None]) -> None:
+    """Same omission convention as `measSpec.key`: 0 means "no name"."""
+    pools(details=(MusDetailRecord(STAFF_GROUP, 0, 1, 0, staff_group_payload(1, 2, full_id=0)),))
+    record = read_mus_document(PATH).details.get("staffGroup", 0, 1)
+    assert record is not None
+    assert "fullID" not in record.fields
+
+    pools(details=(MusDetailRecord(STAFF_GROUP, 0, 2, 0, staff_group_payload(1, 2, full_id=99)),))
+    named = read_mus_document(PATH).details.get("staffGroup", 0, 2)
+    assert named is not None
+    assert named.fields["fullID"] == "99"
+
+
+def test_skips_a_group_payload_too_short_for_its_fields(pools: Callable[..., None]) -> None:
+    pools(details=(MusDetailRecord(STAFF_GROUP, 0, 1, 0, bytes(8)),))
+    assert read_mus_document(PATH).details.get("staffGroup", 0, 1) is None

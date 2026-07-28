@@ -32,6 +32,7 @@ Translated:
 | others | `repeatBack` (203) | `actuate` — Finale's "Total Passes" |
 | others | `repeatEndingStart` (204) | presence only; the bracket's extent comes from `barEnding` |
 | others | `repeatPassList` (206) | `act` — which pass the ending is taken on |
+| details | `staffGroup` (1057) | `startInst`, `endInst`, `bracket.id`, `fullID`, the barline bit |
 | texts | `verse` | the `^verse(N)…^end` sections of the text stream |
 
 Every field above is confirmed against paired `.musx` files; see
@@ -57,6 +58,7 @@ from finale_file_parser.enigma.mus_details import (
     TAG_ARTIC_ASSIGN,
     TAG_GFHOLD,
     TAG_LYRIC_VERSE,
+    TAG_STAFF_GROUP,
     TAG_TUPLET_DEF,
     MusDetailRecord,
     entry_key,
@@ -110,6 +112,18 @@ UNTRANSLATED = (
     "barlines and no final one -- too thin to commit to, so an ordinary barline "
     "is written everywhere. The repeat bits in the same byte's low nibble ARE "
     "read; see enigma.repeats.",
+    "Staff group names: a staffGroup's fullID IS recovered, but resolving it "
+    "needs the textBlock -> blockText chain, which a .mus does not supply -- "
+    "the same missing chain as staffSpec part names. Groups therefore come out "
+    "unnamed rather than labelled with a raw block number; 4 of the 14 paired "
+    "documents with groups differ from their .musx in nothing else.",
+    "Staff layout order (instUsed): a .musx lists its staves in the order the "
+    "score lays them out, which is not always ascending. The .mus tag for that "
+    "list is unidentified and the corpus cannot identify it -- every paired "
+    "document numbers its slots and staves alike, so no pair separates a right "
+    "guess from a wrong one. Staves therefore come out in numeric order, which "
+    "is right for every document there is evidence about. Staff groups are read "
+    "through that order; see enigma.groups.",
     "Repeat jumps: repeatBack's target/trigger/action and the textRepeatAssign "
     "family (D.C., D.S., Fine, To Coda) describe where a repeat sends the "
     "player rather than what barline is drawn. Neither container's reading is "
@@ -192,6 +206,19 @@ platform that wrote the file, which its header records.
 _STAFF_TRANSPOSITION = 20
 """Offset of `staffSpec`'s `transposition` field, per ETF's documented field
 order (`... topBarlineOffset transposition instflag dw_wRest ...`)."""
+
+_GROUP_BRACKET_ID = 10
+_GROUP_ABBRV_ID = 22
+_GROUP_BARLINE_BYTE = 21
+_GROUP_BARLINE_BIT = 0x04
+"""`staffGroup`'s "barlines run through the group" bit -- 0x0400 of the flag
+word at +20.
+
+Found by testing every (byte, bit) against the paired `.musx`, where it is the
+only exact candidate. One negative example is thin on its own, but
+`etfspec.pdf` corroborates it independently: its worked example reads
+`flag: 1088 = 0x0440 (barline through all staves, connecting; normal barline
+style)`, and 0x0400 is the bit that example sets."""
 
 _MEAS_FLAGS = 10
 _MEAS_REPEAT_BITS = {"barEnding": 0x02, "bacRepBar": 0x04, "forRepBar": 0x08}
@@ -457,6 +484,37 @@ def _meas_spec(payload: bytes) -> dict[str, str | tuple[str, ...] | Record | tup
     return fields
 
 
+def _staff_group(payload: bytes) -> dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]]:
+    """The staff span, the bracket, and whether barlines join the group.
+
+    Field order follows `etfspec.pdf`'s ETF `NG` record — `startInst endInst
+    fullNameID fullXadj fullYadj | bracketType bracPos ...` — and every offset
+    below was confirmed against the paired `.musx`, each with exactly one
+    candidate.
+
+    A text-block id of 0 means "no name", so it is written as **no field at
+    all**, matching a `.musx` and the same omission convention as
+    `measSpec.key`.
+    """
+    fields: dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]] = {
+        "startInst": str(_u16(payload, 0)),
+        "endInst": str(_u16(payload, 2)),
+        "bracket": Record(
+            tag="bracket",
+            attrs={},
+            text="",
+            fields={"id": str(_u16(payload, _GROUP_BRACKET_ID))},
+        ),
+    }
+    for name, offset in (("fullID", 4), ("abbrvID", _GROUP_ABBRV_ID)):
+        number = _u16(payload, offset) if len(payload) >= offset + 2 else 0
+        if number:
+            fields[name] = str(number)
+    if payload[_GROUP_BARLINE_BYTE] & _GROUP_BARLINE_BIT:
+        fields["groupBarlineStyle"] = "group"
+    return fields
+
+
 def _gfhold(payload: bytes) -> dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]]:
     """`clefID` at +0, then a frame number per layer from +6.
 
@@ -571,6 +629,15 @@ def _details_records(records: tuple[MusDetailRecord, ...]) -> list[Record]:
             )
         elif record.tag == TAG_LYRIC_VERSE:
             out.extend(_lyric_records(record, lyric_incidence, lyric_seen))
+        elif record.tag == TAG_STAFF_GROUP and len(record.payload) >= _GROUP_BARLINE_BYTE + 1:
+            out.append(
+                Record(
+                    tag="staffGroup",
+                    attrs={"cmper1": str(record.cmper1), "cmper2": str(record.cmper2)},
+                    text="",
+                    fields=_staff_group(record.payload),
+                )
+            )
         elif record.tag == TAG_TUPLET_DEF and len(record.payload) >= 8:
             out.append(
                 Record(
