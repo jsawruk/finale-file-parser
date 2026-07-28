@@ -173,3 +173,33 @@ third-party library would not.
 
 **Consequence.** `read_mus_payload()` decodes 238 of 238 corpus files. Correctness rests on the
 upstream test vector rather than on our own reimplementation being self-consistent.
+
+
+## 2026-07-27 — DECIDED: parts follow the instrument list, not the staff number
+
+**Context.** `build_score` ordered parts by staff number. A `.musx` records the score's real staff
+layout in `instUsed`, one record per slot, and that order is **not** always ascending: 10 of 401
+corpus documents list staves in an order their numbers do not follow. Those scores exported with
+their parts down the page in the wrong places — silently, since every part was still present. It
+also forced 8 staff groups to be dropped as non-contiguous.
+
+**Decision.** Order parts by `staff_order(document)`. A staff carrying music but holding no slot in
+the list keeps a place after the listed ones rather than being dropped.
+
+**Consequence.** 10 documents change part order; 388 do not. All 79 same-content pairs keep identical
+part order across containers, because a `.mus` has no instrument-list record and falls back to
+numeric order, and no paired document is one of the 10. Staff groups rise from 201 to 209 — every
+group previously dropped for non-contiguity now survives.
+
+- **OPEN — what is staff 32767?** Every one of the 398 buildable corpus documents carries a staff
+  numbered 32767 (0x7FFF, the same sentinel `endMeas` uses for "to the end"). It is not a phantom:
+  it has its own `staffSpec`, its own `gfhold` per measure, and real entries — 92 in a sampled
+  document, against 77/95/97 for that score's three named staves. Its music is unique rather than a
+  copy of another staff, though the sampled one repeats a single pitch, which would fit a percussion
+  or chord staff. It is **absent from `instUsed` in every document**, so it is not part of the
+  score's staff layout.
+
+  Both containers produce it identically, and it has been exported as a part named "Staff 32767"
+  since the IR was built; this change leaves its position (last) exactly as before. Whether it should
+  be exported at all, and what Finale uses it for, is unresolved — dropping it would discard real
+  entries on a guess, so nothing here does.

@@ -16,7 +16,7 @@ from finale_file_parser.enigma.articulations import articulations_by_entry
 from finale_file_parser.enigma.beams import BeamedNote, beams_for
 from finale_file_parser.enigma.clef import Clef, ClefSign, clef_definitions, clefs_by_measure
 from finale_file_parser.enigma.document import EnigmaDocument, Record
-from finale_file_parser.enigma.groups import staff_groups
+from finale_file_parser.enigma.groups import staff_groups, staff_order
 from finale_file_parser.enigma.key import Mode, decode_key
 from finale_file_parser.enigma.location import locate_entries
 from finale_file_parser.enigma.lyrics import Lyric as EnigmaLyric
@@ -137,7 +137,7 @@ def build_score(document: EnigmaDocument) -> Score:
     info = file_info(document)
     repeats = repeats_for(document)
 
-    staves = sorted({staff for staff, _ in cells})
+    staves = _ordered_staves(document, {staff for staff, _ in cells})
     numbers = sorted({measure for _, measure in cells})
     parts = [
         Part(
@@ -171,6 +171,25 @@ def build_score(document: EnigmaDocument) -> Score:
         composer=info.get("composer", ""),
         metadata={k: v for k, v in info.items() if k not in {"title", "composer"}},
     )
+
+
+def _ordered_staves(document: EnigmaDocument, present: set[int]) -> list[int]:
+    """The staves carrying music, in the order the score lays them out.
+
+    `instUsed` gives that order, and it is not always ascending: 10 corpus
+    documents list their staves in an order the staff numbers do not follow, and
+    sorting instead puts those parts down the page in the wrong places. Where
+    the document has no such list -- every `.mus`, whose equivalent record is
+    unidentified -- `staff_order` already falls back to numeric order, so this
+    changes nothing there.
+
+    A staff with music but no slot in the list keeps a place, after the listed
+    ones, rather than being dropped: it has notes, and losing a part is worse
+    than putting it last.
+    """
+    order = staff_order(document)
+    listed = [staff for staff in order if staff in present]
+    return listed + sorted(present - set(order))
 
 
 def _groups(document: EnigmaDocument, part_ids: list[str]) -> tuple[PartGroup, ...]:
