@@ -19,7 +19,7 @@ from finale_file_parser.enigma.document import (
     TextsPool,
 )
 from finale_file_parser.enigma.groups import staff_groups, staff_order
-from finale_file_parser.enigma.to_ir import _groups, _ordered_staves
+from finale_file_parser.enigma.to_ir import RESERVED_STAFF, _groups, _ordered_staves
 
 EMPTY: tuple[Record, ...] = ()
 
@@ -213,3 +213,27 @@ def test_a_group_out_of_numeric_order_now_survives() -> None:
     doc = document(others=inst_used(1, 2, 14, 3), details=(group(2, 14),))
     staves = _ordered_staves(doc, {1, 2, 3, 14})
     assert [g.part_ids for g in _groups(doc, [f"P{s}" for s in staves])] == [("P2", "P14")]
+
+
+def test_the_reserved_staff_is_not_a_part() -> None:
+    """Every corpus document declares staff 32767 and none lays it out: it is
+    absent from the instrument list in all 401, never named by a staff group,
+    and its staffSpec is a two-body template with everything hidden. Exporting
+    it put a spurious "Staff 32767" into every file this project produced.
+    """
+    doc = document(others=inst_used(1, 2))
+    assert _ordered_staves(doc, {1, 2, RESERVED_STAFF}) == [1, 2]
+
+
+def test_the_reserved_staff_is_excluded_without_an_instrument_list_too() -> None:
+    """The `.mus` path, and the case that actually distinguishes the rule.
+
+    A `.mus` has no instrument-list record, and emits a `staffSpec` only for a
+    transposing staff -- so a concert-pitch score yields **no** staff ordering
+    information at all and `staff_order` comes back empty. Excluding the
+    reserved staff only where a list exists would keep it on exactly those
+    documents, and the two containers would then disagree on every score: all
+    93 buildable `.mus` documents carry the same staff.
+    """
+    assert staff_order(document()) == ()
+    assert _ordered_staves(document(), {1, 2, RESERVED_STAFF}) == [1, 2]
