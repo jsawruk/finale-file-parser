@@ -206,6 +206,11 @@ def _append_measure(
     element = ET.SubElement(parent, "measure", number=str(measure.number))
     _append_barline(element, measure, "left")
     _append_attributes(element, measure, divisions, emit_divisions=emit_divisions)
+    for words in measure.directions:
+        # Before the notes: the marking applies to the measure, and a direction
+        # placed after them would read as belonging to the next bar.
+        direction = ET.SubElement(element, "direction", placement="above")
+        ET.SubElement(ET.SubElement(direction, "direction-type"), "words").text = words
 
     for index, voice in enumerate(measure.voices):
         if index:

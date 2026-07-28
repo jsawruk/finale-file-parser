@@ -192,6 +192,11 @@ class Measure:
 
     clef_line: int | None = None
 
+    directions: tuple[str, ...] = ()
+    """Words printed over this measure -- "Fine", "D.C. al Coda". Text only:
+    what a jump *does* is not modelled, because Enigma's is not read; see
+    `enigma.jumps`."""
+
     repeat_forward: bool = False
     """A forward repeat barline on the left of this measure."""
 

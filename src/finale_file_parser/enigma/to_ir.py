@@ -23,6 +23,7 @@ from finale_file_parser.enigma.clef import (
 )
 from finale_file_parser.enigma.document import EnigmaDocument, Record
 from finale_file_parser.enigma.groups import staff_groups, staff_order
+from finale_file_parser.enigma.jumps import jumps_by_measure
 from finale_file_parser.enigma.key import Mode, decode_key
 from finale_file_parser.enigma.location import effective_keys, locate_entries
 from finale_file_parser.enigma.lyrics import Lyric as EnigmaLyric
@@ -142,6 +143,7 @@ def build_score(document: EnigmaDocument) -> Score:
     names = staff_names(document)
     info = file_info(document)
     repeats = repeats_for(document)
+    directions = jumps_by_measure(document)
 
     staves = _ordered_staves(document, {staff for staff, _ in cells})
     keys = effective_keys(document)
@@ -166,6 +168,7 @@ def build_score(document: EnigmaDocument) -> Score:
                     clef_table=clef_table,
                     clef_at=clef_at,
                     repeats=repeats,
+                    directions=directions,
                 )
                 for index, number in enumerate(numbers)
             ),
@@ -412,6 +415,7 @@ def _measure(
     clef_table: dict[int, Clef],
     clef_at: dict[tuple[int, int], int],
     repeats: Repeats,
+    directions: dict[int, tuple[str, ...]] | None = None,
 ) -> Measure:
     cell = cells.get((staff, number))
 
@@ -452,6 +456,9 @@ def _measure(
         clef_line=_clef_line(clef) if clef_changed and clef else None,
         # Repeats belong to the measure, not the staff: every part carries the
         # same barline, which is what a reader of one part expects to see.
+        # A marking belongs to the measure, so every part shows it -- which is
+        # what a player reading one part needs.
+        directions=(directions or {}).get(number, ()),
         repeat_forward=here.forward,
         repeat_backward=here.backward,
         repeat_passes=here.passes,

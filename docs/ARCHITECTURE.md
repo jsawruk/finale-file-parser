@@ -566,6 +566,36 @@ right guess from a wrong one, since all of them number slots and staves alike), 
 to numeric order; and a group's name resolves through the `textBlock → blockText` chain a `.mus`
 does not supply, the same missing chain as staff names.
 
+### Known format facts — text repeats
+
+"Fine", "D.C. al Coda" and their kin are three records:
+
+    textRepeatAssign(measure)  -- a marking is placed here, naming a definition
+    textRepeatDef(repnum)      -- how it is drawn
+    textRepeatText(repnum)     -- what it says
+
+**`textRepeatText` is a palette, not a list of what the score uses.** Every one of the 401 corpus
+documents carries the same nine or so definitions — "D.C. al Fine", "D.S. al Coda", "Fine",
+"To Coda #" — whether or not it uses any, roughly 400 occurrences each. Reading the palette puts a
+D.S. in every score in the corpus. Only an **assignment** places a marking, and there are 17 of
+those across 10 documents.
+
+`repnum` names the definition, confirmed by what comes back: measure 5 of one score resolves to
+"Fine" and measure 10 of another to "D.C. al Coda", which is not what a wrong link produces. Five of
+the 17 name a `textRepeatDef` that exists while its `textRepeatText` does not, so the file carries no
+words for them.
+
+Three limits, each deliberate:
+
+| not done | why |
+| --- | --- |
+| playback semantics (`<sound dacapo>`, `dalsegno`, `fine`) | `action` is `stop`/`jumpAbsolute`/`noJump` with a `target` measure, but the corpus holds one or two distinct situations per value. A wrong guess sends a player to the wrong bar — worse than a marking that only prints. |
+| segno and coda signs | Some markings are a single music-font character (`%` for the segno). Printing that literally puts a percent sign in the score, and the definitions carrying one have **no `fontID`** to identify the glyph with — the same blocker as fingerings. |
+| the `.mus` side | Exactly **one** paired document carries a text repeat, with two assignments. A key set that small matches several tags by chance, so no tag can be identified. |
+
+Corpus: **6 markings across 3 documents** — "Fine" and "D.C. al Coda". Small, and that is the point:
+the palette would have given hundreds.
+
 ### Known format facts — repeats
 
 Repeats live in two places at once, and reconstructing one bracket needs both.

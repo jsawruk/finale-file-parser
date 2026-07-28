@@ -29,6 +29,7 @@ from finale_file_parser.enigma.document import (
     parse_enigma,
 )
 from finale_file_parser.enigma.groups import StaffGroup, staff_groups, staff_order
+from finale_file_parser.enigma.jumps import jumps_by_measure
 from finale_file_parser.enigma.key import (
     KeySignature,
     Mode,
@@ -186,6 +187,7 @@ __all__ = [
     "duration_from_edu",
     "decrypt",
     "effective_keys",
+    "jumps_by_measure",
     "locate_entries",
     "lyrics_by_entry",
     "parse_enigma",

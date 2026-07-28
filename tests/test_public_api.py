@@ -121,6 +121,7 @@ EXPECTED_PUBLIC_NAMES = {
     "decrypt",
     "detect_version",
     "effective_keys",
+    "jumps_by_measure",
     "locate_entries",
     "lyrics_by_entry",
     "open_musx",
