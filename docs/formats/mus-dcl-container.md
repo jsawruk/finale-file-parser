@@ -142,10 +142,15 @@ entries picks exactly what the staff-spec shape predicts, in **134 of 134 docume
 > apart is the same either way: look at the per-document distribution before calling anything
 > constant.
 
-**What is still unreached**: 5,435 entries in 56 documents. Only 10 of them start a frame nothing
-references, so the gap is inside frames that *are* named — it reads as a second voice hanging off
-the same frame, which `docs/eeppd.txt` warns about ("voice 2 create complications"). That is a
-separate question from the link.
+**What is still unreached**: 5,302 entries, and they concentrate in **16 documents**. 258 are chain
+heads no frame names at all, 4,325 continue one of those chains, and 711 sit past a frame whose
+`endEntry` stops short of where the music does.
+
+> **They are not voice 2.** `docs/eeppd.txt` warns that "mirrors and voice 2 create complications",
+> and voice-2 entries are marked in the entry flag — `CNTLBIT` 0x10000000 for a voice-2 note,
+> `CNTLRBIT` 0x20000000 for the "V2 launch" controller. **Not one of the orphans carries either
+> bit**, and the 146 voice-2 entries the corpus does contain are all reached already. The obvious
+> hypothesis was checked before it was built on, and it was wrong.
 
 A control worth keeping: the same measurement on the 2011 cohort, whose pipeline demonstrably works,
 returns 10,465 of 10,465 frames referenced. It is pinned as a test, and it is what showed the 34%
@@ -171,7 +176,7 @@ whether the numbers that come out are musically possible.
 
 `read_mus_document` now takes the row path for a 2001-2005 file, so
 `to_musicxml(build_score(read_mus_document(path)))` works on the cohort.
-**110 of the 139 build**, giving 297 parts, 8,938 measures, 42,736 events and 49,693 pitches.
+**118 of the 139 build**, giving 321 parts, 9,711 measures, 48,112 events and 55,463 pitches.
 
 The translation reuses the 2011 field decoders rather than reimplementing them, because **the 2011
 binary layout _is_ the ETF layout** — `measSpec`'s flags byte at +10 and `staffSpec`'s transposition
@@ -182,7 +187,7 @@ puts them. Only the byte order and the framing differ.
 
 | | documents |
 | --- | --- |
-| orphan entries — music in a frame nothing references | 22 |
+| orphan entries — music no frame reaches | 14 |
 | an entry two frames both claim | 1 |
 | a gfhold naming a measure past the end of the piece | 1 |
 | a breve or dotted whole, which `duration_from_edu` rejects | 2 |

@@ -27,22 +27,25 @@ pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not pr
 LAST_DCL_YEAR = 2005
 EXPECTED_DOCUMENTS = 139
 
-EXPECTED_SCORES = 110
+EXPECTED_SCORES = 118
 """Documents that build. Before this reader, none of the 139 did."""
 
-EXPECTED_PARTS = 297
-EXPECTED_MEASURES = 8938
-EXPECTED_EVENTS = 42736
-EXPECTED_PITCHES = 49693
+EXPECTED_PARTS = 321
+EXPECTED_MEASURES = 9711
+EXPECTED_EVENTS = 48112
+EXPECTED_PITCHES = 55463
 """The shape of what comes out. A reader that built empty scores would still
 pass a "did it build" test; these are what stop that."""
 
-EXPECTED_MALFORMED = 24
+EXPECTED_MALFORMED = 16
 """Documents `build_score` rejects.
 
-Almost all are orphan entries -- music in a frame nothing references, which
-reads as a second voice hanging off a frame the reader already places. One is an
-entry two frames both claim, and one a gfhold naming a measure past the end.
+Almost all are orphan entries -- music no frame reaches. They concentrate in 16
+documents: 258 are chain heads nothing frames at all, 4,325 continue one of
+those chains, and 711 sit past a frame whose `endEntry` stops short of where the
+music does. One rejection is an entry two frames both claim, and one a gfhold
+naming a measure past the end.
+
 Pinned rather than tolerated: these are known, named gaps, and the number should
 fall, never rise. See `docs/formats/mus-dcl-container.md`.
 """
