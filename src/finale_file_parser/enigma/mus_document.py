@@ -134,11 +134,13 @@ UNTRANSLATED = (
     "Chorus and section lyrics: the .mus tag for lyrDataVerse is identified, but "
     "no paired corpus document uses a chorus or section track, so their tags are "
     "unknown and those lyrics are absent from a .mus-derived score.",
-    "gfhold frame3-4: layers 3 and 4. Frames 1 and 2 are at payload +6 and +8, "
-    "confirmed against the corpus; no corpus .musx carries a frame3 or frame4, so "
-    "the next two slots are a guess this does not make. A document using layer 3 "
-    "or 4 therefore leaves those entries unplaced, which locate_entries rejects "
-    "as orphans -- a loud failure rather than a silent misplacement.",
+    "gfhold frame3-4 in a 2011 .mus: layers 3 and 4. Frames 1 and 2 are at "
+    "payload +6 and +8, confirmed against the corpus; no corpus .musx carries a "
+    "frame3 or frame4, so the next two slots are a guess this era's reader does "
+    "not make. A 2011 document using layer 3 or 4 therefore leaves those entries "
+    "unplaced, which locate_entries rejects as orphans -- a loud failure rather "
+    "than a silent misplacement. The 2001-2005 rows reader does read all four "
+    "slots; see _FRAME_LAYERS for why the number is the format's, not a guess.",
 )
 """What a `.mus`-derived score does not yet carry, and the consequence of each.
 
@@ -326,16 +328,79 @@ def _rows_document(path: str | os.PathLike[str]) -> EnigmaDocument:
     entries = read_mus_entry_records(path)
     live = {int(record.attrs["entnum"]) for record in entries}
     frames, dropped = _rows_frames(rows, live)
+    gfholds = _rows_details(rows, dropped)
+    kept = _live_entries(entries, frames, gfholds)
+    if entries and not kept:
+        # The pool holds music but no frame reaches any of it. Pruning would
+        # leave an empty pool and `build_score` would return a Score with no
+        # parts -- a silent nothing, which is worse than saying so. Three corpus
+        # documents are like this: they carry a frame hold, so they do not fall
+        # to the check above, but nothing it names resolves.
+        raise CorruptScoreError(
+            f"{path} has {len(entries)} entries but no frame reaches any of them"
+        )
     return EnigmaDocument(
         version=_VERSION,
         header=Pool(records=_EMPTY),
         mappings=Pool(records=_EMPTY),
         options=OptionsPool(records=_EMPTY),
         others=OthersPool(records=tuple(_rows_others(rows, frames))),
-        details=DetailsPool(records=tuple(_rows_details(rows, dropped))),
-        entries=EntriesPool(records=entries),
+        details=DetailsPool(records=tuple(gfholds)),
+        entries=EntriesPool(records=kept),
         texts=TextsPool(records=tuple(_texts_records(path))),
     )
+
+
+def _live_entries(
+    entries: tuple[Record, ...],
+    frames: dict[int, tuple[int, int]],
+    gfholds: list[Record],
+) -> tuple[Record, ...]:
+    """The entries some frame reaches, in pool order.
+
+    **The entry pool is a live database, not a list of the music.** A `.mus` is
+    written in place, so an entry deleted in Finale keeps its slot until the file
+    is compacted, and the pool holds both the current music and whatever earlier
+    music has not been overwritten. The frames are what say which is which.
+
+    That this is dead space rather than music the reader fails to place is the
+    corpus's verdict, not an assumption: of the entries no frame reaches, 88% are
+    *exact duplicates of passages the frames do reach* -- matched as whole
+    `next`-chains, so shape-for-shape coincidence in tonal music is not the
+    explanation. One document keeps entries 1-858 as a stale copy of the live
+    859-1717, 824 of them identical field for field.
+
+    Dropping them here rather than tolerating them downstream keeps
+    `locate_entries`' orphan check meaning what it says in both eras: an entry no
+    frame places is still an error there, and it still fires for `.musx` and for
+    2011 `.mus`. What stops this from hiding a real misplacement is that the
+    corpus sweep pins how many entries it discards -- a reader that stopped
+    reaching music would discard more, and the pin only permits fewer. See
+    `docs/formats/mus-dcl-container.md`.
+    """
+    by_num = {int(record.attrs["entnum"]): record for record in entries}
+    reached: set[int] = set()
+    for gfhold in gfholds:
+        for layer in range(_FRAME_LAYERS):
+            value = gfhold.fields.get(f"frame{layer + 1}")
+            if not isinstance(value, str):
+                continue
+            span = frames.get(int(value))
+            if span is None:
+                continue
+            start, end = span
+            entnum = start
+            # Bounded by the pool: every step consumes an unvisited entry, so a
+            # chain that cycles or never meets its endEntry still terminates.
+            for _ in range(len(by_num)):
+                record = by_num.get(entnum)
+                if record is None or entnum in reached:
+                    break
+                reached.add(entnum)
+                if entnum == end:
+                    break
+                entnum = int(record.attrs.get("next", 0))
+    return tuple(record for record in entries if int(record.attrs["entnum"]) in reached)
 
 
 def _rows_frame_base(rows: MusRows) -> int:

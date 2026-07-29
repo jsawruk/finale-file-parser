@@ -142,15 +142,32 @@ entries picks exactly what the staff-spec shape predicts, in **134 of 134 docume
 > apart is the same either way: look at the per-document distribution before calling anything
 > constant.
 
-**What is still unreached**: 5,302 entries, and they concentrate in **16 documents**. 258 are chain
-heads no frame names at all, 4,325 continue one of those chains, and 711 sit past a frame whose
-`endEntry` stops short of where the music does.
+**What is still unreached**: 5,302 entries in **16 documents** — and they are not unread music.
+**They are dead space in a live database.** A `.mus` is written in place, so an entry deleted in
+Finale keeps its 38-byte slot until the file is compacted; the pool therefore holds both the current
+music and whatever earlier music has not yet been overwritten. The frames are what say which is
+which, and an entry no frame reaches is the second kind.
 
+That is the corpus's verdict, not a convenient reading. **4,675 of the 5,302 (88%) are exact
+duplicates of passages the frames do reach** — matched as whole `next`-chains, sequence for
+sequence, so shape-for-shape coincidence in tonal music is not the explanation. In the clearest
+case a document keeps entries 1–858 as a stale copy of the live 859–1717, 824 of them identical
+field for field. The remaining 12% are in three documents whose frames reach *nothing at all*,
+leaving nothing to duplicate; those are refused outright rather than pruned to an empty score.
+
+> **Two hypotheses died here, both cheaply, both before anything was built on them.**
+>
 > **They are not voice 2.** `docs/eeppd.txt` warns that "mirrors and voice 2 create complications",
 > and voice-2 entries are marked in the entry flag — `CNTLBIT` 0x10000000 for a voice-2 note,
 > `CNTLRBIT` 0x20000000 for the "V2 launch" controller. **Not one of the orphans carries either
-> bit**, and the 146 voice-2 entries the corpus does contain are all reached already. The obvious
-> hypothesis was checked before it was built on, and it was wrong.
+> bit**, and the 146 voice-2 entries the corpus does contain are all reached already.
+>
+> **No frame's `endEntry` "stops short".** That reading assumed each frame owns a `next`-chain that
+> terminates at its own end. It does not: the pool is **one** doubly-linked list per document, and a
+> frame carves a segment out of it with `startEntry`/`endEntry`. Walking `next` from any frame's
+> start runs on to the last entry in the file. A measurement built on the wrong model produced a
+> confident "12,736 frames stop short" — of 13,306. The give-away was the size of the number: a
+> defect that common is usually a defect in the question.
 
 A control worth keeping: the same measurement on the 2011 cohort, whose pipeline demonstrably works,
 returns 10,465 of 10,465 frames referenced. It is pinned as a test, and it is what showed the 34%
@@ -176,7 +193,7 @@ whether the numbers that come out are musically possible.
 
 `read_mus_document` now takes the row path for a 2001-2005 file, so
 `to_musicxml(build_score(read_mus_document(path)))` works on the cohort.
-**118 of the 139 build**, giving 321 parts, 9,711 measures, 48,112 events and 55,463 pitches.
+**129 of the 139 build**, giving 402 parts, 13,717 measures, 60,476 events and 66,847 pitches.
 
 The translation reuses the 2011 field decoders rather than reimplementing them, because **the 2011
 binary layout _is_ the ETF layout** — `measSpec`'s flags byte at +10 and `staffSpec`'s transposition
@@ -187,15 +204,24 @@ puts them. Only the byte order and the framing differ.
 
 | | documents |
 | --- | --- |
-| orphan entries — music no frame reaches | 14 |
 | an entry two frames both claim | 1 |
-| a gfhold naming a measure past the end of the piece | 1 |
+| a gfhold placing entries in a measure that defines no key | 1 |
 | a breve or dotted whole, which `duration_from_edu` rejects | 2 |
 | no frame holds at all — a blank score | 3 |
+| frame holds that resolve to nothing, so the whole pool is unreachable | 3 |
 
-The orphan cases are the 92.3% coverage figure showing up as a hard failure: `build_score` refuses a
-document with music it cannot place, which is the right call — it is the difference between a score
-that is short a voice and a score that silently loses one.
+The orphan cases are gone from this table: since dead pool slots are discarded at the container
+edge, `build_score` no longer sees them. **That deletion is exactly the kind that can hide a
+regression**, so it is paid for with a pin. The sweep asserts the number of entries the reader
+discards — 4,946 — and that number may only fall. A reader that quietly stopped *reaching* music
+would discard more and fail there, where the build counts alone would merely get smaller: reverting
+`_FRAME_LAYERS` from 4 to 2 pushes it to 6,004, and the pin catches it. `locate_entries`' orphan
+check is left exactly as it was, and still fires for `.musx` and for 2011 `.mus`.
+
+The last row is the empty-score trap in a third costume. Pruning turned three documents from
+"rejected for orphans" into "builds a `Score` with no parts", and the aggregate totals stayed
+green because a document contributing nothing changes no sum. Only the per-document assertion
+caught it. They are now refused at the reader, with a message that says what is wrong.
 
 The three blank scores are worth their own line, because of how they were found. They carry staves
 and measures but no `GF` records at all, so they built a `Score` with **no parts** — and the

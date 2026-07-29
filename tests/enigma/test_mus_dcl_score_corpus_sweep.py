@@ -17,6 +17,7 @@ import pytest
 from finale_file_parser.enigma.location import MalformedScoreError
 from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.mus_document import read_mus_document
+from finale_file_parser.enigma.mus_entries import read_mus_entry_records
 from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.version import mus as mus_header
 
@@ -27,35 +28,50 @@ pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not pr
 LAST_DCL_YEAR = 2005
 EXPECTED_DOCUMENTS = 139
 
-EXPECTED_SCORES = 118
+EXPECTED_SCORES = 129
 """Documents that build. Before this reader, none of the 139 did."""
 
-EXPECTED_PARTS = 321
-EXPECTED_MEASURES = 9711
-EXPECTED_EVENTS = 48112
-EXPECTED_PITCHES = 55463
+EXPECTED_PARTS = 402
+EXPECTED_MEASURES = 13717
+EXPECTED_EVENTS = 60476
+EXPECTED_PITCHES = 66847
 """The shape of what comes out. A reader that built empty scores would still
 pass a "did it build" test; these are what stop that."""
 
-EXPECTED_MALFORMED = 16
-"""Documents `build_score` rejects.
+EXPECTED_DEAD_ENTRIES = 4946
+"""Entries the reader discards because no frame reaches them.
 
-Almost all are orphan entries -- music no frame reaches. They concentrate in 16
-documents: 258 are chain heads nothing frames at all, 4,325 continue one of
-those chains, and 711 sit past a frame whose `endEntry` stops short of where the
-music does. One rejection is an entry two frames both claim, and one a gfhold
-naming a measure past the end.
+**This is the pin that keeps the pruning honest.** A `.mus` entry pool is a live
+database -- deleting music in Finale leaves its slots behind until the file is
+compacted -- so an unreached entry is dead space, not music. Discarding it is
+what lets these documents build at all, but it is also exactly how a reader that
+*stopped reaching* music would hide the loss.
+
+So the count is pinned, and it may only fall. Reading two frame slots per
+`gfhold` instead of four, for instance, put 1,058 more entries out of reach:
+under this pin that is a failure rather than a quieter score. The 5,302 are
+overwhelmingly provable dead space -- 4,675 duplicate live passages chain for
+chain. (The three documents whose frames reach nothing at all are refused
+outright rather than pruned to nothing, so their 356 entries are not counted
+here.) See `docs/formats/mus-dcl-container.md`.
+"""
+
+EXPECTED_MALFORMED = 2
+"""Documents `build_score` rejects: one entry that two frames both claim, and
+one `gfhold` placing entries in a measure that defines no key.
 
 Pinned rather than tolerated: these are known, named gaps, and the number should
 fall, never rise. See `docs/formats/mus-dcl-container.md`.
 """
 
-EXPECTED_CORRUPT = 5
+EXPECTED_CORRUPT = 8
 """Two whose entry pool holds a breve or a dotted whole, which
 `duration_from_edu` rejects -- a note-value limit, not a container one -- and
-three that carry no frame holds at all. Those three are blank scores: they have
-staves and measures but no music, and building one yields a Score with no parts,
-which is not valid MusicXML."""
+six that carry no music the frames reach. Three of those six have no frame holds
+at all; the other three have frame holds that resolve to nothing, so their whole
+entry pool is unreachable. All six are blank scores: they have staves and
+measures but no music, and building one yields a Score with no parts, which is
+not valid MusicXML."""
 
 
 def _dcl_files() -> list[Path]:
@@ -139,3 +155,22 @@ def test_no_built_score_is_empty() -> None:
         assert any(measure.voices for part in score.parts for measure in part.measures), (
             "built a score with no music"
         )
+
+
+def test_the_reader_discards_only_dead_pool_space() -> None:
+    """The counterweight to the pruning in `_live_entries`.
+
+    Discarding unreached entries is what lets these documents build, and it is
+    also how a reader that quietly stopped reaching music would look. Reading
+    two frame slots per `gfhold` rather than four leaves 1,058 more entries
+    unreached; this fails on that, where the build counts alone would only get
+    quieter.
+    """
+    dead = 0
+    for path in _dcl_files():
+        try:
+            document = read_mus_document(path)
+        except CorruptScoreError:
+            continue
+        dead += len(read_mus_entry_records(path)) - len(document.entries.records)
+    assert dead == EXPECTED_DEAD_ENTRIES
