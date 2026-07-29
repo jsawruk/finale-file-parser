@@ -289,8 +289,13 @@ bytes ahead of it, and the staff spec's incidence count is what tells the eras
 apart -- three in a 2001 file, six in a 2005 one. See
 `docs/formats/mus-dcl-container.md`."""
 
-_FRAME_LAYERS = 2
-"""Frame slots read per `GF` record. The 2011 reader takes the same two."""
+_FRAME_LAYERS = 4
+"""Frame slots per `GF` record, one per Finale layer.
+
+Four, not the two the 2011 reader takes: a fifth slot never resolves to a frame
+in any corpus document, and reading the third and fourth reaches 1,058 entries
+that two leave orphaned. Finale has four layers, so this is the format's own
+number rather than a fitted one."""
 
 _FRAME_ENTRY_OFFSETS = (0, 12)
 """Where a frame's `startEntry`/`endEntry` pair sits.
