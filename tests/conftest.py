@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
+from corpus_files import CORPUS, corpus_paths
 
 from finale_file_parser.enigma.document import parse_enigma
 from finale_file_parser.enigma.models import CorruptScoreError
@@ -31,19 +32,28 @@ from finale_file_parser.enigma.score import score_xml
 from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.ir import Score
 
-CORPUS = Path(__file__).parent.parent / "corpus"
-
 
 def musx_paths() -> list[Path]:
-    return sorted(CORPUS.rglob("*.musx"))
+    return corpus_paths(".musx")
 
 
 def mus_paths() -> list[Path]:
-    return sorted(CORPUS.rglob("*.mus"))
+    return corpus_paths(".mus")
 
 
 def stem_pairs() -> list[tuple[Path, Path]]:
-    """`.mus`/`.musx` sharing a filename stem, in stem order."""
+    """`.mus`/`.musx` sharing a filename stem, in stem order.
+
+    **Deliberately left on the old walk**, case-sensitive glob and all, because
+    which oracle a `.mus` is compared against is not well defined here and this
+    is not the change to redefine it in. 401 `.musx` files share only 123 stems,
+    so 278 of them are shadowed, and `{p.stem: p}` keeps whichever the walk
+    yielded last. Making the walk case insensitive also reorders it, which
+    silently swaps the oracle under a third of the pairs -- moving one sweep's
+    agreement from 91 documents to 84 with no bug in sight. Widening this needs
+    pairing that names one document, not a re-glob. See the note in
+    `corpus_files.corpus_paths`.
+    """
     mus = {p.stem: p for p in CORPUS.rglob("*.mus")}
     musx = {p.stem: p for p in CORPUS.rglob("*.musx")}
     return [(mus[s], musx[s]) for s in sorted(set(mus) & set(musx))]
