@@ -166,3 +166,47 @@ And there is **no oracle for any of it**: not one of the 139 has a stem-matched 
 `.mus`/`.musx` comparison this project relies on is drawn from the 2011/2012 cohort. Verification
 here has to come from internal consistency, from the ETF spec's own printed examples, and from
 whether the numbers that come out are musically possible.
+
+## 7. Building a `Score`
+
+`read_mus_document` now takes the row path for a 2001-2005 file, so
+`to_musicxml(build_score(read_mus_document(path)))` works on the cohort.
+**110 of the 139 build**, giving 297 parts, 8,938 measures, 42,736 events and 49,693 pitches.
+
+The translation reuses the 2011 field decoders rather than reimplementing them, because **the 2011
+binary layout _is_ the ETF layout** — `measSpec`'s flags byte at +10 and `staffSpec`'s transposition
+at +20 were derived independently from paired `.musx` files and land exactly where the ETF record
+puts them. Only the byte order and the framing differ.
+
+### What does not build, and why
+
+| | documents |
+| --- | --- |
+| orphan entries — music in a frame nothing references | 22 |
+| an entry two frames both claim | 1 |
+| a gfhold naming a measure past the end of the piece | 1 |
+| a breve or dotted whole, which `duration_from_edu` rejects | 2 |
+| no frame holds at all — a blank score | 3 |
+
+The orphan cases are the 92.3% coverage figure showing up as a hard failure: `build_score` refuses a
+document with music it cannot place, which is the right call — it is the difference between a score
+that is short a voice and a score that silently loses one.
+
+The three blank scores are worth their own line, because of how they were found. They carry staves
+and measures but no `GF` records at all, so they built a `Score` with **no parts** — and the
+per-document totals in the new sweep were satisfied the whole time, because a document contributing
+nothing changes no sum. What caught it was the export audit's "parts disagree about which measures
+exist", asserted per document. The reader now refuses them outright, and the sweep asserts
+per document that a built score has parts and music in them. Aggregates cannot see an empty file.
+
+### One fallback, named as such
+
+A frame's `startEntry`/`endEntry` pair is at +0 for 13,200 of 13,322 frames. The other 122 carry a
+leading block — always a second incidence — that pushes the pair to +12, where 106 of them read
+correctly. **What that leading block is has not been identified.** The reader takes whichever pair
+names entries the pool actually holds, and drops the frame when neither does (16 frames). That is a
+fallback, not an explanation, and it is worth replacing with the real rule.
+
+Dropping a frame also drops the `gfhold` references to it: `build_score` rejects a gfhold naming a
+frameSpec that is absent, so keeping the reference would cost the whole document instead of one
+frame's music.
