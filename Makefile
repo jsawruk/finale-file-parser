@@ -13,7 +13,7 @@ help:
 	@echo "Targets:"
 	@echo "  install    create the venv, install dependencies (uv sync), and enable git hooks"
 	@echo "  hooks      point git at .githooks/ (blocks direct pushes to main)"
-	@echo "  test       run the test suite (pytest)"
+	@echo "  test       run the test suite (pytest, parallel; JOBS=0 for serial)"
 	@echo "  lint       ruff check"
 	@echo "  fmt        auto-format with ruff"
 	@echo "  typecheck  mypy --strict"
@@ -31,8 +31,15 @@ hooks:
 	@git config core.hooksPath .githooks
 	@echo "git hooks enabled (core.hooksPath=.githooks) — direct pushes to main are blocked"
 
+# `-n auto` fans the suite across cores; `--dist loadfile` keeps every test in a
+# file on one worker, which matters because the corpus sweeps hang their work off
+# module-scoped fixtures — splitting a file would recompute one on each worker
+# and cost more than it saves. Override with:  make test JOBS=0   (serial)
+JOBS ?= auto
+PYTEST_ARGS ?= $(if $(filter 0,$(JOBS)),,-n $(JOBS) --dist loadfile)
+
 test:
-	$(PY) pytest
+	$(PY) pytest $(PYTEST_ARGS)
 
 lint:
 	$(PY) ruff check $(CODE)
