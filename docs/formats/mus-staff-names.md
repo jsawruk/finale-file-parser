@@ -51,8 +51,23 @@ template. Only the within-document test discriminates.
   documents the delta ranges 63–87 with no relation to the block count.
 
 So there is a genuine lookup record, equivalent to the `.musx`'s `textBlock[cmper] -> textID`, and it
-has not been located. The ETF notes list a `TX` record for text blocks, which is the thing to look
-for next.
+has not been located. Ruled out so far, each against the 45 name/block pairs the corpus yields:
+
+| searched | result |
+| --- | --- |
+| every `others` record keyed at the id, every offset | best 24% (tag 183 at +0) — and its value is constant per document while the block varies, so it is coincidence |
+| every `details` record keyed at the id (either cmper), every offset | best 4 of 540 |
+| an arithmetic relation | delta varies across documents, 63–87, unrelated to block count |
+| blocks numbered in the id range | none: every `^block(` has an `^end` (2,654 of 2,654) and the highest is 37 |
+| **stream 2**, which no reader consumes, as a flat table | no stride/base fits; and its size varies (9,044–13,376), so it is not a fixed table |
+
+**Stream 2 is worth naming even so: nothing reads it.** A `.mus` with four streams uses 0 for the
+`others` pool, 1 for `details`, 3 for text — and 2 is untouched by any reader in this project.
+Whatever it holds is unexamined.
+
+A second thing surfaced while mapping the streams: **38 of 137 `.mus` documents have only one
+stream.** Those are the DCL era, which packs every pool together, and `read_mus_others` refuses them
+outright. That is a separate, larger gap than staff names.
 
 ## 4. A limit that will remain even then
 
