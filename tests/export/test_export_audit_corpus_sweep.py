@@ -29,6 +29,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
+from corpus_files import corpus_paths
 from defusedxml import ElementTree as DET
 
 from finale_file_parser.export.musicxml import to_musicxml
@@ -50,25 +51,22 @@ records whose entry is a rest, against 16,591 on notes. Pinned so that a change
 in the count means the lyric-to-entry mapping moved, rather than going unnoticed.
 """
 
-MUS_EXPORTED = 123
+MUS_EXPORTED = 222
 """`.mus` documents that export. The same invariants are asserted on them: a
 reader-specific defect would otherwise hide behind the `.musx` path.
 
-Was 93 until the 2001-2005 reader landed. The 30 added are DCL-era documents
-that used to raise before reaching the exporter, and they pass every invariant
-below unchanged -- which is the useful part: the new reader's output holds
-together under checks written for the old one.
-
-Counts lowercase `.mus` only, because `conftest.mus_paths` globs case
-sensitively: the corpus's `.MUS` cohort is audited by the `.mus` sweeps but not
-by this one. Every document that builds does export -- 222 of 222 across both
-spellings -- so this is a gap in coverage, not a known failure."""
+Was 93 until the 2001-2005 reader landed, then 123 -- and 123 was measured
+through a case-sensitive glob that never saw the corpus's 101 `.MUS` files at
+all. The Windows cohort had been outside this audit since it was written, and
+nothing failed to say so, because a sweep that walks fewer files simply reports
+a smaller number. Every one of the 99 documents that walk now brings in passes
+every invariant below unchanged."""
 
 _BARLINE_ORDER = ("bar-style", "ending", "repeat")
 
 
 def musx_files() -> list[Path]:
-    return sorted(CORPUS.rglob("*.musx"))
+    return corpus_paths(".musx")
 
 
 def _rendered(scores: list[tuple[Path, Score]]) -> list[tuple[str, Score, ET.Element]]:
