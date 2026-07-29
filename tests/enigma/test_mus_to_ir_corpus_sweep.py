@@ -19,13 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from conftest import PairedCorpus
 
-from finale_file_parser.enigma.document import parse_enigma
-from finale_file_parser.enigma.models import CorruptScoreError
-from finale_file_parser.enigma.mus_document import read_mus_document
-from finale_file_parser.enigma.mus_entries import read_mus_entries
-from finale_file_parser.enigma.score import score_xml
-from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.ir import Event, Score
 
 CORPUS = Path(__file__).parent.parent.parent / "corpus"
@@ -177,20 +172,9 @@ def compare(mine: Score, theirs: Score, tally: Tally) -> None:
 
 
 @pytest.fixture(scope="module")
-def tally() -> Tally:
-    out = Tally()
-    for mus_path, musx_path in pairs():
-        try:
-            document = parse_enigma(score_xml(musx_path))
-            if len(read_mus_entries(mus_path)) != len(document.entries.records):
-                continue
-            theirs = build_score(document)
-            mine = build_score(read_mus_document(mus_path))
-        except CorruptScoreError:
-            continue
-        except Exception:  # noqa: BLE001 - the point is to count, not to diagnose
-            out.unbuildable += 1
-            continue
+def tally(paired_scores: PairedCorpus) -> Tally:
+    out = Tally(unbuildable=paired_scores.unbuildable)
+    for mine, theirs in paired_scores.pairs:
         out.compared += 1
         compare(mine, theirs, out)
     return out

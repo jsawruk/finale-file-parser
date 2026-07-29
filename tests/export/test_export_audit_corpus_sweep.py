@@ -31,11 +31,6 @@ from pathlib import Path
 import pytest
 from defusedxml import ElementTree as DET
 
-from finale_file_parser.enigma.document import parse_enigma
-from finale_file_parser.enigma.models import CorruptScoreError
-from finale_file_parser.enigma.mus_document import read_mus_document
-from finale_file_parser.enigma.score import score_xml
-from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.export.musicxml import to_musicxml
 from finale_file_parser.ir import Score
 
@@ -66,39 +61,33 @@ def musx_files() -> list[Path]:
     return sorted(CORPUS.rglob("*.musx"))
 
 
-def exported() -> list[tuple[str, ET.Element]]:
-    """Every corpus document, exported and parsed back."""
-    out: list[tuple[str, ET.Element]] = []
-    for path in musx_files():
-        try:
-            xml = to_musicxml(build_score(parse_enigma(score_xml(path))))
-        except CorruptScoreError:
-            continue
-        element: ET.Element = DET.fromstring(xml.decode())
-        out.append((path.name, element))
-    return out
+def _rendered(scores: list[tuple[Path, Score]]) -> list[tuple[str, Score, ET.Element]]:
+    """Each score with the document it renders to.
 
-
-def mus_exported() -> list[tuple[str, ET.Element]]:
-    out: list[tuple[str, ET.Element]] = []
-    for path in sorted(CORPUS.rglob("*.mus")):
-        try:
-            xml = to_musicxml(build_score(read_mus_document(path)))
-        except Exception:  # noqa: BLE001 - the .mus reader's own failures are pinned elsewhere
-            continue
-        element: ET.Element = DET.fromstring(xml.decode())
-        out.append((path.name, element))
+    Both are kept because the completeness check needs to compare them, and
+    exporting the corpus a second time to get the other half costs more than
+    holding it.
+    """
+    out: list[tuple[str, Score, ET.Element]] = []
+    for path, score in scores:
+        element: ET.Element = DET.fromstring(to_musicxml(score).decode())
+        out.append((path.name, score, element))
     return out
 
 
 @pytest.fixture(scope="module")
-def documents() -> list[tuple[str, ET.Element]]:
-    return exported()
+def rendered(musx_scores: list[tuple[Path, Score]]) -> list[tuple[str, Score, ET.Element]]:
+    return _rendered(musx_scores)
 
 
 @pytest.fixture(scope="module")
-def mus_documents() -> list[tuple[str, ET.Element]]:
-    return mus_exported()
+def documents(rendered: list[tuple[str, Score, ET.Element]]) -> list[tuple[str, ET.Element]]:
+    return [(name, element) for name, _, element in rendered]
+
+
+@pytest.fixture(scope="module")
+def mus_documents(mus_scores: list[tuple[Path, Score]]) -> list[tuple[str, ET.Element]]:
+    return [(name, element) for name, _, element in _rendered(mus_scores)]
 
 
 def test_the_mus_path_exports_and_holds_together(
@@ -114,18 +103,15 @@ def test_the_mus_path_exports_and_holds_together(
     test_durations_are_positive_integers_against_a_declared_divisions(mus_documents)
 
 
-def test_nothing_the_ir_holds_is_dropped_on_the_way_out() -> None:
+def test_nothing_the_ir_holds_is_dropped_on_the_way_out(
+    rendered: list[tuple[str, Score, ET.Element]],
+) -> None:
     """Completeness, end to end: every attachment the IR carries reaches the
     document. A feature wired into `to_ir` but not into the exporter looks
     exactly like one that was never read.
     """
     totals: collections.Counter[str] = collections.Counter()
-    for path in musx_files():
-        try:
-            score = build_score(parse_enigma(score_xml(path)))
-        except CorruptScoreError:
-            continue
-        doc: ET.Element = DET.fromstring(to_musicxml(score).decode())
+    for _, score, doc in rendered:
         totals["ir lyrics"] += _count(score, "lyrics")
         totals["xml lyrics"] += len(list(doc.iter("lyric")))
         totals["ir beams"] += _count(score, "beams")

@@ -18,6 +18,7 @@ Report counts only -- never a corpus filename, title, or record value.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
@@ -81,23 +82,37 @@ def mus_scores() -> list[tuple[Path, Score]]:
     return out
 
 
+@dataclass
+class PairedCorpus:
+    """Same-music pairs, and a count of the ones that would not build.
+
+    The failure count is carried rather than swallowed: a sweep pins it at 2,
+    and a fixture that quietly skipped them would turn a known, named breakage
+    into silence.
+    """
+
+    pairs: list[tuple[Score, Score]] = field(default_factory=list)
+    unbuildable: int = 0
+
+
 @pytest.fixture(scope="session")
-def paired_scores() -> list[tuple[Score, Score]]:
+def paired_scores() -> PairedCorpus:
     """(`.mus`, `.musx`) for stem-matched pairs holding the **same music**.
 
     A shared filename stem is not enough: some pairs are different arrangements
     entirely. Matching the entry count is the filter every container comparison
     in this suite has used, and it belongs here rather than repeated in each.
     """
-    out: list[tuple[Score, Score]] = []
+    out = PairedCorpus()
     for mus_path, musx_path in stem_pairs():
         try:
             document = parse_enigma(score_xml(musx_path))
             if len(read_mus_entries(mus_path)) != len(document.entries.records):
                 continue
-            out.append((build_score(read_mus_document(mus_path)), build_score(document)))
         except CorruptScoreError:
             continue
-        except Exception:  # noqa: BLE001 - the readers' own failures are pinned elsewhere
-            continue
+        try:
+            out.pairs.append((build_score(read_mus_document(mus_path)), build_score(document)))
+        except Exception:  # noqa: BLE001 - the point is to count them, not to diagnose
+            out.unbuildable += 1
     return out

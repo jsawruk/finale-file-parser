@@ -31,11 +31,11 @@ import pytest
 from defusedxml import ElementTree as DET
 
 from finale_file_parser.enigma.document import parse_enigma
-from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.score import score_xml
 from finale_file_parser.enigma.text import staff_names
 from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.export.musicxml import to_musicxml
+from finale_file_parser.ir import Score
 
 CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
@@ -66,10 +66,20 @@ def _export(path: Path) -> bytes:
     return to_musicxml(build_score(parse_enigma(score_xml(path))))
 
 
-def test_every_score_exports_and_is_well_formed() -> None:
+@pytest.fixture(scope="module")
+def exports(musx_scores: list[tuple[Path, Score]]) -> list[bytes]:
+    """Every corpus score rendered once.
+
+    The sampling tests below take the first `SAMPLE` of these rather than
+    re-exporting their own; the schema test takes all of them.
+    """
+    return [to_musicxml(score) for _, score in musx_scores]
+
+
+def test_every_score_exports_and_is_well_formed(exports: list[bytes]) -> None:
     exported = 0
-    for path in _archives():
-        document = DET.fromstring(_export(path).decode())
+    for raw in exports[:SAMPLE]:
+        document = DET.fromstring(raw.decode())
         assert document.tag == "score-partwise"
         assert document.findall("./part-list/score-part"), "no parts declared"
         assert len(document.findall("./part")) == len(document.findall("./part-list/score-part")), (
@@ -79,11 +89,13 @@ def test_every_score_exports_and_is_well_formed() -> None:
     assert exported == SAMPLE
 
 
-def test_every_note_has_a_type_and_a_duration_unless_it_is_a_grace_note() -> None:
+def test_every_note_has_a_type_and_a_duration_unless_it_is_a_grace_note(
+    exports: list[bytes],
+) -> None:
     """The grace-note rule, asserted on real output rather than a constructed case."""
     notes = grace = measure_rests = 0
-    for path in _archives():
-        document = DET.fromstring(_export(path).decode())
+    for raw in exports[:SAMPLE]:
+        document = DET.fromstring(raw.decode())
         for note in document.iter("note"):
             notes += 1
             rest = note.find("rest")
@@ -143,7 +155,7 @@ def test_titles_and_part_names_resolve() -> None:
 
 @pytest.mark.skipif(shutil.which("xmllint") is None, reason="xmllint not available")
 @pytest.mark.skipif(not os.environ.get(SCHEMA_ENV), reason=f"{SCHEMA_ENV} not set")
-def test_output_validates_against_the_official_schema(tmp_path: Path) -> None:
+def test_output_validates_against_the_official_schema(tmp_path: Path, exports: list[bytes]) -> None:
     """Every corpus document, not a sample.
 
     The schema is the one genuinely external oracle here, and the faults it
@@ -153,13 +165,9 @@ def test_output_validates_against_the_official_schema(tmp_path: Path) -> None:
     """
     schema = os.environ[SCHEMA_ENV]
     targets = []
-    for index, path in enumerate(_all_archives()):
-        try:
-            exported = _export(path)
-        except CorruptScoreError:
-            continue
+    for index, raw in enumerate(exports):
         target = tmp_path / f"{index:03d}.musicxml"
-        target.write_bytes(exported)
+        target.write_bytes(raw)
         targets.append(target)
 
     failures: list[str] = []

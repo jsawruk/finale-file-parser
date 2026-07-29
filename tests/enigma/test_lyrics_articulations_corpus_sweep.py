@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 import pytest
+from conftest import PairedCorpus
 
 from finale_file_parser.enigma.to_ir import RESERVED_STAFF
 from finale_file_parser.ir import Lyric, Score
@@ -257,10 +258,10 @@ def coverage(
 
 @pytest.fixture(scope="module")
 def agreement(
-    paired_scores: list[tuple[Score, Score]],
+    paired_scores: PairedCorpus,
 ) -> tuple[int, int, int]:
     documents = identical = different = 0
-    for mine, theirs in paired_scores:
+    for mine, theirs in paired_scores.pairs:
         if not any(all_lyrics(theirs)):
             continue
         documents += 1
@@ -287,10 +288,10 @@ def articulation_coverage(
 
 @pytest.fixture(scope="module")
 def articulation_agreement(
-    paired_scores: list[tuple[Score, Score]],
+    paired_scores: PairedCorpus,
 ) -> tuple[int, int, int]:
     documents = identical = different = 0
-    for mine, theirs in paired_scores:
+    for mine, theirs in paired_scores.pairs:
         if not any(all_articulations(theirs)):
             continue
         documents += 1
@@ -319,10 +320,10 @@ def group_coverage(
 
 @pytest.fixture(scope="module")
 def group_agreement(
-    paired_scores: list[tuple[Score, Score]],
+    paired_scores: PairedCorpus,
 ) -> tuple[int, int, int]:
     documents = shape_differences = name_only = 0
-    for mine, theirs in paired_scores:
+    for mine, theirs in paired_scores.pairs:
         if not mine.groups and not theirs.groups:
             continue
         documents += 1
@@ -396,7 +397,7 @@ def test_the_corpus_exports_barline_styles(
 
 
 def test_both_containers_style_the_same_barlines(
-    paired_scores: list[tuple[Score, Score]],
+    paired_scores: PairedCorpus,
 ) -> None:
     """A `.mus` keeps the style in a nibble of the repeat flags byte, so this
     also checks the two readings of that byte do not interfere."""
@@ -410,7 +411,7 @@ def test_both_containers_style_the_same_barlines(
             if measure.barline_style
         }
 
-    for mus_score, musx_score in paired_scores:
+    for mus_score, musx_score in paired_scores.pairs:
         mine, theirs = styles(mus_score), styles(musx_score)
         if not mine and not theirs:
             continue
@@ -512,10 +513,10 @@ def repeat_coverage(
 
 @pytest.fixture(scope="module")
 def repeat_agreement(
-    paired_scores: list[tuple[Score, Score]],
+    paired_scores: PairedCorpus,
 ) -> tuple[int, int]:
     documents = different = 0
-    for mine, theirs in paired_scores:
+    for mine, theirs in paired_scores.pairs:
         ours, expected = all_repeats(mine), all_repeats(theirs)
         if not ours and not expected:
             continue
@@ -556,10 +557,10 @@ def beam_coverage(
 
 @pytest.fixture(scope="module")
 def beam_agreement(
-    paired_scores: list[tuple[Score, Score]],
+    paired_scores: PairedCorpus,
 ) -> tuple[int, int, int]:
     documents = identical = different = 0
-    for mine, theirs in paired_scores:
+    for mine, theirs in paired_scores.pairs:
         if not any(all_beams(theirs)):
             continue
         documents += 1
