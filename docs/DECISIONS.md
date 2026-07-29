@@ -301,7 +301,9 @@ See `docs/formats/transposition-octave.md` for the full evidence and for what wo
 - **RESOLVED 2026-07-28 — which octave frame is the true written pitch?** Both, depending on the
   residue. The independent witness turned out not to need a new file: the interval values identify
   the instruments (B♭ trumpet, F horn, E♭ alto/tenor/baritone sax, double bass, xylophone), and each
-  has a published written range that owes nothing to Finale. `spell_note` now undoes the fold where
-  the residue is non-zero and leaves whole-octave transpositions alone. Notes inside their
-  instrument's published range: **82.0% → 91.6%**; baritone sax 7.3% → 100%. Container octave-only
-  differences 2,491 → 845, all of them the whole-octave case a `.mus` cannot record.
+  has a published written range that owes nothing to Finale. `spell_note` undoes the fold for every
+  **downward** transposition; an upward one shows no fold. Measuring each instrument against **its
+  own** published range — not a compromise range shared by two instruments, which hid an error for
+  a while — notes inside range go **82.0% → 94.4%**: baritone sax 7.3% → 100%, double bass
+  69.8% → 99.7%, guitar 82.1% → 99.7%. Container octave-only differences **2,491 → 1**, and that
+  one is a content difference between the files. The octave was never missing from a `.mus`.

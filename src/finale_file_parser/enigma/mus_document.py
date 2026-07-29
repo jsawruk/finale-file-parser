@@ -84,14 +84,6 @@ from finale_file_parser.version import mus as mus_header
 __all__ = ["UNTRANSLATED", "read_mus_document"]
 
 UNTRANSLATED = (
-    "staffSpec whole-octave transpositions: a transposition that is an exact "
-    "octave leaves Finale's residue at zero and the key unchanged, so the staff "
-    "is recorded as though it did not transpose at all -- nothing distinguishes "
-    "a double bass written at sounding pitch from a concert staff. Those staves "
-    "come out an octave from the .musx (845 notes, all interval 7). Every "
-    "transposition WITH a residue is now recovered: the octaves Finale folds "
-    "into harm_lev are undone by written_octave_correction. See "
-    "docs/formats/transposition-octave.md.",
     "staffSpec part names: the reference at +30/+32 does not resolve to a text "
     "block -- the best candidate chain matches 16 of 59 staves, and by hand it "
     "picks a trumpet block for a saxophone part. The .musx is only a fuzzy oracle "

@@ -209,37 +209,36 @@ def transposition_residue(interval: int) -> int:
 def written_octave_correction(interval: int) -> int:
     """Diatonic steps to add to `harm_lev` before spelling the written pitch.
 
-    Finale folds a transposition's octaves *into `harm_lev`* as well as out of
-    the interval, so `harm_lev` alone does not place the written octave. Undoing
-    the fold recovers it -- but **only where the transposition has a non-octave
-    residue**.
+    `etfspec.pdf` fixes the anchor absolutely: "the harmonic value 0 will always
+    be the tonic of the current key **in the octave from middle C to the C
+    above**". No transposition enters that rule, so `harm_lev` alone places the
+    written octave -- and a container that stores it shifted needs the shift
+    undone.
 
-    That gate is not a fudge; the two cases are stored differently:
+    Finale folds a downward transposition's octaves out of the interval into a
+    residue in -4..+2 **and into `harm_lev`**. This returns them, as diatonic
+    steps: `interval + residue`, always a whole number of octaves.
 
-    * A transposition with a residue -- every ordinary transposing instrument --
-      keeps the residue in the staff record and the octaves in `harm_lev`.
-      Undoing the fold gives the pitch the player reads.
-    * A **whole-octave** transposition leaves the residue at zero and the key
-      unchanged, so the staff is recorded as though it did not transpose at all,
-      with `harm_lev` already at the written octave. There is nothing to undo,
-      and undoing it moves the part an octave.
+    **Only for a downward transposition** (`interval > 0`, the written pitch
+    sitting above concert). An upward one -- a xylophone sounding an octave
+    above what it reads -- shows no such fold, and correcting it moves the part
+    an octave. That asymmetry rests on a single instrument, 600 notes across
+    three staves, with no paired `.mus` to check against; see
+    `docs/formats/transposition-octave.md`.
 
-    Checked against the written ranges players actually read, which owe nothing
-    to Finale. Across 45,000 corpus notes on transposing staves the share
-    falling inside the published written range of the named instrument goes from
-    82.0% to 91.6%; every instrument either improves or is untouched:
+    Adjudicated against the written ranges players read, which owe nothing to
+    Finale, with each instrument measured against **its own** range:
 
-        Eb baritone sax (interval 12)    7.3% -> 100.0%
-        Bb tenor sax    (interval  8)   37.9% ->  89.0%
-        Eb alto sax     (interval  5)   87.0% ->  98.8%
-        double bass, guitar (interval  7, residue 0)   87.3%, unchanged
-        xylophone       (interval -7, residue 0)      100.0%, unchanged
-        Bb trumpet, F horn (no octave folded)          unchanged
+        Eb baritone sax (12)   100.0%     double bass    (7)   69.8% -> 99.7%
+        Bb tenor sax    ( 8)    89.0%     classical guitar(7)  82.1% -> 99.7%
+        Eb alto sax     ( 5)    98.8%     xylophone     (-7)  100.0% (untouched)
+        Bb trumpet, F horn: no octave folded, untouched
 
-    See `docs/formats/transposition-octave.md`.
+    Over 45,155 corpus notes on transposing staves, the share inside the
+    instrument's published written range is **94.4%**.
     """
     residue = transposition_residue(interval)
-    return interval + residue if residue else 0
+    return interval + residue if interval > 0 else 0
 
 
 def spell_note(
