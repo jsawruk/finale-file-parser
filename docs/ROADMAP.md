@@ -182,9 +182,10 @@ limit is verified by mutation, because no real corpus archive trips one.
       `fullName`), `FR` (frame) and `GF` are all confirmed, **including the frame link**: a `GF`
       record's frame array starts at +4 in a 2001 file and +6 in a 2005 one, told apart by the staff
       spec's incidence count. That takes frames referenced to 13,241 of 13,322 and entries reached
-      to 92.3%. Remaining: wiring these records into `read_mus_document` so the cohort builds a
-      `Score`, and the 5,435 entries in 56 documents that sit inside referenced frames and read as a
-      second voice. This cohort has **no paired `.musx`**, so the evidence has to be the ETF spec,
+      to 92.3%. `read_mus_document` now takes the row path, so **110 of the 139 build a `Score`**
+      (297 parts, 8,938 measures, 49,693 pitches) and 15 more `.mus` documents export. Remaining:
+      the 5,435 entries in 56 documents that sit inside referenced frames and read as a second
+      voice, and the unidentified leading block that pushes 122 frames' entry pair from +0 to +12. This cohort has **no paired `.musx`**, so the evidence has to be the ETF spec,
       internal cross-references, and a control against the 2011 cohort. See
       `docs/formats/mus-dcl-container.md`.
 - [ ] **Durations above a whole note.** `duration_from_edu` caps at 4096 EDU, so it rejects a breve

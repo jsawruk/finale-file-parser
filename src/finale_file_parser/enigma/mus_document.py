@@ -54,6 +54,7 @@ from finale_file_parser.enigma.document import (
     Record,
     TextsPool,
 )
+from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.mus_details import (
     TAG_ARTIC_ASSIGN,
     TAG_GFHOLD,
@@ -78,7 +79,8 @@ from finale_file_parser.enigma.mus_others import (
     MusOther,
     read_mus_others,
 )
-from finale_file_parser.enigma.mus_payload import read_mus_streams
+from finale_file_parser.enigma.mus_payload import ByteOrder, read_mus_pools, read_mus_streams
+from finale_file_parser.enigma.mus_rows import MusRows, read_mus_rows
 from finale_file_parser.version import mus as mus_header
 
 __all__ = ["UNTRANSLATED", "read_mus_document"]
@@ -255,10 +257,19 @@ def read_mus_document(path: str | os.PathLike[str]) -> EnigmaDocument:
     Raises:
         FileNotFoundError: no such path.
         CorruptScoreError: the payload does not decode, or a pool is missing or
-            malformed. DCL-era files (2001-2005) raise here.
+            malformed.
     """
-    others = read_mus_others(path)
-    details = read_mus_details(path)
+    try:
+        others = read_mus_others(path)
+        details = read_mus_details(path)
+    except CorruptScoreError:
+        # A 2001-2005 file stores its pools as ETF-tagged rows, which those two
+        # readers refuse by design. Checked here rather than up front so the
+        # common path stays one decode, and so the error a genuinely corrupt
+        # 2011 file raises is still the one the caller sees.
+        if any(pool.kind is not None for pool in read_mus_pools(path)):
+            return _rows_document(path)
+        raise
     return EnigmaDocument(
         version=_VERSION,
         header=Pool(records=_EMPTY),
@@ -271,12 +282,152 @@ def read_mus_document(path: str | os.PathLike[str]) -> EnigmaDocument:
     )
 
 
-def _u16(payload: bytes, offset: int) -> int:
-    return int.from_bytes(payload[offset : offset + 2], "little")
+_FRAME_BASE_2001 = 4
+_FRAME_BASE_2005 = 6
+"""Where a `GF` record's frame array starts. The 2005 layout carries two more
+bytes ahead of it, and the staff spec's incidence count is what tells the eras
+apart -- three in a 2001 file, six in a 2005 one. See
+`docs/formats/mus-dcl-container.md`."""
+
+_FRAME_LAYERS = 2
+"""Frame slots read per `GF` record. The 2011 reader takes the same two."""
+
+_FRAME_ENTRY_OFFSETS = (0, 12)
+"""Where a frame's `startEntry`/`endEntry` pair sits.
+
++0 for 13,200 of 13,322 corpus frames. The other 122 carry a leading block --
+always a second incidence -- that pushes the pair into it, and 106 of those read
+correctly at +12. What that leading block is has not been identified, so the
+reader takes **whichever pair names entries the pool actually holds** and drops
+the frame when neither does. That is a fallback, not an explanation, and it is
+the reason 16 frames are dropped rather than read.
+"""
 
 
-def _u32(payload: bytes, offset: int) -> int:
-    return int.from_bytes(payload[offset : offset + 4], "little")
+def _rows_document(path: str | os.PathLike[str]) -> EnigmaDocument:
+    """Build a document from a 2001-2005 file's ETF-tagged rows.
+
+    Its pools hold the same records as the 2011 era at the same offsets -- the
+    2011 binary *is* the ETF layout -- so only the byte order and the framing
+    differ, and the field decoders above are shared rather than reimplemented.
+    """
+    rows = read_mus_rows(path)
+    if not any(tag == "GF" for tag, _, _ in rows.details):
+        # No frame holds means nothing places music on a staff. Three corpus
+        # documents are like this, and all three also carry an empty entry pool:
+        # they are blank scores. Building one yields a Score with no parts,
+        # which is not valid MusicXML and is worse than saying so.
+        raise CorruptScoreError(f"{path} has no frame holds; the document carries no music")
+    entries = read_mus_entry_records(path)
+    live = {int(record.attrs["entnum"]) for record in entries}
+    frames, dropped = _rows_frames(rows, live)
+    return EnigmaDocument(
+        version=_VERSION,
+        header=Pool(records=_EMPTY),
+        mappings=Pool(records=_EMPTY),
+        options=OptionsPool(records=_EMPTY),
+        others=OthersPool(records=tuple(_rows_others(rows, frames))),
+        details=DetailsPool(records=tuple(_rows_details(rows, dropped))),
+        entries=EntriesPool(records=entries),
+        texts=TextsPool(records=tuple(_texts_records(path))),
+    )
+
+
+def _rows_frame_base(rows: MusRows) -> int:
+    specs = [record for (tag, _), record in rows.others.items() if tag == "IS"]
+    return _FRAME_BASE_2001 if specs and specs[0].incidences == 3 else _FRAME_BASE_2005
+
+
+def _rows_frames(rows: MusRows, live: set[int]) -> tuple[dict[int, tuple[int, int]], set[int]]:
+    """Each `FR` record's entry span, and the frames that could not be read.
+
+    A frame naming entries the pool does not hold is dropped rather than
+    emitted: `build_score` rejects a chain it cannot walk, so keeping one would
+    cost the whole document instead of one frame's music.
+    """
+    found: dict[int, tuple[int, int]] = {}
+    dropped: set[int] = set()
+    for (tag, cmper), record in rows.others.items():
+        if tag != "FR":
+            continue
+        for offset in _FRAME_ENTRY_OFFSETS:
+            start = _u32(record.payload, offset, rows.byte_order)
+            end = _u32(record.payload, offset + 4, rows.byte_order)
+            if start in live and end in live:
+                found[cmper] = (start, end)
+                break
+        else:
+            dropped.add(cmper)
+    return found, dropped
+
+
+def _rows_others(rows: MusRows, frames: dict[int, tuple[int, int]]) -> list[Record]:
+    out: list[Record] = []
+    for (tag, cmper), record in rows.others.items():
+        attrs = {"cmper": str(cmper)}
+        if tag == "MS":
+            out.append(
+                Record(
+                    tag="measSpec",
+                    attrs=attrs,
+                    text="",
+                    fields=_meas_spec(record.payload, rows.byte_order),
+                )
+            )
+        elif tag == "IS":
+            out.append(
+                Record(
+                    tag="staffSpec",
+                    attrs=attrs,
+                    text="",
+                    fields=_staff_spec(record.payload, rows.byte_order),
+                )
+            )
+        elif tag == "FR" and cmper in frames:
+            start, end = frames[cmper]
+            out.append(
+                Record(
+                    tag="frameSpec",
+                    attrs=attrs,
+                    text="",
+                    fields={"startEntry": str(start), "endEntry": str(end)},
+                )
+            )
+    return out
+
+
+def _rows_details(rows: MusRows, dropped: set[int]) -> list[Record]:
+    base = _rows_frame_base(rows)
+    out: list[Record] = []
+    for (tag, cmper1, cmper2), record in rows.details.items():
+        if tag != "GF":
+            continue
+        fields: dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]] = {
+            "clefID": str(_u16(record.payload, 0, rows.byte_order))
+        }
+        for layer in range(_FRAME_LAYERS):
+            frame = _u16(record.payload, base + 2 * layer, rows.byte_order)
+            # A dropped frame's reference goes too: a gfhold naming a frameSpec
+            # that is not there is rejected the same way a broken chain is.
+            if frame and frame not in dropped:
+                fields[f"frame{layer + 1}"] = str(frame)
+        out.append(
+            Record(
+                tag="gfhold",
+                attrs={"cmper1": str(cmper1), "cmper2": str(cmper2)},
+                text="",
+                fields=fields,
+            )
+        )
+    return out
+
+
+def _u16(payload: bytes, offset: int, order: ByteOrder = "little") -> int:
+    return int.from_bytes(payload[offset : offset + 2], order)
+
+
+def _u32(payload: bytes, offset: int, order: ByteOrder = "little") -> int:
+    return int.from_bytes(payload[offset : offset + 4], order)
 
 
 def _texts_records(path: str | os.PathLike[str]) -> list[Record]:
@@ -438,7 +589,9 @@ def _repeat_back(payload: bytes) -> dict[str, str | tuple[str, ...] | Record | t
     return {"actuate": str(actuate)} if actuate else {}
 
 
-def _staff_spec(payload: bytes) -> dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]]:
+def _staff_spec(
+    payload: bytes, order: ByteOrder = "little"
+) -> dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]]:
     """Only the transposition's key alteration -- which is all written pitch needs.
 
     `transpose_key` uses `adjust` alone; `interval` is accepted "for symmetry
@@ -450,7 +603,7 @@ def _staff_spec(payload: bytes) -> dict[str, str | tuple[str, ...] | Record | tu
     correct for the written pitch the IR uses and *wrong* for the concert pitch
     `spell_note` also returns -- a `.mus` cannot supply it. See UNTRANSLATED.
     """
-    raw = _u16(payload, _STAFF_TRANSPOSITION)
+    raw = _u16(payload, _STAFF_TRANSPOSITION, order)
     magnitude = raw & _ALTERATION_MAGNITUDE
     adjust = -magnitude if raw & _ALTERATION_SIGN else magnitude
     if not adjust:
@@ -461,7 +614,9 @@ def _staff_spec(payload: bytes) -> dict[str, str | tuple[str, ...] | Record | tu
     }
 
 
-def _meas_spec(payload: bytes) -> dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]]:
+def _meas_spec(
+    payload: bytes, order: ByteOrder = "little"
+) -> dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]]:
     """`width, key, beats, divbeat` from offset zero, as `.musx` names them.
 
     A stored key of 0 is written as **no `keySig` at all**, which is what a
@@ -472,10 +627,10 @@ def _meas_spec(payload: bytes) -> dict[str, str | tuple[str, ...] | Record | tup
     `.mus` stores 0 exactly where the `.musx` omits the element.
     """
     fields: dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]] = {
-        "beats": str(_u16(payload, 4)),
-        "divbeat": str(_u16(payload, 6)),
+        "beats": str(_u16(payload, 4, order)),
+        "divbeat": str(_u16(payload, 6, order)),
     }
-    key = _u16(payload, 2)
+    key = _u16(payload, 2, order)
     if key:
         fields["keySig"] = Record(tag="keySig", attrs={}, text="", fields={"key": str(key)})
     if len(payload) > _MEAS_FLAGS:

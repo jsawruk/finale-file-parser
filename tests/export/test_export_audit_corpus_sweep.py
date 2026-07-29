@@ -50,9 +50,14 @@ records whose entry is a rest, against 16,591 on notes. Pinned so that a change
 in the count means the lyric-to-entry mapping moved, rather than going unnoticed.
 """
 
-MUS_EXPORTED = 93
+MUS_EXPORTED = 108
 """`.mus` documents that export. The same invariants are asserted on them: a
-reader-specific defect would otherwise hide behind the `.musx` path."""
+reader-specific defect would otherwise hide behind the `.musx` path.
+
+Was 93 until the 2001-2005 reader landed. The 15 added are DCL-era documents
+that used to raise before reaching the exporter, and they pass every invariant
+below unchanged -- which is the useful part: the new reader's output holds
+together under checks written for the old one."""
 
 _BARLINE_ORDER = ("bar-style", "ending", "repeat")
 
