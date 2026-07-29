@@ -29,7 +29,10 @@ sequence is the `.musx` sequence restricted to the keys `.mus` holds in 80 of
 8,372, and `clefID` in 8,255 of 8,527 -- with every one of the other 272 being
 the `defaultClef` case above, so none are unexplained.
 
-Scope: the 2011/2012 era, as with the other `.mus` readers.
+Scope: the 2011/2012 era, as with `enigma.mus_others` -- and for the same
+reason. A 2001-2005 file's `details` pool is reachable now but holds fixed
+16-byte rows, `[u16 cmper1][u16 cmper2][2-char ETF tag][10 bytes]`, not these
+variable-length records. Not one of the 139 is accepted by the walk below.
 """
 
 from __future__ import annotations
@@ -177,7 +180,8 @@ def read_mus_details(path: str | os.PathLike[str]) -> tuple[MusDetailRecord, ...
             return records
     raise CorruptScoreError(
         f"{path} has no recognisable details pool "
-        "(DCL-era files pack all pools into one stream; that is not yet supported)"
+        "(a 2001-2005 file stores its pools as 16-byte ETF-tagged rows, "
+        "which this reader does not yet decode)"
     )
 
 

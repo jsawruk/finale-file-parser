@@ -173,6 +173,18 @@ limit is verified by mutation, because no real corpus archive trips one.
       field; `enigma/mus_details.py`), and `gfhold` is payload-confirmed, which is the link from a
       (staff, measure) to its entry frames. Remaining: the per-tag payload layouts, and the seven
       corpus documents whose walk halts inside one unrecognised record type.
+- [ ] **2001–2005 (`DCL`-era) `.mus`** — part done, and this is 139 of the 238 `.mus` corpus.
+      The container reads: four labelled pools per file, tiling exactly, 139/139, with the byte
+      order (102 little-endian, 37 big-endian) taken from the file. The **entry pool reads** —
+      70,428 entries over 137 documents, same 38-byte slots as the 2011 era. Remaining: the
+      `others`/`details` record encoding, which is *not* the 2011 one — fixed 16-byte rows carrying
+      ETF's two-character tags (`MS`, `IS`, `FL`, `IU`, `NG`, `TX`), so the field layout inside each
+      row has to be derived, and this cohort has **no paired `.musx`** to check against. Until then
+      these files still do not build a `Score`. See `docs/formats/mus-dcl-container.md`.
+- [ ] **Durations above a whole note.** `duration_from_edu` caps at 4096 EDU, so it rejects a breve
+      (8192) and, more awkwardly, a **dotted whole** (6144) — ordinary notation. Two DCL-era
+      documents fail on it today; a `.musx` carrying one would fail identically. Needs `NoteValue`,
+      the range check and the MusicXML `<type>` map together.
 - [ ] MusicXML exporter over the IR (DECIDED — see DECISIONS.md).
 - [ ] Desktop frontend: hex viewer with decoded structure values (DECIDED — framework still open).
 - [ ] Desktop frontend: notation rendering.

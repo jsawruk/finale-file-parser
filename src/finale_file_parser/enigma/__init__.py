@@ -71,7 +71,9 @@ from finale_file_parser.enigma.mus_others import (
 )
 from finale_file_parser.enigma.mus_payload import (
     MAX_MUS_PAYLOAD,
+    MusPool,
     read_mus_payload,
+    read_mus_pools,
     read_mus_streams,
 )
 from finale_file_parser.enigma.music import (
@@ -203,7 +205,9 @@ __all__ = [
     "read_mus_entries",
     "read_mus_entry_records",
     "read_mus_others",
+    "MusPool",
     "read_mus_payload",
+    "read_mus_pools",
     "read_mus_streams",
     "read_transposition",
     "verse_syllables",

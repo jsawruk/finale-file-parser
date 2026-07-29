@@ -24,9 +24,13 @@ Verified against paired `.musx` files (84 documents, 219,463 records): the tag
 documents and its `startEntry`/`endEntry` payload in 7,975 of 7,978 records; the
 tag 176 (`measSpec`) payload's width/beats/divbeat match in 4,546 of 4,595.
 
-Scope: the 2011/2012 era, whose payload separates pools into their own zlib
-streams. DCL-era files (2001-2005) pack everything into one stream with no known
-pool delimiters, so this raises for them rather than guessing.
+Scope: the 2011/2012 era. The 2001-2005 era's `others` pool is now reachable --
+`enigma.mus_payload` labels it -- but it is **not this record encoding**: it is a
+table of fixed 16-byte rows, `[u16 cmper][2-char ETF tag][12 bytes]`, written the
+platform's way round, where a record too big for twelve bytes runs on into
+further rows under the same tag and cmper. The walk below rejects every one of
+those pools rather than half-reading them (verified: 0 of 139 accepted), so a
+DCL-era file still raises here. See `docs/formats/mus-dcl-container.md`.
 """
 
 from __future__ import annotations
@@ -184,7 +188,8 @@ def read_mus_others(path: str | os.PathLike[str]) -> tuple[MusOther, ...]:
             return records
     raise CorruptScoreError(
         f"{path} has no recognisable others pool "
-        "(DCL-era files pack all pools into one stream; that is not yet supported)"
+        "(a 2001-2005 file stores its pools as 16-byte ETF-tagged rows, "
+        "which this reader does not yet decode)"
     )
 
 

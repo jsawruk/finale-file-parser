@@ -65,9 +65,11 @@ has not been located. Ruled out so far, each against the 45 name/block pairs the
 `others` pool, 1 for `details`, 3 for text — and 2 is untouched by any reader in this project.
 Whatever it holds is unexamined.
 
-A second thing surfaced while mapping the streams: **38 of 137 `.mus` documents have only one
-stream.** Those are the DCL era, which packs every pool together, and `read_mus_others` refuses them
-outright. That is a separate, larger gap than staff names.
+A second thing surfaced while mapping the streams: **38 of 137 `.mus` documents appeared to have
+only one stream.** That has since been chased down and was wrong twice over — the count was 139 of
+238 (a case-sensitive glob was dropping every `.MUS`), and those files have four pools, not one.
+See `docs/formats/mus-dcl-container.md`. Their `others` pool is now reachable, but it is a different
+record encoding, so it does not yet yield staff names either.
 
 ## 4. A limit that will remain even then
 

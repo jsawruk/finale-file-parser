@@ -642,11 +642,18 @@ Sensible first slice: a `.mus` entries reader validated against the paired `.mus
 
 | cohort | files | payload encoding | offset | decodes |
 | --- | --- | --- | --- | --- |
-| 2001 / 2004 / 2005 | 139 | **PKWARE DCL "implode"** (`lit=0`, `dict=4`) | `0x20A` | **139/139** |
+| 2001 / 2004 / 2005 | 139 | **chain of 4 PKWARE DCL "implode"** records (`lit=0`, `dict=4`) | `0x200` | **139/139** |
 | 2011 / 2012 | 99 | **chain of zlib streams** (`78 9c`) | `0x216` (2 files `0x20A`) | **99/99** |
 
-Both offsets and the DCL header are constant across every file in their cohort. DCL inflation runs
-0.82×–2.75× (median 2.35×); the zlib chain 5.87×–8.63× (median 6.07×) once all streams are
+> **Corrected 2026-07-29.** This table read "single PKWARE DCL stream at `0x20A`" for a long time,
+> and the claim of 139/139 decoding was true of that one stream only — which is the `others` pool
+> and about a quarter of the file. There are **four** DCL records per file, framed by a ten-byte
+> header that names the pool, and `0x20A` is `0x200` plus one such header. The full container,
+> including the byte order (102 files little-endian, 37 big-endian), is in
+> `docs/formats/mus-dcl-container.md`.
+
+Both offsets and the DCL header are constant across every file in their cohort. The DCL chain
+inflates 3.25×–4.51× (median 3.56×); the zlib chain 5.87×–8.63× (median 6.07×) once all streams are
 concatenated — a *single* zlib stream is only ~3.2×–3.5×. Decoded payloads run 32,816–699,585 bytes.
 
 Decoded output is unambiguously real Finale data —

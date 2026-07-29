@@ -7,12 +7,14 @@ from pathlib import Path
 
 import pytest
 
+from finale_file_parser.enigma import blast
 from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.mus_entries import (
     harm_lev_octave_shift,
     read_mus_entries,
     read_mus_entry_records,
 )
+from finale_file_parser.enigma.mus_payload import POOL_ENTRIES, POOL_OTHERS, ByteOrder
 from finale_file_parser.enigma.music import NoteValue
 
 SLOT = 38
@@ -186,3 +188,153 @@ def test_harm_lev_octave_shift(interval: int, shift: int) -> None:
     implementation passes the 0/7/12 cases and silently breaks 5 and 8.
     """
     assert harm_lev_octave_shift(interval) == shift
+
+
+# --- the 2001-2005 era: same slots, the platform's byte order, a labelled pool ---
+
+
+def _dcl_file(pool: bytes, order: ByteOrder, *, others: bytes = b"\x00" * 64) -> bytes:
+    """A 2005-era .mus: a container of DCL pool records, `pool` under kind 17.
+
+    The streams are stored uncompressed-in-effect by using a literal-only DCL
+    stream, so the fixture exercises the container rather than the codec.
+    """
+    header = bytearray(b"\x00" * 0x200)
+    header[0:18] = b"ENIGMA BINARY FILE"
+    banner = b"Finale(R) 2005 Copyright (c) 1987-2004 MakeMusic"
+    header[BANNER_OFFSET : BANNER_OFFSET + len(banner)] = banner
+
+    def record(kind: int, raw: bytes) -> bytes:
+        stream = _dcl_literal_stream(raw)
+        return (
+            kind.to_bytes(2, order)
+            + (10 + len(stream)).to_bytes(4, order)
+            + b"\x00\x00\x00\x00"
+            + stream
+        )
+
+    return bytes(header) + record(POOL_OTHERS, others) + record(POOL_ENTRIES, pool)
+
+
+def _length_code_bits(symbol: int) -> list[int]:
+    """The bits `blast`'s decoder consumes to produce `symbol` from the length code.
+
+    Reconstructed from the decoder's own table rather than written out by hand,
+    because PKWARE's canonical codes are stored inverted and a hand-copied
+    constant that is subtly wrong yields a fixture that fails for a reason
+    unrelated to what it is testing. `_stores_what_it_claims` proves the round trip.
+    """
+    table = blast._LENGTH_CODE
+    index = first = 0
+    for length in range(1, 16):
+        count = table.count[length]
+        for offset in range(count):
+            if table.symbol[index + offset] == symbol:
+                code = first + offset
+                return [((code >> (length - 1 - bit)) & 1) ^ 1 for bit in range(length)]
+        index += count
+        first = (first + count) << 1
+    raise AssertionError(f"length code has no symbol {symbol}")
+
+
+def _dcl_literal_stream(raw: bytes) -> bytes:
+    """A PKWARE DCL stream that stores `raw` as uncoded literals.
+
+    `lit=0` means a literal is eight raw bits, so the body is one 0 bit then
+    eight bits per byte. The stream then ends with a 1 bit, the length code for
+    symbol 15, and its eight extra bits -- 264 + 255 == 519, the end marker.
+    """
+    bits: list[int] = []
+    for byte in raw:
+        bits.append(0)
+        bits.extend((byte >> i) & 1 for i in range(8))
+    bits.append(1)
+    bits.extend(_length_code_bits(15))
+    bits.extend([1] * 8)
+    out = bytearray(b"\x00\x04")
+    for start in range(0, len(bits), 8):
+        out.append(sum(bit << i for i, bit in enumerate(bits[start : start + 8])))
+    return bytes(out)
+
+
+def test_the_dcl_fixture_builder_stores_what_it_claims() -> None:
+    """Guards every DCL-era test below: a broken fixture would fail them all
+    for a reason that has nothing to do with the reader."""
+    raw = bytes(range(256)) + b"entry pool"
+    assert blast.blast_decompress(_dcl_literal_stream(raw), 0, 1 << 20) == raw
+
+
+def _be_entry_slot(entnum: int, *, dura: int, flag: int, notes: list[tuple[int, int]]) -> bytes:
+    """The same slot as `_entry_slot`, written big-endian."""
+    body = (
+        (0).to_bytes(4, "big")
+        + (0).to_bytes(4, "big")
+        + dura.to_bytes(2, "big")
+        + (0).to_bytes(2, "big")
+        + flag.to_bytes(4, "big")
+        + (0).to_bytes(2, "big")
+        + len(notes).to_bytes(2, "big")
+    )
+    for tcd, note_flag in notes[:2]:
+        body += tcd.to_bytes(2, "big") + note_flag.to_bytes(4, "big")
+    return entnum.to_bytes(4, "big") + (0).to_bytes(2, "big") + body.ljust(SLOT - 6, b"\x00")
+
+
+def test_reads_a_big_endian_entry_pool(tmp_path: Path) -> None:
+    """Mac-written files put every field the other way round.
+
+    Read little-endian, `dura` 1024 becomes 4 and SETBIT is not set, so the pool
+    is rejected outright rather than mis-read -- which is why 37 corpus
+    documents needed the byte order to come from the container.
+    """
+    pool = b"".join(
+        _be_entry_slot(i + 1, dura=1024, flag=SETBIT | NOTEBIT, notes=[(0x0060, SETBIT)])
+        for i in range(8)
+    )
+    path = tmp_path / "mac.mus"
+    path.write_bytes(_dcl_file(pool, "big"))
+
+    entries = read_mus_entries(path)
+    assert len(entries) == 8
+    assert entries[0].entnum == 1
+    assert entries[0].duration.base is NoteValue.QUARTER
+    assert entries[0].notes[0].harm_lev == 6
+
+
+def test_a_labelled_entry_pool_is_used_even_when_it_is_small(tmp_path: Path) -> None:
+    """The container names the pool, so no size or structure floor has to stand in.
+
+    A two-entry pool is well under anything a sniffer could safely accept.
+    """
+    pool = _be_entry_slot(1, dura=512, flag=SETBIT | NOTEBIT, notes=[(0x0010, SETBIT)])
+    path = tmp_path / "tiny.mus"
+    path.write_bytes(_dcl_file(pool, "big"))
+    assert len(read_mus_entries(path)) == 1
+
+
+def test_an_empty_labelled_entry_pool_reads_as_no_entries(tmp_path: Path) -> None:
+    """Three corpus documents carry one. Empty is an answer, not a failure."""
+    header = bytearray(b"\x00" * 0x200)
+    header[0:18] = b"ENIGMA BINARY FILE"
+    banner = b"Finale(R) 2005 Copyright (c) 1987-2004 MakeMusic"
+    header[BANNER_OFFSET : BANNER_OFFSET + len(banner)] = banner
+    others = _dcl_literal_stream(b"\x00" * 64)
+    records = (
+        POOL_OTHERS.to_bytes(2, "big")
+        + (10 + len(others)).to_bytes(4, "big")
+        + b"\x00\x00\x00\x00"
+        + others
+        + POOL_ENTRIES.to_bytes(2, "big")
+        + (6).to_bytes(4, "big")
+    )
+    path = tmp_path / "no_entries.mus"
+    path.write_bytes(bytes(header) + records)
+    assert read_mus_entries(path) == ()
+
+
+def test_a_labelled_pool_that_is_not_entry_slots_raises(tmp_path: Path) -> None:
+    """Trusting the label is not the same as trusting the bytes."""
+    path = tmp_path / "mislabelled.mus"
+    path.write_bytes(_dcl_file(b"\x01\x02\x03", "big"))
+    with pytest.raises(CorruptScoreError, match="does not tile as entry slots"):
+        read_mus_entries(path)
