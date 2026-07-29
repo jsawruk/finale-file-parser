@@ -12,7 +12,13 @@ dependencies = ["defusedxml>=0.7.1"]
 
 [dependency-groups]
 # Dev tooling. `uv sync` installs these by default.
-dev = ["pytest>=7.4", "ruff>=0.4", "mypy>=1.8", "types-defusedxml>=0.7"]
+dev = [
+    "pytest>=7.4",
+    "pytest-xdist>=3.5",
+    "ruff>=0.4",
+    "mypy>=1.8",
+    "types-defusedxml>=0.7",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
