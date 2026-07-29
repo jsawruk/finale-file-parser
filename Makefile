@@ -50,11 +50,14 @@ fmt:
 typecheck:
 	$(PY) mypy $(CODE)
 
+# Repeats the commands rather than depending on the targets so the order and
+# output stay fixed -- but it must pass PYTEST_ARGS too, or the gate everyone
+# actually runs is the one place that never gets the parallelism.
 check:
 	$(PY) ruff check $(CODE)
 	$(PY) ruff format --check $(CODE)
 	$(PY) mypy $(CODE)
-	$(PY) pytest
+	$(PY) pytest $(PYTEST_ARGS)
 
 clean:
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist *.egg-info

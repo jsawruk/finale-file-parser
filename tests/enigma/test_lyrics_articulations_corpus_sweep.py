@@ -21,12 +21,7 @@ from typing import NamedTuple
 
 import pytest
 
-from finale_file_parser.enigma.document import parse_enigma
-from finale_file_parser.enigma.models import CorruptScoreError
-from finale_file_parser.enigma.mus_document import read_mus_document
-from finale_file_parser.enigma.mus_entries import read_mus_entries
-from finale_file_parser.enigma.score import score_xml
-from finale_file_parser.enigma.to_ir import RESERVED_STAFF, build_score
+from finale_file_parser.enigma.to_ir import RESERVED_STAFF
 from finale_file_parser.ir import Lyric, Score
 
 CORPUS = Path(__file__).parent.parent.parent / "corpus"
@@ -248,13 +243,11 @@ def all_lyrics(score: Score) -> list[tuple[Lyric, ...]]:
 
 
 @pytest.fixture(scope="module")
-def coverage() -> tuple[int, int]:
+def coverage(
+    musx_scores: list[tuple[Path, Score]],
+) -> tuple[int, int]:
     documents = syllables = 0
-    for path in musx_files():
-        try:
-            score = build_score(parse_enigma(score_xml(path)))
-        except CorruptScoreError:
-            continue
+    for _, score in musx_scores:
         total = sum(len(item) for item in all_lyrics(score))
         if total:
             documents += 1
@@ -263,19 +256,11 @@ def coverage() -> tuple[int, int]:
 
 
 @pytest.fixture(scope="module")
-def agreement() -> tuple[int, int, int]:
+def agreement(
+    paired_scores: list[tuple[Score, Score]],
+) -> tuple[int, int, int]:
     documents = identical = different = 0
-    for mus_path, musx_path in pairs():
-        try:
-            document = parse_enigma(score_xml(musx_path))
-            if len(read_mus_entries(mus_path)) != len(document.entries.records):
-                continue
-            theirs = build_score(document)
-            mine = build_score(read_mus_document(mus_path))
-        except CorruptScoreError:
-            continue
-        except Exception:  # noqa: BLE001 - counted, not diagnosed, like the other sweeps
-            continue
+    for mine, theirs in paired_scores:
         if not any(all_lyrics(theirs)):
             continue
         documents += 1
@@ -288,13 +273,11 @@ def agreement() -> tuple[int, int, int]:
 
 
 @pytest.fixture(scope="module")
-def articulation_coverage() -> tuple[int, int]:
+def articulation_coverage(
+    musx_scores: list[tuple[Path, Score]],
+) -> tuple[int, int]:
     documents = marks = 0
-    for path in musx_files():
-        try:
-            score = build_score(parse_enigma(score_xml(path)))
-        except CorruptScoreError:
-            continue
+    for _, score in musx_scores:
         total = sum(len(item) for item in all_articulations(score))
         if total:
             documents += 1
@@ -303,19 +286,11 @@ def articulation_coverage() -> tuple[int, int]:
 
 
 @pytest.fixture(scope="module")
-def articulation_agreement() -> tuple[int, int, int]:
+def articulation_agreement(
+    paired_scores: list[tuple[Score, Score]],
+) -> tuple[int, int, int]:
     documents = identical = different = 0
-    for mus_path, musx_path in pairs():
-        try:
-            document = parse_enigma(score_xml(musx_path))
-            if len(read_mus_entries(mus_path)) != len(document.entries.records):
-                continue
-            theirs = build_score(document)
-            mine = build_score(read_mus_document(mus_path))
-        except CorruptScoreError:
-            continue
-        except Exception:  # noqa: BLE001 - counted, not diagnosed
-            continue
+    for mine, theirs in paired_scores:
         if not any(all_articulations(theirs)):
             continue
         documents += 1
@@ -328,14 +303,12 @@ def articulation_agreement() -> tuple[int, int, int]:
 
 
 @pytest.fixture(scope="module")
-def group_coverage() -> tuple[int, int, dict[str | None, int]]:
+def group_coverage(
+    musx_scores: list[tuple[Path, Score]],
+) -> tuple[int, int, dict[str | None, int]]:
     documents = groups = 0
     symbols: collections.Counter[str | None] = collections.Counter()
-    for path in musx_files():
-        try:
-            score = build_score(parse_enigma(score_xml(path)))
-        except CorruptScoreError:
-            continue
+    for _, score in musx_scores:
         if not score.groups:
             continue
         documents += 1
@@ -345,19 +318,11 @@ def group_coverage() -> tuple[int, int, dict[str | None, int]]:
 
 
 @pytest.fixture(scope="module")
-def group_agreement() -> tuple[int, int, int]:
+def group_agreement(
+    paired_scores: list[tuple[Score, Score]],
+) -> tuple[int, int, int]:
     documents = shape_differences = name_only = 0
-    for mus_path, musx_path in pairs():
-        try:
-            document = parse_enigma(score_xml(musx_path))
-            if len(read_mus_entries(mus_path)) != len(document.entries.records):
-                continue
-            theirs = build_score(document)
-            mine = build_score(read_mus_document(mus_path))
-        except CorruptScoreError:
-            continue
-        except Exception:  # noqa: BLE001 - counted, not diagnosed
-            continue
+    for mine, theirs in paired_scores:
         if not mine.groups and not theirs.groups:
             continue
         documents += 1
@@ -368,14 +333,12 @@ def group_agreement() -> tuple[int, int, int]:
     return documents, shape_differences, name_only
 
 
-def test_the_corpus_exports_fingerings() -> None:
+def test_the_corpus_exports_fingerings(
+    musx_scores: list[tuple[Path, Score]],
+) -> None:
     documents = 0
     digits: collections.Counter[str] = collections.Counter()
-    for path in musx_files():
-        try:
-            score = build_score(parse_enigma(score_xml(path)))
-        except CorruptScoreError:
-            continue
+    for _, score in musx_scores:
         found = [
             digit
             for part in score.parts
@@ -392,15 +355,13 @@ def test_the_corpus_exports_fingerings() -> None:
     assert set(digits) <= {"1", "2", "3", "4", "5"}
 
 
-def test_the_legacy_reader_finds_fingerings_too() -> None:
+def test_the_legacy_reader_finds_fingerings_too(
+    mus_scores: list[tuple[Path, Score]],
+) -> None:
     """Unverifiable against a `.musx`, so pinned on its own: a change here means
     the legacy `articDef` reading moved."""
     documents = total = 0
-    for path in sorted(CORPUS.rglob("*.mus")):
-        try:
-            score = build_score(read_mus_document(path))
-        except Exception:  # noqa: BLE001 - the .mus reader's failures are pinned elsewhere
-            continue
+    for _, score in mus_scores:
         found = sum(
             len(event.fingerings)
             for part in score.parts
@@ -415,14 +376,12 @@ def test_the_legacy_reader_finds_fingerings_too() -> None:
     assert total == MUS_FINGERINGS
 
 
-def test_the_corpus_exports_barline_styles() -> None:
+def test_the_corpus_exports_barline_styles(
+    musx_scores: list[tuple[Path, Score]],
+) -> None:
     documents = 0
     styles: collections.Counter[str] = collections.Counter()
-    for path in musx_files():
-        try:
-            score = build_score(parse_enigma(score_xml(path)))
-        except CorruptScoreError:
-            continue
+    for _, score in musx_scores:
         found = {
             measure.number: measure.barline_style
             for part in score.parts
@@ -436,29 +395,23 @@ def test_the_corpus_exports_barline_styles() -> None:
     assert dict(styles) == BARLINE_STYLES
 
 
-def test_both_containers_style_the_same_barlines() -> None:
+def test_both_containers_style_the_same_barlines(
+    paired_scores: list[tuple[Score, Score]],
+) -> None:
     """A `.mus` keeps the style in a nibble of the repeat flags byte, so this
     also checks the two readings of that byte do not interfere."""
     documents = different = 0
-    for mus_path, musx_path in pairs():
-        try:
-            document = parse_enigma(score_xml(musx_path))
-            if len(read_mus_entries(mus_path)) != len(document.entries.records):
-                continue
-            scores = (build_score(read_mus_document(mus_path)), build_score(document))
-        except CorruptScoreError:
-            continue
-        except Exception:  # noqa: BLE001 - counted, not diagnosed
-            continue
-        mine, theirs = (
-            {
-                measure.number: measure.barline_style
-                for part in score.parts
-                for measure in part.measures
-                if measure.barline_style
-            }
-            for score in scores
-        )
+
+    def styles(score: Score) -> dict[int, str | None]:
+        return {
+            measure.number: measure.barline_style
+            for part in score.parts
+            for measure in part.measures
+            if measure.barline_style
+        }
+
+    for mus_score, musx_score in paired_scores:
+        mine, theirs = styles(mus_score), styles(musx_score)
         if not mine and not theirs:
             continue
         documents += 1
@@ -468,15 +421,13 @@ def test_both_containers_style_the_same_barlines() -> None:
     assert different == 0
 
 
-def test_the_corpus_exports_text_repeats() -> None:
+def test_the_corpus_exports_text_repeats(
+    musx_scores: list[tuple[Path, Score]],
+) -> None:
     """Guards the palette trap from the other side: if the definitions were read
     without their assignments this would be in the hundreds, not 6."""
     documents = markings = 0
-    for path in musx_files():
-        try:
-            score = build_score(parse_enigma(score_xml(path)))
-        except CorruptScoreError:
-            continue
+    for _, score in musx_scores:
         found = {
             (measure.number, words)
             for part in score.parts
@@ -490,16 +441,14 @@ def test_the_corpus_exports_text_repeats() -> None:
     assert markings == JUMP_MARKINGS
 
 
-def test_every_part_covers_every_measure() -> None:
+def test_every_part_covers_every_measure(
+    musx_scores: list[tuple[Path, Score]],
+) -> None:
     """A part that falls silent must still have the bar. Asserted over the
     corpus because the failure is invisible in a single document -- the output
     stays well-formed, the numbering simply skips."""
     rests = 0
-    for path in musx_files():
-        try:
-            score = build_score(parse_enigma(score_xml(path)))
-        except CorruptScoreError:
-            continue
+    for _, score in musx_scores:
         lists = {tuple(m.number for m in part.measures) for part in score.parts}
         assert len(lists) == 1, "parts of one score disagree about which measures exist"
         numbers = next(iter(lists))
@@ -515,15 +464,13 @@ def test_every_part_covers_every_measure() -> None:
     assert rests == MEASURE_RESTS
 
 
-def test_no_document_exports_the_reserved_staff() -> None:
+def test_no_document_exports_the_reserved_staff(
+    musx_scores: list[tuple[Path, Score]],
+) -> None:
     """Asserted over the whole corpus rather than a constructed document,
     because the claim is about every file Finale writes, not about the rule."""
     parts = 0
-    for path in musx_files():
-        try:
-            score = build_score(parse_enigma(score_xml(path)))
-        except CorruptScoreError:
-            continue
+    for _, score in musx_scores:
         parts += sum(1 for part in score.parts if part.id == f"P{RESERVED_STAFF}")
         assert score.parts, "excluding the reserved staff must not empty a score"
     assert parts == RESERVED_STAFF_PARTS
@@ -548,13 +495,11 @@ def test_both_containers_produce_the_same_groups(group_agreement: tuple[int, int
 
 
 @pytest.fixture(scope="module")
-def repeat_coverage() -> tuple[int, int, int, int]:
+def repeat_coverage(
+    musx_scores: list[tuple[Path, Score]],
+) -> tuple[int, int, int, int]:
     documents = forward = backward = brackets = 0
-    for path in musx_files():
-        try:
-            score = build_score(parse_enigma(score_xml(path)))
-        except CorruptScoreError:
-            continue
+    for _, score in musx_scores:
         repeats = all_repeats(score)
         if not repeats:
             continue
@@ -566,19 +511,11 @@ def repeat_coverage() -> tuple[int, int, int, int]:
 
 
 @pytest.fixture(scope="module")
-def repeat_agreement() -> tuple[int, int]:
+def repeat_agreement(
+    paired_scores: list[tuple[Score, Score]],
+) -> tuple[int, int]:
     documents = different = 0
-    for mus_path, musx_path in pairs():
-        try:
-            document = parse_enigma(score_xml(musx_path))
-            if len(read_mus_entries(mus_path)) != len(document.entries.records):
-                continue
-            theirs = build_score(document)
-            mine = build_score(read_mus_document(mus_path))
-        except CorruptScoreError:
-            continue
-        except Exception:  # noqa: BLE001 - counted, not diagnosed
-            continue
+    for mine, theirs in paired_scores:
         ours, expected = all_repeats(mine), all_repeats(theirs)
         if not ours and not expected:
             continue
@@ -605,13 +542,11 @@ def test_both_containers_produce_the_same_repeats(repeat_agreement: tuple[int, i
 
 
 @pytest.fixture(scope="module")
-def beam_coverage() -> tuple[int, int]:
+def beam_coverage(
+    musx_scores: list[tuple[Path, Score]],
+) -> tuple[int, int]:
     documents = beams = 0
-    for path in musx_files():
-        try:
-            score = build_score(parse_enigma(score_xml(path)))
-        except CorruptScoreError:
-            continue
+    for _, score in musx_scores:
         total = sum(len(item) for item in all_beams(score))
         if total:
             documents += 1
@@ -620,19 +555,11 @@ def beam_coverage() -> tuple[int, int]:
 
 
 @pytest.fixture(scope="module")
-def beam_agreement() -> tuple[int, int, int]:
+def beam_agreement(
+    paired_scores: list[tuple[Score, Score]],
+) -> tuple[int, int, int]:
     documents = identical = different = 0
-    for mus_path, musx_path in pairs():
-        try:
-            document = parse_enigma(score_xml(musx_path))
-            if len(read_mus_entries(mus_path)) != len(document.entries.records):
-                continue
-            theirs = build_score(document)
-            mine = build_score(read_mus_document(mus_path))
-        except CorruptScoreError:
-            continue
-        except Exception:  # noqa: BLE001 - counted, not diagnosed
-            continue
+    for mine, theirs in paired_scores:
         if not any(all_beams(theirs)):
             continue
         documents += 1
