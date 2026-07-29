@@ -84,13 +84,14 @@ from finale_file_parser.version import mus as mus_header
 __all__ = ["UNTRANSLATED", "read_mus_document"]
 
 UNTRANSLATED = (
-    "staffSpec part names: the reference at +30/+32 does not resolve to a text "
-    "block -- the best candidate chain matches 16 of 59 staves, and by hand it "
-    "picks a trumpet block for a saxophone part. The .musx is only a fuzzy oracle "
-    "here -- it names the same staff 'Tenor Sax' where the .mus says 'Tenor "
-    "Saxophone', synonyms rather than a disagreement -- so a match must tolerate "
-    "abbreviation. Parts fall back to positional names rather than to a plausible "
-    "wrong one. See docs/formats/mus-binary-notes.md.",
+    "staffSpec part names: the names ARE in the file -- text stream 3 carries "
+    "them as ^block(N) sections, and staffSpec +30 selects one (non-zero "
+    "exactly when the .musx names the staff, 156 of 157; the only offset that "
+    "distinguishes differently-named staves within a document). What is missing "
+    "is the lookup from that id to the block number: ids run 92-97 against "
+    "blocks 1-30, no record keyed at the id holds the block number, and the "
+    "delta is not constant across documents. Parts therefore still fall back to "
+    "positional names. See docs/formats/mus-staff-names.md.",
     "Instrument-derived clefs: where a gfhold stores clefID 0 it means 'use the "
     "staff's defaultClef', and for some staves the .mus stores 0 there too while "
     "the .musx materialises a real clef. Those measures come out treble. Same "

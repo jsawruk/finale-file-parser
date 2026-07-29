@@ -28,14 +28,20 @@ _MARKUP = re.compile(r"\^[A-Za-z]+\([^)]*\)")
 """An Enigma text command as EnigmaXML writes it: a caret, a name, and
 parenthesised arguments."""
 
-_BINARY_MARKUP = re.compile(r"\^[\u0080-\u00ff].{4}", re.DOTALL)
+_BINARY_MARKUP = re.compile(r"\^[^\x00-\x7f].{4}", re.DOTALL)
 """The same command in the dialect a `.mus` text stream uses: a caret, a
 high-byte opcode, and four argument bytes.
 
 A `.mus` writes `^\x85\x01\x01\x02\x08` where a `.musx` writes `^size(13)`.
 Both are commands rather than content, so both are stripped. The pattern is
-deliberately narrow -- caret, one byte in 0x80-0xFF, then exactly four -- so a
+deliberately narrow -- caret, one non-ASCII character, then exactly four -- so a
 caret in real lyric or title text is left alone.
+
+**Any non-ASCII, not `\u0080-\u00ff`.** The opcode is a byte above 0x7F, but
+what it decodes *to* depends on the encoding: cp1252 maps 0x85, 0x86 and 0x84 to
+U+2026, U+2020 and U+201E, all outside Latin-1. Matching the Latin-1 range left
+that markup in the text, which is why a `.mus` staff name came back as
+`^\u2026\x01\x01\x01\n^\u2020\x01\x01\x01\rScore` rather than `Score`.
 """
 
 _TEXT_BLOCK = "textBlock"
