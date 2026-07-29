@@ -131,3 +131,24 @@ def test_file_info_is_keyed_by_type_and_returned_verbatim() -> None:
         "title": "Ode to Joy",
         "composer": "Beethoven",
     }
+
+
+def test_binary_markup_is_stripped_when_decoded_as_cp1252() -> None:
+    """The opcode is a byte above 0x7F, and what it decodes *to* depends on the
+    encoding. cp1252 maps 0x84, 0x85 and 0x86 to U+201E, U+2026 and U+2020, all
+    outside Latin-1 -- so a pattern written for `\u0080-\u00ff` leaves the
+    markup in the text. A `.mus` staff name came back with its opcodes attached
+    rather than as "Score".
+    """
+    raw = "^\u2026\x01\x01\x01\n^\u2020\x01\x01\x01\r^\u201e\x01\x01\x01\x01Score"
+    assert plain_text(raw) == "Score"
+
+
+def test_the_latin_1_form_of_the_same_markup_still_strips() -> None:
+    """The other decoding of the same bytes, which already worked."""
+    assert plain_text("^\x85\x01\x01\x02\x08Voice") == "Voice"
+
+
+def test_a_caret_in_real_text_survives() -> None:
+    """The pattern must stay narrow: five characters of opcode, not any caret."""
+    assert plain_text("2^3 and up") == "2^3 and up"
