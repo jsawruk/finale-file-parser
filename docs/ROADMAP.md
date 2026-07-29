@@ -179,12 +179,13 @@ limit is verified by mutation, because no real corpus archive trips one.
       70,428 entries over 137 documents, same 38-byte slots as the 2011 era. Remaining: the
       `others`/`details` rows, which `read_mus_rows` now reads for all 139 — fixed 16-byte rows
       carrying ETF's two-character tags. `MS` (measure spec), `IS` (staff spec, including
-      `fullName`), `FR` (frame) and `GF`'s frame slots are all confirmed. **What blocks a `Score` is
-      the (staff, measure) → frame link**: only 4,196 of 14,191 `GF` records carry a frame and 8,999
-      of 13,710 frames are named by nothing, so walking `gfhold → frame → entries` reaches 29% of
-      the notes, against 100% for the same measurement on the 2011 cohort. Either `GF` is not the
-      only holder or it keeps the link elsewhere. This cohort has **no paired `.musx`**, so the
-      evidence has to be the ETF spec, internal cross-references, and that control. See
+      `fullName`), `FR` (frame) and `GF` are all confirmed, **including the frame link**: a `GF`
+      record's frame array starts at +4 in a 2001 file and +6 in a 2005 one, told apart by the staff
+      spec's incidence count. That takes frames referenced to 13,241 of 13,322 and entries reached
+      to 92.3%. Remaining: wiring these records into `read_mus_document` so the cohort builds a
+      `Score`, and the 5,435 entries in 56 documents that sit inside referenced frames and read as a
+      second voice. This cohort has **no paired `.musx`**, so the evidence has to be the ETF spec,
+      internal cross-references, and a control against the 2011 cohort. See
       `docs/formats/mus-dcl-container.md`.
 - [ ] **Durations above a whole note.** `duration_from_edu` caps at 4096 EDU, so it rejects a breve
       (8192) and, more awkwardly, a **dotted whole** (6144) — ordinary notation. Two DCL-era
