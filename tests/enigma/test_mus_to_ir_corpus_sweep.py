@@ -59,22 +59,23 @@ would invert every ratio. Sounded durations agreeing end to end is what rules
 that out.
 """
 
-OCTAVE_ONLY_PITCHES = 845
+OCTAVE_ONLY_PITCHES = 1
 """Pitches whose letter and accidental are right and only the octave is wrong.
 
 Down from 4,140 total differences once the transposition's key alteration was
-recovered, and from 2,491 once the written octave stopped ignoring the octaves
-Finale folds into `harm_lev` (`written_octave_correction`).
+recovered, from 2,491 once the written octave stopped ignoring the octaves
+Finale folds into `harm_lev`, and from 845 once that correction stopped
+exempting whole-octave transpositions.
 
-**Every one that remains sits on a whole-octave transposition** -- interval 7,
-double basses and guitars -- where the residue is 0. Those staves are the one
-case a `.mus` genuinely cannot recover: a whole-octave transposition leaves the
-residue at zero and the key unchanged, so the staff is recorded as though it did
-not transpose at all, and nothing in the file says otherwise. A transposition
-with a residue is recoverable and no longer differs.
+**The one that remains is not a transposition fault.** It sits on a concert
+staff, where the two files disagree about the music: the `.mus` holds a chord
+(`harm_lev` 7 and 9) where the `.musx` holds a single note (9), with a different
+pitch on a neighbouring entry. It lands in this bucket by coincidence, the
+comparison lining a D4 up against a D5, and is one of the `.mus`/`.musx`
+revision differences the entry-pool sweep already pins.
 
-That the remainder is exactly the residue-0 set is the check that the correction
-is the right shape rather than a fitted constant.
+So a `.mus` gives the same written pitch as its `.musx` on every transposing
+staff in the corpus. The octave was never missing from it.
 """
 
 OTHER_PITCHES = 3

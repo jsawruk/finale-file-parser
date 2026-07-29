@@ -64,62 +64,51 @@ consistent.** Finale reading a `.mus` has everything it requires.
 
 ## 3. The fix
 
-`spell_pitch` took the written octave from `harm_lev` and the written key's tonic and never
-consulted the transposition. `spell_note` now adds `written_octave_correction(interval)` first —
-the octaves Finale folded into `harm_lev`, undone — **but only where the transposition has a
-non-octave residue.**
+`etfspec.pdf` anchors `harm_lev` absolutely:
 
-That gate is the whole finding. The two cases are stored differently:
+> "The harmonic value 0 will always be the tonic of the current key **in the octave from middle C to
+> the C above**. For example, in G major, 0 is the G above middle C."
 
-* **A transposition with a residue** (every ordinary transposing instrument) keeps the residue in
-  the staff record and the octaves in `harm_lev`. Undoing the fold gives the pitch the player reads.
-* **A whole-octave transposition** leaves the residue at zero and the key unchanged, so the staff is
-  recorded as though it did not transpose at all, with `harm_lev` already at the written octave.
-  There is nothing to undo, and undoing it moves the part an octave.
+No transposition enters that rule. So `harm_lev` alone places the written octave, and a container
+that stores it shifted needs the shift undone. `spell_note` adds
+`written_octave_correction(interval)` — the folded octaves, returned — **for a downward
+transposition**, one whose written pitch sits above concert.
+
+An **upward** transposition shows no such fold. A xylophone sounds an octave above what it reads,
+and correcting it moves the part an octave. That asymmetry rests on a single instrument — 600 notes
+across three staves, with no paired `.mus` to check against — and is the weakest part of this.
 
 ## 4. How it was adjudicated
 
-Not against Finale. The `.musx` in this corpus were produced by Finale *from* the matching `.mus`,
+Not against Finale. Every `.musx` in this corpus was produced by Finale *from* the matching `.mus`,
 so the two are not independent witnesses and agreement between them proves only consistency.
 
-The interval values identify the instruments outright, and every one has a **published written
-range** — what a player reads, owing nothing to any file format:
+The interval values identify the instruments outright, and each has a **published written range** —
+what a player reads, owing nothing to any file format. **Each instrument is measured against its
+own range**; lumping the two interval-7 instruments under one compromise range is what hid the last
+error.
 
-| interval | adjust | instrument | published written range |
-| --- | --- | --- | --- |
-| −7 | 0 | Xylophone | F4–C7 |
-| 1 | 2 | B♭ Trumpet | F♯3–D6 |
-| 4 | 1 | F Horn / English Horn | F3–C6 |
-| 5 | 3 | E♭ Alto Sax | B♭3–F♯6 |
-| 7 | 0 | Double Bass / Guitar | E2–B4 |
-| 8 | 2 | B♭ Tenor Sax / Bass Clarinet | B♭3–F♯6 |
-| 12 | 3 | E♭ Baritone Sax | B♭3–F♯6 |
+| instrument | interval | published written range | before | after |
+| --- | --- | --- | --- | --- |
+| E♭ baritone sax | 12 | B♭3–F♯6 | 7.3% | **100.0%** |
+| B♭ tenor sax | 8 | B♭3–F♯6 | 37.9% | **89.0%** |
+| E♭ alto sax | 5 | B♭3–F♯6 | 87.0% | **98.8%** |
+| Double bass | 7 | E2–G4 | 69.8% | **99.7%** |
+| Classical guitar | 7 | E3–B5 | 82.1% | **99.7%** |
+| Xylophone | −7 | F4–C7 | 100.0% | 100.0% (untouched) |
+| B♭ trumpet | 1 | F♯3–D6 | 91.6% | 91.6% (no fold) |
+| F horn | 4 | F3–C6 | 87.7% | 87.7% (no fold) |
+| **all transposing notes** | | | **82.0%** | **94.4%** |
 
-Share of notes falling inside the instrument's published range, over 45,000 corpus notes on
-transposing staves:
+The saxophone family is the sharpest check: alto, tenor and baritone read one written range — that
+is what the family is for — and before this they spelled an octave apart from each other.
 
-| instrument | residue | before | after |
-| --- | --- | --- | --- |
-| E♭ baritone sax | 2 | **7.3%** | **100.0%** |
-| B♭ tenor sax | −1 | 37.9% | **89.0%** |
-| E♭ alto sax | 2 | 87.0% | **98.8%** |
-| double bass / guitar | **0** | 87.3% | 87.3% (untouched) |
-| xylophone | **0** | 100.0% | 100.0% (untouched) |
-| B♭ trumpet | −1 | 91.6% | 91.6% (no octave folded) |
-| F horn | −4 | 87.7% | 87.7% (no octave folded) |
-| **all transposing notes** | | **82.0%** | **91.6%** |
+## 5. What is lost: nothing
 
-Every instrument either improves or is untouched. The saxophone family is the sharpest check: alto,
-tenor and baritone all read the same written range — that is what the family is for — and before the
-fix they spelled an octave apart from each other.
+The `.mus`/`.musx` octave-only differences fall from **2,491 to 1**, and that one is not a
+transposition fault at all: it sits on a concert staff where the two files disagree about the
+music — a chord in the `.mus` against a single note in the `.musx` — and lands in the bucket only
+because the comparison lines a D4 up against a D5.
 
-## 5. What is still lost
-
-The `.mus`/`.musx` octave-only differences fall from **2,491 to 845**, and **every one that remains
-sits on a whole-octave transposition** (interval 7 — double basses and guitars).
-
-Those are the one case a `.mus` genuinely cannot recover, and now for a precise reason: a
-whole-octave transposition leaves the residue at zero and the key unchanged, so the staff is
-recorded as though it did not transpose at all. Nothing in the file distinguishes a double bass
-written at sounding pitch from a non-transposing staff. That the remainder is exactly the residue-0
-set is the check that the correction is the right shape rather than a fitted constant.
+So a `.mus` gives the same written pitch as its `.musx` on every transposing staff in the corpus.
+The octave was never missing from it, and no `UNTRANSLATED` entry is needed for transposition.

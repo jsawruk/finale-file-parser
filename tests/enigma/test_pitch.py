@@ -283,22 +283,22 @@ def test_the_residue_is_the_sounding_direction_folded_into_its_band(
     ("interval", "correction", "instrument"),
     [
         (5, 7, "E-flat alto sax"),
+        (7, 7, "double bass: a whole octave is folded like any other"),
         (8, 7, "B-flat tenor sax"),
         (12, 14, "E-flat baritone sax"),
         (1, 0, "B-flat trumpet: no octave folded"),
         (4, 0, "F horn: no octave folded"),
-        (7, 0, "double bass: a whole octave, nothing to undo"),
-        (-7, 0, "xylophone: a whole octave, nothing to undo"),
+        (-7, 0, "xylophone: an upward transposition folds nothing"),
     ],
 )
-def test_the_written_octave_correction_undoes_only_a_folded_residue(
+def test_the_written_octave_correction_undoes_a_downward_fold(
     interval: int, correction: int, instrument: str
 ) -> None:
-    """The gate is the point: a whole-octave transposition records no residue
-    and no key change, so its `harm_lev` is already at the written octave and
-    correcting it moves the part an octave. Checked against the ranges players
-    read -- the baritone sax goes from 7.3% to 100% inside its published written
-    range, while the double bass and xylophone stay where they were."""
+    """`etfspec.pdf` anchors `harm_lev` absolutely -- 0 is the key's tonic in
+    the octave above middle C -- so a shifted value always needs undoing. Only
+    a downward transposition shifts one: measured against the ranges players
+    read, double bass goes 69.8% -> 99.7% and guitar 82.1% -> 99.7%, while the
+    xylophone stays at 100% only if an upward transposition is left alone."""
     assert written_octave_correction(interval) == correction, instrument
 
 
@@ -315,12 +315,23 @@ def test_the_correction_reaches_the_written_pitch() -> None:
     assert written.octave == bare.octave + 1
 
 
-def test_a_whole_octave_transposition_is_spelled_untouched() -> None:
-    """A double bass (interval 7) records no residue and no key change, so its
-    `harm_lev` is already at the written octave -- correcting it would move the
-    part an octave, which is what the residue gate prevents."""
+def test_an_upward_transposition_is_spelled_untouched() -> None:
+    """A xylophone (interval -7) sounds an octave above what it reads and shows
+    no fold; correcting it would move the part an octave. This is the one
+    asymmetry in the rule, and it rests on a single instrument."""
+    note = Note(harm_lev=0, harm_alt=0, tie_start=False, tie_end=False)
+    concert = KeySignature(fifths=0, mode=Mode.MAJOR, tonic="C")
+    xylophone = StaffTransposition(interval=-7, adjust=0)
+    bare = spell_pitch(note, transpose_key(concert, xylophone.interval, xylophone.adjust))
+    assert spell_note(note, concert, xylophone).written == bare
+
+
+def test_a_whole_octave_transposition_is_corrected_like_any_other() -> None:
+    """A double bass (interval 7) folds one octave into `harm_lev` exactly as a
+    tenor sax does. Exempting it was wrong: it put double basses at 69.8% of
+    notes inside their written range instead of 99.7%."""
     note = Note(harm_lev=0, harm_alt=0, tie_start=False, tie_end=False)
     concert = KeySignature(fifths=0, mode=Mode.MAJOR, tonic="C")
     bass = StaffTransposition(interval=7, adjust=0)
     bare = spell_pitch(note, transpose_key(concert, bass.interval, bass.adjust))
-    assert spell_note(note, concert, bass).written == bare
+    assert spell_note(note, concert, bass).written.octave == bare.octave + 1
