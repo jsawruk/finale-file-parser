@@ -598,3 +598,63 @@ def test_the_barline_nibble_does_not_disturb_the_repeat_bits(
     assert record is not None
     assert record.fields["barline"] == "double"
     assert "forRepBar" in record.fields
+
+
+def entry_record(entnum: int, prev: int = 0, next_: int = 0) -> Record:
+    """An entry carrying only the chain links `_live_entries` walks."""
+    return Record(
+        tag="entry",
+        attrs={"entnum": str(entnum), "prev": str(prev), "next": str(next_)},
+        text="",
+        fields={},
+    )
+
+
+def gfhold_record(*frames: int) -> Record:
+    return Record(
+        tag="gfhold",
+        attrs={"cmper1": "1", "cmper2": "1"},
+        text="",
+        fields={f"frame{i + 1}": str(f) for i, f in enumerate(frames) if f},
+    )
+
+
+def test_an_entry_no_frame_reaches_is_dropped_as_dead_pool_space() -> None:
+    """A `.mus` entry pool is a live database: entries deleted in Finale stay in
+    it until the file is compacted, so the frames -- not the pool -- say what the
+    music is."""
+    entries = (entry_record(1, next_=2), entry_record(2, prev=1), entry_record(9))
+    live = adapter._live_entries(entries, {7: (1, 2)}, [gfhold_record(7)])
+    assert [r.attrs["entnum"] for r in live] == ["1", "2"]
+
+
+def test_a_dead_entry_between_two_live_ones_does_not_break_the_chain() -> None:
+    """Dead slots are not always a block at one end of the pool."""
+    entries = (entry_record(1, next_=3), entry_record(2), entry_record(3, prev=1))
+    live = adapter._live_entries(entries, {7: (1, 3)}, [gfhold_record(7)])
+    assert [r.attrs["entnum"] for r in live] == ["1", "3"]
+
+
+def test_every_layer_of_a_gfhold_keeps_its_music() -> None:
+    """Reading fewer layer slots than a gfhold names would silently discard the
+    rest as dead -- the failure this pruning could otherwise hide."""
+    entries = tuple(entry_record(n) for n in range(1, 5))
+    frames = {1: (1, 1), 2: (2, 2), 3: (3, 3), 4: (4, 4)}
+    live = adapter._live_entries(entries, frames, [gfhold_record(1, 2, 3, 4)])
+    assert [r.attrs["entnum"] for r in live] == ["1", "2", "3", "4"]
+
+
+def test_a_chain_that_never_meets_its_end_entry_stops_at_the_pool_edge() -> None:
+    """A `next` of 0 ends the walk: a frame whose endEntry is unreachable must
+    not spin, and must not claim the whole pool."""
+    entries = (entry_record(1, next_=0), entry_record(5))
+    live = adapter._live_entries(entries, {7: (1, 99)}, [gfhold_record(7)])
+    assert [r.attrs["entnum"] for r in live] == ["1"]
+
+
+def test_a_cyclic_chain_terminates() -> None:
+    """Hostile input: two entries pointing at each other, and an endEntry never
+    reached."""
+    entries = (entry_record(1, next_=2), entry_record(2, next_=1))
+    live = adapter._live_entries(entries, {7: (1, 99)}, [gfhold_record(7)])
+    assert [r.attrs["entnum"] for r in live] == ["1", "2"]

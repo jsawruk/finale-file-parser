@@ -347,3 +347,36 @@ tags — and decoding the fields inside those rows is unstarted. Both walks are 
 measured on the thing that was implemented, not on the thing that exists. A decoder that returns
 *something* for every file is not evidence that it returns *everything*; nothing checked the decoded
 size against the file, and a 4× shortfall went unnoticed for a week.
+
+## 2026-07-29 — DECIDED: an entry no frame reaches is dead pool space, and is discarded
+
+**The `.mus` entry pool is a live database, not a list of the music.** A `.mus` is written in place,
+so an entry deleted in Finale keeps its 38-byte slot until the file is compacted. The pool therefore
+holds the current music *and* whatever earlier music has not yet been overwritten. The frames say
+which is which. The 2001–2005 reader now emits only the entries some frame reaches, and 5,302
+unreached entries across 16 documents are dropped at the container edge.
+
+**Why this is not a convenient reading of an inconvenient failure.** 4,675 of the 5,302 (88%) are
+exact duplicates of passages the frames *do* reach, matched as whole `next`-chains rather than
+entry-by-entry — sequence identity, which coincidence in tonal music does not produce. One document
+keeps entries 1–858 as a stale copy of the live 859–1717, 824 identical field for field. The other
+12% are in three documents whose frames reach nothing at all.
+
+**What it buys**: 118 → 129 of 139 documents build, 55,463 → 66,847 pitches (+20%), and the
+malformed count falls 16 → 2. The two that remain are a genuinely double-claimed entry and a gfhold
+placing entries in a measure that defines no key.
+
+**What it costs, and how that is paid for.** The orphan check in `locate_entries` is what caught the
+four-layer frame bug the day before; pruning would silence it for this era. So it is left untouched —
+it still fires for `.musx` and for 2011 `.mus` — and the discard is pinned instead. The sweep asserts
+that the reader discards exactly 4,946 entries, a number that **may only fall**. A reader that
+stopped reaching music would discard *more*: reverting `_FRAME_LAYERS` from 4 to 2 pushes it to
+6,004 and fails the pin, where the build counts alone would only have got quieter. The detector moved
+from a per-document exception to a corpus-level quantity; it did not go away.
+
+**A document whose frames reach no entry at all is refused, not pruned to nothing.** Three files are
+like this. Pruning turned them from "rejected for orphans" into "builds a `Score` with no parts", and
+every aggregate total stayed green, because a document contributing nothing changes no sum. The
+per-document assertion caught it — the same trap as the blank scores three days ago, in a third
+costume. The rule that keeps catching it: **a sweep that only adds things up cannot see a document
+that adds up to nothing.**

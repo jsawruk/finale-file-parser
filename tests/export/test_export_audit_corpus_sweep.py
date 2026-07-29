@@ -50,14 +50,19 @@ records whose entry is a rest, against 16,591 on notes. Pinned so that a change
 in the count means the lyric-to-entry mapping moved, rather than going unnoticed.
 """
 
-MUS_EXPORTED = 113
+MUS_EXPORTED = 123
 """`.mus` documents that export. The same invariants are asserted on them: a
 reader-specific defect would otherwise hide behind the `.musx` path.
 
-Was 93 until the 2001-2005 reader landed. The 20 added are DCL-era documents
+Was 93 until the 2001-2005 reader landed. The 30 added are DCL-era documents
 that used to raise before reaching the exporter, and they pass every invariant
 below unchanged -- which is the useful part: the new reader's output holds
-together under checks written for the old one."""
+together under checks written for the old one.
+
+Counts lowercase `.mus` only, because `conftest.mus_paths` globs case
+sensitively: the corpus's `.MUS` cohort is audited by the `.mus` sweeps but not
+by this one. Every document that builds does export -- 222 of 222 across both
+spellings -- so this is a gap in coverage, not a known failure."""
 
 _BARLINE_ORDER = ("bar-style", "ending", "repeat")
 
