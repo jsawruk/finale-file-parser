@@ -148,11 +148,19 @@ file is a plaintext header followed by a **compressed** payload, and the codec d
 
 | banner year | files | payload | offset |
 | --- | --- | --- | --- |
-| 2001–2005 | 139 | single **PKWARE DCL "implode"** stream, `lit=0`, `dict=4` | `0x20A` |
+| 2001–2005 | 139 | **chain of PKWARE DCL "implode"** records, `lit=0`, `dict=4`, 4 per file | first at `0x200` |
 | 2011–2012 | 99 | **chain of consecutive zlib streams**, ~4 per file | first at `0x216` (2 files `0x20A`) |
 
-Verified against every `.mus` in the corpus: **238/238 decode**. Inflation is 0.82×–2.75× for DCL and
-5.87×–8.63× for the concatenated zlib chain; decoded payloads run 32,816–699,585 bytes.
+Verified against every `.mus` in the corpus: **238/238 decode**. Inflation is 3.25×–4.51× for the DCL
+chain and 5.87×–8.63× for the concatenated zlib chain; decoded payloads run 32,816–699,585 bytes.
+
+**The DCL era labels its pools; the zlib era does not.** Each DCL record is `[u16 kind][u32 length,
+header included][u32 checksum][DCL stream]`, laid end to end from `0x200` to the last byte of the
+file, with `kind` 15 others, 16 details, 17 entries, 18 text. A `length` of exactly 6 means the pool
+is empty. Byte order is the writing platform's — 102 little-endian, 37 big-endian — and it is read
+off the first record's kind rather than assumed. All 139 tile exactly. The old fixed `0x20A` was
+`0x200` plus one ten-byte header, which is why decoding there worked and returned only the first
+pool of four. Full reference: `docs/formats/mus-dcl-container.md`.
 
 Two practical notes that cost real time to learn:
 
@@ -332,10 +340,14 @@ corpus sweep: one entry stores two notes in `.mus` and one in `.musx` with an ad
 octave (a revision made to the `.musx` afterwards), and two notes on one octave-transposed staff are
 off by a single step, cause unknown.
 
-**Scope:** the 2011/2012 era, where each pool is its own zlib stream; 97 of 99 corpus files place the
-entry pool in a standalone stream and the other 2 lay the payload out as three streams rather than
-four. DCL-era files (2001–2005) pack every pool into one stream with no known delimiters. Both
-unsupported cases raise `CorruptScoreError` rather than guessing.
+**Scope:** both eras. In the 2011/2012 era each pool is its own zlib stream and the entry pool is
+recognised by structure; 97 of 99 corpus files place it in a standalone stream and the other 2 lay
+the payload out as three streams rather than four, which raises `CorruptScoreError` rather than
+guessing. The 2001–2005 era stores the same 38-byte slots **the platform's way round** and names the
+entry pool in the container, so no recognition is needed: 136 non-empty pools tile exactly, 70,428
+entries decode, and 3 documents carry a pool that is legitimately empty. Two documents fail on a
+breve (8192 EDU) or a dotted whole (6144), which `duration_from_edu` rejects — a limit of the
+note-value model, not of the container, and one a `.musx` would hit too.
 
 ### Known format facts — the `.mus` others pool
 

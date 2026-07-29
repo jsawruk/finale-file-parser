@@ -35,9 +35,17 @@ alteration as "a signed quantity ... -8 to +7", which reads as two's complement;
 the corpus disagrees, and the corpus wins. Observed: 0x0 -> 0, 0x1 -> +1,
 0x9 -> -1.
 
-Scope: the 2011/2012 era, whose payload separates pools into their own zlib
-streams. DCL-era files (2001-2005) pack everything into one stream with no known
-pool delimiters, so this raises for them rather than guessing.
+Both eras, one decode. The 2001-2005 era lays the same 38-byte slots out in the
+same order; what differs is that it writes its integers the platform's way round
+(big-endian on Mac, little-endian on Windows) and that its container names the
+entry pool outright rather than leaving it to be recognised. `enigma.mus_payload`
+supplies both facts, so the only thing that changes here is which way `_u16` and
+`_u32` read.
+
+That the layout really is shared is the corpus's verdict, not an assumption:
+across 136 DCL-era documents the slots tile the pool exactly, every entry has
+SETBIT, and the 71,801 durations take 16 distinct values, every one of them a
+note value with 0-2 dots.
 """
 
 from __future__ import annotations
@@ -46,7 +54,12 @@ import os
 
 from finale_file_parser.enigma.document import Record
 from finale_file_parser.enigma.models import CorruptScoreError
-from finale_file_parser.enigma.mus_payload import read_mus_streams
+from finale_file_parser.enigma.mus_payload import (
+    POOL_ENTRIES,
+    ByteOrder,
+    MusPool,
+    read_mus_pools,
+)
 from finale_file_parser.enigma.music import Duration, Entry, duration_from_edu, read_entry
 
 __all__ = ["harm_lev_octave_shift", "read_mus_entries", "read_mus_entry_records"]
@@ -152,13 +165,28 @@ def read_mus_entry_records(path: str | os.PathLike[str]) -> tuple[Record, ...]:
         CorruptScoreError: the payload does not decode, holds no recognisable
             entry pool, or the pool is malformed.
     """
-    for stream in read_mus_streams(path):
-        if _looks_like_entry_pool(stream):
-            return tuple(_read_pool(stream))
-    raise CorruptScoreError(
-        f"{path} has no recognisable entry pool "
-        "(DCL-era files pack all pools into one stream; that is not yet supported)"
-    )
+    pools = read_mus_pools(path)
+    labelled = [pool for pool in pools if pool.kind == POOL_ENTRIES]
+    # A labelled pool is taken at its word even when empty, because empty is a
+    # real answer: three corpus documents carry no entries at all, and sniffing
+    # on would either find nothing and raise, or find some other pool and lie.
+    if labelled:
+        return _read_labelled(labelled[0], path)
+    for pool in pools:
+        if _looks_like_entry_pool(pool.data, pool.byte_order):
+            return tuple(_read_pool(pool.data, pool.byte_order))
+    raise CorruptScoreError(f"{path} has no recognisable entry pool")
+
+
+def _read_labelled(pool: MusPool, path: str | os.PathLike[str]) -> tuple[Record, ...]:
+    """Read the pool the container itself calls the entry pool."""
+    if not pool.data:
+        return ()
+    if not _looks_like_entry_pool(pool.data, pool.byte_order):
+        raise CorruptScoreError(
+            f"{path}: the pool the container labels as entries does not tile as entry slots"
+        )
+    return tuple(_read_pool(pool.data, pool.byte_order))
 
 
 def read_mus_entries(path: str | os.PathLike[str]) -> tuple[Entry, ...]:
@@ -173,12 +201,12 @@ def read_mus_entries(path: str | os.PathLike[str]) -> tuple[Entry, ...]:
     return tuple(read_entry(record) for record in read_mus_entry_records(path))
 
 
-def _u16(data: bytes, offset: int) -> int:
-    return int.from_bytes(data[offset : offset + 2], "little")
+def _u16(data: bytes, offset: int, order: ByteOrder) -> int:
+    return int.from_bytes(data[offset : offset + 2], order)
 
 
-def _u32(data: bytes, offset: int) -> int:
-    return int.from_bytes(data[offset : offset + 4], "little")
+def _u32(data: bytes, offset: int, order: ByteOrder) -> int:
+    return int.from_bytes(data[offset : offset + 4], order)
 
 
 def _signed(value: int, bits: int) -> int:
@@ -194,37 +222,42 @@ def _slot_span(note_count: int) -> int:
     return 1 + -(-overflow // _CONT_SLOT_NOTES)  # ceiling division
 
 
-def _looks_like_entry_pool(stream: bytes) -> bool:
-    """Is this stream the entry pool?
+def _looks_like_entry_pool(stream: bytes, order: ByteOrder = "little") -> bool:
+    """Is this stream the entry pool, read `order`-endian?
 
     Identified by structure rather than by position, so a file whose streams are
     ordered differently still works. Every legal entry has SETBIT set and a
     plausible note count, and the slots must tile the stream exactly -- a
     combination the other pools do not satisfy (verified across the corpus).
+
+    The test is also strict enough to tell the byte orders apart: over the 139
+    DCL-era documents it accepts a pool read the file's own way round and no
+    pool read the other way, which is what makes it safe as a fallback for files
+    whose container does not label its pools.
     """
     if not stream or len(stream) % _SLOT:
         return False
     position = 0
     while position + _SLOT <= len(stream):
-        if _u16(stream, position + 4) != 0:
+        if _u16(stream, position + 4, order) != 0:
             return False  # a first slot must carry slot index 0
-        if not _u32(stream, position + 18) & _SETBIT:
+        if not _u32(stream, position + 18, order) & _SETBIT:
             return False
-        count = _u16(stream, position + 24)
+        count = _u16(stream, position + 24, order)
         if count > _MAX_NOTES:
             return False
         position += _SLOT * _slot_span(count)
     return position == len(stream)
 
 
-def _read_pool(stream: bytes) -> list[Record]:
+def _read_pool(stream: bytes, order: ByteOrder) -> list[Record]:
     records: list[Record] = []
     position = 0
     while position + _SLOT <= len(stream):
-        stored_count = _u16(stream, position + 24)
+        stored_count = _u16(stream, position + 24, order)
         if stored_count > _MAX_NOTES:
             raise CorruptScoreError(f"entry note count {stored_count} exceeds {_MAX_NOTES}")
-        records.append(_entry_record(stream, position, stored_count))
+        records.append(_entry_record(stream, position, stored_count, order))
         position += _SLOT * _slot_span(stored_count)
     return records
 
@@ -243,8 +276,8 @@ def _note_offsets(base: int, count: int) -> list[int]:
     return offsets
 
 
-def _entry_record(stream: bytes, offset: int, stored_count: int) -> Record:
-    flag = _u32(stream, offset + 18)
+def _entry_record(stream: bytes, offset: int, stored_count: int, order: ByteOrder) -> Record:
+    flag = _u32(stream, offset + 18, order)
     # FLOATREST decides, not NOTEBIT. Three cases, all observed in the corpus:
     #   * ordinary note      NOTEBIT set                  -> notes = stored count
     #   * floating rest      FLOATREST set, NOTEBIT clear -> a placeholder note
@@ -255,12 +288,12 @@ def _entry_record(stream: bytes, offset: int, stored_count: int) -> Record:
     #     the vertical position, which .musx surfaces as one note
     # Using NOTEBIT instead mis-classifies the third case (74 corpus entries).
     note_count = 0 if flag & _FLOATREST else stored_count
-    edu = _u16(stream, offset + 14)
+    edu = _u16(stream, offset + 14, order)
     # Fail here rather than in `read_entry`, so the message names the entry.
     try:
         duration_from_edu(edu)
     except Exception as exc:
-        raise CorruptScoreError(f"entry {_u32(stream, offset)}: bad duration {edu}") from exc
+        raise CorruptScoreError(f"entry {_u32(stream, offset, order)}: bad duration {edu}") from exc
     fields: dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]] = {
         "dura": str(edu),
         "numNotes": str(note_count),
@@ -270,26 +303,26 @@ def _entry_record(stream: bytes, offset: int, stored_count: int) -> Record:
     if flag & _GRACENOTE:
         # Presence is the signal, as it is in EnigmaXML's `<graceNote/>`.
         fields["graceNote"] = ""
-    notes = tuple(_note_record(stream, o) for o in _note_offsets(offset, note_count))
+    notes = tuple(_note_record(stream, o, order) for o in _note_offsets(offset, note_count))
     if notes:
         fields["note"] = notes if len(notes) > 1 else notes[0]
     return Record(
         tag="entry",
         attrs={
-            "entnum": str(_u32(stream, offset)),
-            "prev": str(_u32(stream, offset + 6)),
-            "next": str(_u32(stream, offset + 10)),
+            "entnum": str(_u32(stream, offset, order)),
+            "prev": str(_u32(stream, offset + 6, order)),
+            "next": str(_u32(stream, offset + 10, order)),
         },
         text="",
         fields=fields,
     )
 
 
-def _note_record(stream: bytes, offset: int) -> Record:
+def _note_record(stream: bytes, offset: int, order: ByteOrder) -> Record:
     if offset + _NOTE > len(stream):
         raise CorruptScoreError("entry note record runs past the end of the pool")
-    tcd = _u16(stream, offset)
-    flag = _u32(stream, offset + 2)
+    tcd = _u16(stream, offset, order)
+    flag = _u32(stream, offset + 2, order)
     magnitude = tcd & 0x07
     fields: dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]] = {
         "harmLev": str(_signed(tcd >> _TCD_ALT_BITS, 16 - _TCD_ALT_BITS)),

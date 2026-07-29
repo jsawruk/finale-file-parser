@@ -1,41 +1,120 @@
-"""Decode a legacy `.mus` file's compressed payload.
+"""Decode a legacy `.mus` file's compressed payload into its pools.
 
-Two eras, two codecs. Which one applies is decided by the banner year in the
-plaintext header, then confirmed by actually decoding:
+Two eras, two codecs, but the same idea: the payload is a handful of compressed
+**pools**, not one blob.
 
-    2001-2005  PKWARE DCL ("implode") stream   at 0x20A, lit=0, dict=4
-    2011-2012  chain of zlib streams           first at 0x216, found by 78 9c
+    2001-2005  a chain of PKWARE DCL ("implode") records, first at 0x200
+    2011-2012  a chain of zlib streams, first found by scanning for 78 9c
 
-Verified across the whole curated corpus: 139/139 old-cohort files and 99/99
-new-cohort files decode. See `docs/formats/mus-binary-notes.md` for how this was
-established and for the offsets' stability.
+The DCL era labels its pools; the zlib era does not. A DCL chain is a run of
+records, each
 
-This returns the decoded payload bytes. Parsing those bytes into records is a
-separate, later step -- the payload is not EnigmaXML and is not yet understood.
+    0-1   kind      pool id: 15 others, 16 details, 17 entries, 18 text
+    2-5   length    the whole record, this ten-byte header included
+    6-9   checksum  (absent when the pool is empty -- see below)
+    10-   a PKWARE DCL stream of `length - 10` bytes
+
+laid end to end from 0x200 to the last byte of the file, with no gaps. A
+`length` of exactly 6 means the pool is **empty**: the record is the kind and
+the length and nothing else, no checksum and no stream. Three corpus documents
+carry an empty entry pool that way.
+
+`length` counts the header, so the chain is walked by adding it to the current
+position -- which is also why the old fixed `0x20A` worked as "where the first
+stream starts": it is 0x200 plus the ten-byte header.
+
+**Byte order is the writing platform's**, big-endian on Mac and little-endian on
+Windows, and it governs the pool records here and every field inside them. It is
+read off the first record rather than assumed: that record's kind is always 15,
+which is only 15 one way round. Over the corpus: 102 little-endian, 37
+big-endian, all 139 walking to the last byte exactly.
+
+Verified across the whole curated corpus: 139/139 DCL-era files tile exactly
+with pool kinds (15, 16, 17, 18) and every non-empty pool decodes; 99/99
+zlib-era files decode. See `docs/formats/mus-dcl-container.md` for how the
+container was established and `docs/formats/mus-binary-notes.md` for the
+offsets' stability.
+
+This returns the decoded pool bytes. Parsing those into records is a separate,
+later step, and the two eras do not share it: a 2011 pool is a run of
+self-identifying variable-length records (`enigma.mus_others`), while a DCL pool
+is a table of fixed 16-byte rows carrying ETF's two-character tags.
 """
 
 from __future__ import annotations
 
 import os
 import zlib
+from dataclasses import dataclass
+from typing import Literal
 
 from finale_file_parser.enigma.blast import CorruptDclStreamError, blast_decompress
 from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.version import mus as mus_header
 
-__all__ = ["MAX_MUS_PAYLOAD", "read_mus_payload", "read_mus_streams"]
+__all__ = [
+    "MAX_MUS_PAYLOAD",
+    "POOL_DETAILS",
+    "POOL_ENTRIES",
+    "POOL_OTHERS",
+    "POOL_TEXT",
+    "ByteOrder",
+    "MusPool",
+    "read_mus_payload",
+    "read_mus_pools",
+    "read_mus_streams",
+]
 
 MAX_MUS_PAYLOAD = 64 * 1024 * 1024
-"""Refuse output past 64 MiB.
+"""Refuse output past 64 MiB, counted across the whole chain.
 
-Measured over all 238 corpus files: DCL inflates 0.82x-2.75x (median 2.35x) and
-the zlib chain 5.87x-8.63x (median 6.07x), with decoded payloads running
-32,816 to 699,585 bytes. The cap leaves ~90x headroom over the largest real
-payload while still bounding a decompression bomb.
+Measured over all 238 corpus files: a DCL chain inflates 3.25x-4.51x (median
+3.56x) and the zlib chain 5.87x-8.63x (median 6.07x), with decoded payloads
+running 32,816 to 699,585 bytes. The cap leaves ~90x headroom over the largest
+real payload while still bounding a decompression bomb.
 """
 
-_DCL_OFFSET = 0x20A
-"""Constant across all 139 old-cohort corpus files."""
+ByteOrder = Literal["little", "big"]
+
+POOL_OTHERS = 15
+POOL_DETAILS = 16
+POOL_ENTRIES = 17
+POOL_TEXT = 18
+"""The kinds a DCL-era container gives its four pools, in the order it writes them.
+
+They line up with the roles the zlib era's four streams were found to play by
+structure alone, which is what makes them believable as pool ids rather than as
+some other counter: 15 walks as the `others` pool, 16 as `details`, 17 tiles as
+38-byte entry slots, and 18 opens with `^block(1)`.
+"""
+
+
+@dataclass(frozen=True)
+class MusPool:
+    """One decompressed pool, with whatever the container says about it."""
+
+    data: bytes
+
+    byte_order: ByteOrder = "little"
+    """The document's byte order, which every field inside `data` follows."""
+
+    kind: int | None = None
+    """The container's own pool id, or None where the container does not label
+    its pools -- which is every zlib-era file. `None` means "ask the bytes",
+    not "no pool"."""
+
+
+_CONTAINER_START = 0x200
+"""Where the first pool record sits. Constant across all 139 DCL-era files."""
+
+_RECORD_HEADER = 10
+"""kind (2) + length (4) + checksum (4)."""
+
+_EMPTY_RECORD = 6
+"""An empty pool's record: kind and length, with no checksum and no stream."""
+
+_MAX_POOLS = 64
+"""Bound the walk. Real files carry four; the cap only has to stop a runaway."""
 
 _ZLIB_DEFLATE_METHOD = 8
 _MIN_STREAM_OUTPUT = 4096
@@ -63,8 +142,8 @@ _LAST_DCL_YEAR = 2005
 _CHUNK = 1 << 20
 
 
-def read_mus_payload(path: str | os.PathLike[str]) -> bytes:
-    """Return the decoded payload of the `.mus` file at `path`.
+def read_mus_pools(path: str | os.PathLike[str]) -> tuple[MusPool, ...]:
+    """Return every decompressed pool of the `.mus` file at `path`, in file order.
 
     Raises:
         FileNotFoundError: no such path.
@@ -76,12 +155,12 @@ def read_mus_payload(path: str | os.PathLike[str]) -> bytes:
     # An unknown banner year is not fatal: try both schemes rather than refusing
     # a variant we simply have not catalogued.
     if detail.year is not None and detail.year <= _LAST_DCL_YEAR:
-        order = (_read_dcl, _read_zlib_chain)
+        readers = (_dcl_pools, _zlib_pools)
     else:
-        order = (_read_zlib_chain, _read_dcl)
+        readers = (_zlib_pools, _dcl_pools)
 
     failures = []
-    for reader in order:
+    for reader in readers:
         try:
             return reader(data)
         except CorruptScoreError as exc:
@@ -89,42 +168,115 @@ def read_mus_payload(path: str | os.PathLike[str]) -> bytes:
     raise CorruptScoreError(f"{path} payload decoded by neither scheme: " + "; ".join(failures))
 
 
-def _read_dcl(data: bytes) -> bytes:
-    """Decode the single PKWARE DCL stream of a 2001-2005 file."""
-    try:
-        return blast_decompress(data, _DCL_OFFSET, MAX_MUS_PAYLOAD)
-    except CorruptDclStreamError as exc:
-        raise CorruptScoreError(f"DCL stream at {_DCL_OFFSET:#x} did not decode: {exc}") from exc
-
-
 def read_mus_streams(path: str | os.PathLike[str]) -> list[bytes]:
-    """Return the payload's zlib streams individually, in file order.
+    """Return the payload's pools individually, in file order.
 
     `read_mus_payload` concatenates these. Callers that need the pool boundaries
-    -- the entries reader does -- need them apart, because each stream holds a
-    different pool. Returns a single element for a DCL-era file, which packs
-    everything into one stream with no delimiters yet known.
+    -- the entries reader does -- need them apart, because each holds a
+    different pool. Use `read_mus_pools` instead to get the container's own
+    labelling and the document's byte order along with the bytes.
     """
-    with open(path, "rb") as handle:
-        data = handle.read()
-    detail = mus_header.parse(data[: mus_header.MUS_METADATA_SIZE])
-    if detail.year is not None and detail.year <= _LAST_DCL_YEAR:
-        return [_read_dcl(data)]
-    return _zlib_streams(data)
+    return [pool.data for pool in read_mus_pools(path)]
 
 
-def _read_zlib_chain(data: bytes) -> bytes:
-    """Decode the chain of consecutive zlib streams of a 2011-2012 file.
+def read_mus_payload(path: str | os.PathLike[str]) -> bytes:
+    """Return the whole decoded payload of the `.mus` file at `path`.
+
+    Raises:
+        FileNotFoundError: no such path.
+        CorruptScoreError: the payload does not decode by either scheme.
+    """
+    return b"".join(read_mus_streams(path))
+
+
+def _container_byte_order(data: bytes) -> ByteOrder:
+    """Which way round this file writes its integers.
+
+    Decided by the first pool record's kind, which is `POOL_OTHERS` in every
+    corpus file and reads as 15 exactly one way round -- 15 the other way is
+    3840. So this is a check that a container is there at all as much as it is a
+    byte-order test, which is why it raises rather than defaulting.
+    """
+    if len(data) < _CONTAINER_START + _EMPTY_RECORD:
+        raise CorruptScoreError("file is too short to hold a pool container")
+    head = data[_CONTAINER_START : _CONTAINER_START + 2]
+    if int.from_bytes(head, "big") == POOL_OTHERS:
+        return "big"
+    if int.from_bytes(head, "little") == POOL_OTHERS:
+        return "little"
+    raise CorruptScoreError(
+        f"no pool container at {_CONTAINER_START:#x}: "
+        f"first record's kind is {head.hex()} either way round, not {POOL_OTHERS}"
+    )
+
+
+def _dcl_pools(data: bytes) -> tuple[MusPool, ...]:
+    """Walk the chain of DCL pool records of a 2001-2005 file.
+
+    The records tile the file from `_CONTAINER_START` to its last byte. A walk
+    that would step past the end, or that declares a record too short to hold
+    its own header, is refused rather than truncated: a chain that stops halfway
+    is a file we do not understand, and half a document read as a whole one is
+    worse than an error.
+    """
+    byte_order = _container_byte_order(data)
+    pools: list[MusPool] = []
+    position = _CONTAINER_START
+    decoded = 0
+    while position < len(data):
+        if len(pools) >= _MAX_POOLS:
+            raise CorruptScoreError(f"pool chain exceeds {_MAX_POOLS} records; refusing")
+        if position + _EMPTY_RECORD > len(data):
+            raise CorruptScoreError(f"pool record at {position} is truncated")
+        kind = int.from_bytes(data[position : position + 2], byte_order)
+        length = int.from_bytes(data[position + 2 : position + 6], byte_order)
+        if length < _EMPTY_RECORD or position + length > len(data):
+            raise CorruptScoreError(
+                f"pool record at {position} declares length {length}, "
+                f"which does not fit the remaining {len(data) - position} bytes"
+            )
+        if length == _EMPTY_RECORD:
+            pools.append(MusPool(data=b"", byte_order=byte_order, kind=kind))
+        else:
+            if length < _RECORD_HEADER:
+                raise CorruptScoreError(
+                    f"pool record at {position} declares length {length}, "
+                    f"too short for its {_RECORD_HEADER}-byte header"
+                )
+            # Sliced to the record, so a malformed stream cannot read on into
+            # the next one and come back with a plausible-looking pool.
+            stream = data[position + _RECORD_HEADER : position + length]
+            try:
+                payload = blast_decompress(stream, 0, MAX_MUS_PAYLOAD - decoded)
+            except CorruptDclStreamError as exc:
+                raise CorruptScoreError(
+                    f"pool record at {position} (kind {kind}) did not decode: {exc}"
+                ) from exc
+            decoded += len(payload)
+            pools.append(MusPool(data=payload, byte_order=byte_order, kind=kind))
+        position += length
+    if not pools:
+        raise CorruptScoreError("pool container holds no records")
+    return tuple(pools)
+
+
+def _zlib_pools(data: bytes) -> tuple[MusPool, ...]:
+    """The 2011/2012 chain of zlib streams, as pools.
+
+    That container does not label its streams, so `kind` stays None and
+    the readers identify a pool by walking it. Byte order is little-endian
+    throughout that era -- no corpus file says otherwise.
+    """
+    return tuple(MusPool(data=stream, byte_order="little") for stream in _zlib_streams(data))
+
+
+def _zlib_streams(data: bytes) -> list[bytes]:
+    """Every zlib stream in `data`, in order. Raises if there are none.
 
     Streams are located by their zlib header rather than a fixed offset: the
     preamble ahead of the first one is variable-length, and two corpus files
     start at 0x20A rather than the usual 0x216.
     """
-    return b"".join(_zlib_streams(data))
-
-
-def _zlib_streams(data: bytes) -> list[bytes]:
-    """Every zlib stream in `data`, in order. Raises if there are none."""
     out: list[bytes] = []
     total = 0
     position = 0

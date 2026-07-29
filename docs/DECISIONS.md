@@ -307,3 +307,43 @@ See `docs/formats/transposition-octave.md` for the full evidence and for what wo
   a while — notes inside range go **82.0% → 94.4%**: baritone sax 7.3% → 100%, double bass
   69.8% → 99.7%, guitar 82.1% → 99.7%. Container octave-only differences **2,491 → 1**, and that
   one is a content difference between the files. The octave was never missing from a `.mus`.
+
+## 2026-07-29 — CORRECTED: a 2001–2005 `.mus` payload is four labelled pools, not one stream
+
+**What was recorded.** That the DCL era "packs every pool into one stream with no known
+delimiters", so `read_mus_others`, `read_mus_details` and `read_mus_entries` raised for those files
+by design. It appeared in three module docstrings, `docs/ARCHITECTURE.md` and the roadmap.
+
+**What is true.** The payload is a chain of four DCL records from `0x200` to the last byte of the
+file, each `[u16 kind][u32 length, header included][u32 checksum][DCL stream]`, with `kind` naming
+the pool — 15 others, 16 details, 17 entries, 18 text. All 139 corpus documents tile exactly. The
+DCL era **labels its pools**, which the zlib era does not.
+
+The old fixed offset `0x20A` is `0x200` plus one ten-byte header, which is why decoding there always
+worked. It returned the first pool of four — the `others` pool, about a quarter of the file — and
+reported success, so the payload sweep counted 139/139 as decoding while three quarters of every one
+of those files, including every note, went unread.
+
+**Two things this changes about the public API.**
+
+- `read_mus_payload` now returns the whole payload for a DCL-era file rather than its first pool. It
+  is the same function doing what its name always claimed; the number it returns is roughly 4× larger.
+- `read_mus_pools` is added and `read_mus_streams` kept as `[pool.data for pool in ...]`. A `MusPool`
+  carries the container's own `kind` and the document's `byte_order`, because both are facts the file
+  states and neither should be re-derived by guessing. `kind` is `None` for the zlib era, where the
+  container genuinely says nothing and a reader must walk a pool to know what it is.
+
+**Byte order is per document** — 102 little-endian (Windows), 37 big-endian (Mac) — and governs every
+field in every pool. It is read off the first record's kind, which is 15 exactly one way round, so
+the byte-order test and the "is there a container here" test are the same test.
+
+**What this does not do.** These files still do not build a `Score`. The `others`/`details` pools are
+a different record encoding from the 2011 era's — fixed 16-byte rows carrying ETF's two-character
+tags — and decoding the fields inside those rows is unstarted. Both walks are pinned as accepting
+0 of 139 so that a future change cannot start half-reading them silently. See
+`docs/formats/mus-dcl-container.md`.
+
+**The process lesson, and it is the same one as the codec false negatives.** "139/139 decode" was
+measured on the thing that was implemented, not on the thing that exists. A decoder that returns
+*something* for every file is not evidence that it returns *everything*; nothing checked the decoded
+size against the file, and a 4× shortfall went unnoticed for a week.
