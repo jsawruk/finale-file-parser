@@ -48,22 +48,16 @@ FRAMES_CHECKED_AGAINST_ENTRIES = 13322
 
 NOTE_VALUES = frozenset({64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048, 3072, 4096})
 
-# --- what is NOT solved, pinned so that progress is visible ---
-FRAMES_REFERENCED = 4711
+LAYERS = 4
+"""Frame slots per `GF` record, one per Finale layer, from the base."""
+
+FRAMES_REFERENCED = 13241
 FRAMES_TOTAL = 13710
-"""**The (staff, measure) -> frame link is incomplete.** A `GF` record's frame
-slots at +6 and +8 resolve to a real frame every time they are non-zero, but
-only 4,196 of 14,191 `GF` records carry one, and 8,999 frames are named by
-nothing at all -- real music that nothing found so far reaches.
+"""Frames a `GF` names, once the base is chosen by the staff-spec shape.
+Was 4,711 while the base was read as +6 for every document."""
 
-The control below is what makes this a finding rather than a bad metric: the
-same measurement on the 2011 cohort, whose pipeline works, comes out at 100%.
-
-Pinned as a floor: raise it when the link is found, and let it fail if a change
-ever *loses* frames."""
-
-GFHOLDS_WITH_A_FRAME = 4196
-GFHOLDS_TOTAL = 14191
+ENTRY_COVERAGE = 0.92
+"""Entries reachable through gfhold -> frame -> chain. Was 0.293."""
 
 
 def _mus_files() -> list[Path]:
@@ -86,6 +80,17 @@ def _u16(payload: bytes, offset: int, rows: MusRows) -> int:
 
 def _u32(payload: bytes, offset: int, rows: MusRows) -> int:
     return int.from_bytes(payload[offset : offset + 4], rows.byte_order)
+
+
+def _frame_base(rows: MusRows) -> int:
+    """Where a `GF` record's frame array starts.
+
+    The 2005 layout carries two more bytes ahead of it than the 2001 one, and
+    the staff spec's incidence count is what tells the eras apart -- three in a
+    2001 file, six in a 2005 one.
+    """
+    specs = [record for (tag, _), record in rows.others.items() if tag == "IS"]
+    return 4 if specs and specs[0].incidences == 3 else 6
 
 
 def test_every_dcl_document_reads_as_rows() -> None:
@@ -168,15 +173,20 @@ def test_a_frames_entry_numbers_are_real_entries() -> None:
     assert ordered / checked >= 0.97
 
 
-def test_a_gfholds_frame_slots_always_name_a_real_frame() -> None:
-    """+6 and +8 are layers 1 and 2, the same offsets the 2011 reader uses.
+def test_the_frame_slots_sit_at_a_base_the_staff_spec_shape_selects() -> None:
+    """A `GF` record holds a frame per layer, and where that array starts
+    depends on the era: **+4 in a 2001 file, +6 in a 2005 one**, told apart by
+    whether the staff spec is three incidences or six.
 
-    A caution for anyone re-deriving this: **+4 looks better than +6 in 116 of
-    the 139 documents**, and it is a coincidence. +4 is `clefPercent`, which is
-    75 in every corpus record, and 75 is a valid frame number in any document
-    with at least 75 frames -- so it "resolves" for every record in the big
-    documents and for none in the small ones. Judge an offset by whether it
-    resolves *when non-zero*, not by how often it resolves.
+    A correction, recorded because the wrong version shipped first: an earlier
+    revision of this file called +4 a coincidence, on the grounds that it is
+    `clefPercent` and always 75. It is 75 in only 5,205 of 14,191 records -- in
+    34 documents, all of them 2005-era. That conclusion came from generalising
+    one sampled document, and it cost the frame link a release.
+
+    What makes the rule more than a fit: choosing the base per document by
+    whichever reaches more entries picks exactly what the staff-spec shape
+    predicts, in 134 of 134 documents.
     """
     resolved = non_zero = 0
     for path in _by_era(old=True):
@@ -184,47 +194,86 @@ def test_a_gfholds_frame_slots_always_name_a_real_frame() -> None:
         frames = {cmper for tag, cmper in rows.others if tag == "FR"}
         if not frames:
             continue
+        base = _frame_base(rows)
         for (tag, _, _), record in rows.details.items():
             if tag != "GF":
                 continue
-            for offset in (6, 8):
-                frame = _u16(record.payload, offset, rows)
+            for layer in range(LAYERS):
+                frame = _u16(record.payload, base + 2 * layer, rows)
                 if frame:
                     non_zero += 1
                     resolved += frame in frames
     assert non_zero, "no frame references to check"
-    assert resolved == non_zero
+    assert resolved / non_zero >= 0.99
 
 
-def test_the_frame_link_is_still_incomplete() -> None:
-    """Pins the gap, so that closing it is visible and losing ground fails.
+def test_the_frame_link_reaches_almost_every_frame() -> None:
+    """Pins the link, which the previous release had at 34%.
 
-    This is the reason a 2001-2005 file still does not build a `Score`: most of
-    its music is in frames that nothing reaches.
+    Reading the frame array at the base the staff-spec shape selects takes
+    frames referenced from 4,711 to 13,241 of 13,322, and entries reached from
+    29.3% to 92.3%.
     """
-    referenced = total = with_frame = gfholds = 0
+    referenced = total = 0
     for path in _by_era(old=True):
         rows = read_mus_rows(path)
         frames = {cmper for tag, cmper in rows.others if tag == "FR"}
         total += len(frames)
+        base = _frame_base(rows)
         seen: set[int] = set()
         for (tag, _, _), record in rows.details.items():
             if tag != "GF":
                 continue
-            gfholds += 1
-            hit = False
-            for offset in (6, 8):
-                frame = _u16(record.payload, offset, rows)
+            for layer in range(LAYERS):
+                frame = _u16(record.payload, base + 2 * layer, rows)
                 if frame in frames:
                     seen.add(frame)
-                    hit = True
-            with_frame += hit
         referenced += len(seen)
     assert total == FRAMES_TOTAL
-    assert gfholds == GFHOLDS_TOTAL
     assert referenced >= FRAMES_REFERENCED, "frames were lost"
-    assert with_frame >= GFHOLDS_WITH_A_FRAME, "gfhold frames were lost"
-    assert referenced < total, "the link is solved -- update this test and the docs"
+
+
+def test_the_frame_chain_reaches_most_entries() -> None:
+    """Walking gfhold -> frame -> entry chain, how much music is reachable.
+
+    Not yet all of it: 5,435 entries in 56 documents are missed, and only 10 of
+    them start a frame nothing references -- so what is left is inside frames
+    that *are* referenced, and reads as a second voice hanging off the same
+    frame rather than a missing link. That is why this is a floor, not equality.
+    """
+    reached_total = entries_total = 0
+    for path in _by_era(old=True):
+        rows = read_mus_rows(path)
+        try:
+            records = read_mus_entry_records(path)
+        except CorruptScoreError:
+            continue
+        if not records:
+            continue
+        following = {int(r.attrs["entnum"]): int(r.attrs["next"]) for r in records}
+        specs = {cmper: record for (tag, cmper), record in rows.others.items() if tag == "FR"}
+        base = _frame_base(rows)
+        reached: set[int] = set()
+        for (tag, _, _), record in rows.details.items():
+            if tag != "GF":
+                continue
+            for layer in range(LAYERS):
+                spec = specs.get(_u16(record.payload, base + 2 * layer, rows))
+                if spec is None:
+                    continue
+                start = _u32(spec.payload, 0, rows)
+                end = _u32(spec.payload, 4, rows)
+                entry, steps = start, 0
+                while entry and entry in following and steps <= len(following):
+                    reached.add(entry)
+                    if entry == end:
+                        break
+                    entry = following[entry]
+                    steps += 1
+        reached_total += len(reached)
+        entries_total += len(following)
+    assert entries_total
+    assert reached_total / entries_total >= ENTRY_COVERAGE
 
 
 def test_the_same_measurement_is_complete_on_the_2011_cohort() -> None:
