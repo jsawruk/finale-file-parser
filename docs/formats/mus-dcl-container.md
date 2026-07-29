@@ -96,10 +96,50 @@ Three independent checks that the row framing is right:
   and 65534 is `OPTIONS_CMPER`, already known from the 2011 format;
 * the spec prints `^CL(0,0) 144 0 0 0`; the detail row `CL` at (0,0) holds 144 in 34 of 38.
 
-Decoding the fields inside those rows is the next piece of work and is not done. Until it is,
-`read_mus_others` and `read_mus_details` refuse a DCL-era pool outright — verified, 0 of 139
-accepted — so a 2001-2005 file still cannot be built into a `Score`. Refusing is the point: a walk
-that half-succeeded would hand `read_mus_document` a document made of fabricated records.
+`read_mus_rows(path)` reads them. `read_mus_others`/`read_mus_details` still refuse a DCL-era pool
+outright — verified, 0 of 139 accepted — because they implement the *other* encoding; refusing is
+the point, since a walk that half-succeeded would hand `read_mus_document` fabricated records.
+
+### What the rows say
+
+Established across all 139 documents:
+
+| record | key | fields | evidence |
+| --- | --- | --- | --- |
+| `MS` measure spec | measure number | `measpace, key, beats, divbeat, auxflag, meflag` | the spec's own `^MS(1) 600 0 4 1024 1 16`; 4,113 measures, every `beats` in 1–32 and every `divbeat` a note value; keyed 1..N with no gaps in 139/139 |
+| `IS` staff spec | staff number | 3 incidences in a 2001 file, 6 in a 2005 one; `botLines` at +16, `transposition`, `fullName` at +30, `abbrvName` at +32 | the spec's worked example matches a corpus row verbatim; `fullName` resolves to a text block for 284 of 571 staves |
+| `FR` frame | frame number | `startEntry` and `endEntry` as u32 at +0 and +4 | 99.1% of both are real entry numbers, over 13,322 frames |
+| `GF` frame hold | (staff, measure) | `clefPercent` at +4, frame per layer at +6 and +8 | every non-zero frame slot names a real frame, 4,785 of 4,785 |
+
+**`fullName` at +30 is worth pausing on.** That is the same offset the 2011-era investigation
+identified as the staff-name selector (`docs/formats/mus-staff-names.md`), and the spec confirms it
+independently. In 2001 files the value *is* the text-block number — 150 of 167 named staves resolve
+directly. In 2005 files 71 of 205 sit above the highest block in the document, which is the same
+signature as the unresolved 2011 case. So the indirection appears between the two, and the 2001
+files are the era where a `.mus` names its staves outright.
+
+### The link that is missing
+
+**A 2001-2005 file still does not build a `Score`**, and this is why: the (staff, measure) → frame
+link reaches only part of the music. Only **4,196 of 14,191 `GF` records carry a frame at all**, and
+**8,999 of 13,710 frames are named by nothing**. Walking `gfhold → frame → entry chain` reaches
+20,622 of 70,428 entries — 29%.
+
+The same measurement on the 2011 cohort, whose pipeline demonstrably works, returns **10,465 of
+10,465 frames referenced** and 99% of gfholds carrying a frame. That control is what makes this a
+finding rather than a bad metric, and it is pinned as a test.
+
+So either `GF` is not the only holder of that link, or it holds it somewhere else in the records
+where the frame slots are zero. Building a score on what is currently reachable would silently drop
+71% of the notes, which is worse than not building one.
+
+**A trap to record, because it cost real time.** Scanning for "which offset in `GF` resolves to a
+frame most often" says **+4 in 116 of the 139 documents** — and +4 is `clefPercent`, which is 75 in
+every corpus record. 75 is a valid frame number in any document with at least 75 frames, so it
+resolves for every record in the big documents and none in the small ones. The right question is
+whether an offset resolves *when it is non-zero*, not how often it resolves. This is the same shape
+as the reserved-staff and `textRepeatText` palettes: a high hit rate across documents that is really
+one constant meeting a large enough range.
 
 ## 5. The text pool (kind 18)
 

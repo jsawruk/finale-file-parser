@@ -76,6 +76,7 @@ from finale_file_parser.enigma.mus_payload import (
     read_mus_pools,
     read_mus_streams,
 )
+from finale_file_parser.enigma.mus_rows import MusRowRecord, MusRows, read_mus_rows
 from finale_file_parser.enigma.music import (
     Duration,
     Entry,
@@ -206,8 +207,11 @@ __all__ = [
     "read_mus_entry_records",
     "read_mus_others",
     "MusPool",
+    "MusRowRecord",
+    "MusRows",
     "read_mus_payload",
     "read_mus_pools",
+    "read_mus_rows",
     "read_mus_streams",
     "read_transposition",
     "verse_syllables",
