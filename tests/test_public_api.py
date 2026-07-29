@@ -140,6 +140,8 @@ EXPECTED_PUBLIC_NAMES = {
     "spell_pitch",
     "transpose_key",
     "transpose_pitch",
+    "transposition_residue",
+    "written_octave_correction",
 }
 
 

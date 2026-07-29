@@ -62,44 +62,64 @@ So a `.mus` records the residue and an unshifted `harm_lev`; a `.musx` records t
 a `harm_lev` shifted to match. **Neither needs an octave field, because each is internally
 consistent.** Finale reading a `.mus` has everything it requires.
 
-## 3. What that means for this project
+## 3. The fix
 
-Our `spell_pitch` takes the written octave from `harm_lev` and the written key's tonic, and never
-consults the transposition's octave count. That is correct for a `.mus`, where the count is zero by
-construction, and off by exactly the count for a `.musx`.
+`spell_pitch` took the written octave from `harm_lev` and the written key's tonic and never
+consulted the transposition. `spell_note` now adds `written_octave_correction(interval)` first —
+the octaves Finale folded into `harm_lev`, undone — **but only where the transposition has a
+non-octave residue.**
 
-Undoing the fold on the `.musx` side — spelling from `harm_lev − harm_lev_octave_shift(interval)` —
-reconciles the two containers almost completely:
+That gate is the whole finding. The two cases are stored differently:
 
-| | identical | octave-only difference | other |
+* **A transposition with a residue** (every ordinary transposing instrument) keeps the residue in
+  the staff record and the octaves in `harm_lev`. Undoing the fold gives the pitch the player reads.
+* **A whole-octave transposition** leaves the residue at zero and the key unchanged, so the staff is
+  recorded as though it did not transpose at all, with `harm_lev` already at the written octave.
+  There is nothing to undo, and undoing it moves the part an octave.
+
+## 4. How it was adjudicated
+
+Not against Finale. The `.musx` in this corpus were produced by Finale *from* the matching `.mus`,
+so the two are not independent witnesses and agreement between them proves only consistency.
+
+The interval values identify the instruments outright, and every one has a **published written
+range** — what a player reads, owing nothing to any file format:
+
+| interval | adjust | instrument | published written range |
 | --- | --- | --- | --- |
-| current model | 27,931 | **2,493** | 2 |
-| with the fold undone | **30,423** | **1** | 2 |
+| −7 | 0 | Xylophone | F4–C7 |
+| 1 | 2 | B♭ Trumpet | F♯3–D6 |
+| 4 | 1 | F Horn / English Horn | F3–C6 |
+| 5 | 3 | E♭ Alto Sax | B♭3–F♯6 |
+| 7 | 0 | Double Bass / Guitar | E2–B4 |
+| 8 | 2 | B♭ Tenor Sax / Bass Clarinet | B♭3–F♯6 |
+| 12 | 3 | E♭ Baritone Sax | B♭3–F♯6 |
 
-## 4. What is still unresolved
+Share of notes falling inside the instrument's published range, over 45,000 corpus notes on
+transposing staves:
 
-Reconciling the containers does not by itself say **which frame is the true written pitch**, and
-this is why no code changes here.
+| instrument | residue | before | after |
+| --- | --- | --- | --- |
+| E♭ baritone sax | 2 | **7.3%** | **100.0%** |
+| B♭ tenor sax | −1 | 37.9% | **89.0%** |
+| E♭ alto sax | 2 | 87.0% | **98.8%** |
+| double bass / guitar | **0** | 87.3% | 87.3% (untouched) |
+| xylophone | **0** | 100.0% | 100.0% (untouched) |
+| B♭ trumpet | −1 | 91.6% | 91.6% (no octave folded) |
+| F horn | −4 | 87.7% | 87.7% (no octave folded) |
+| **all transposing notes** | | **82.0%** | **91.6%** |
 
-The obvious external check is where notes land on the staff. It has a validated baseline:
-non-transposing staves sit at a median +2 to +3 semitones from the middle line, with only 4–7% more
-than an octave off-staff, using the same clefs (plain treble and bass — no transposing staff in the
-corpus uses an octave clef).
+Every instrument either improves or is untouched. The saxophone family is the sharpest check: alto,
+tenor and baritone all read the same written range — that is what the family is for — and before the
+fix they spelled an octave apart from each other.
 
-Against that baseline, four candidate models were tried: the current one, the fold undone, spelling
-anchored on the concert key's tonic, and both. **None wins.** The fold-undone model fits intervals
-−7, 5 and 7; the current model fits 4 and 8; the concert-anchored model fits 1 and 12.
+## 5. What is still lost
 
-And the baseline cannot settle it, because a transposing instrument has its own tessitura — a horn
-in F genuinely sits low in the treble staff — so "distance from the middle line" is not a fair
-comparison for exactly the staves in question.
+The `.mus`/`.musx` octave-only differences fall from **2,491 to 845**, and **every one that remains
+sits on a whole-octave transposition** (interval 7 — double basses and guitars).
 
-## What would settle it
-
-A score whose correct written pitches are known independently: a public-domain edition of a
-transposing part, entered in Finale and saved in both formats. The corpus cannot supply it, because
-every `.musx` here was produced by Finale from the matching `.mus`, so the two are not independent
-witnesses.
-
-Until then the reconciliation above is a strong result about the **relationship** between the
-containers and a conjecture about the absolute answer.
+Those are the one case a `.mus` genuinely cannot recover, and now for a precise reason: a
+whole-octave transposition leaves the residue at zero and the key unchanged, so the staff is
+recorded as though it did not transpose at all. Nothing in the file distinguishes a double bass
+written at sounding pitch from a non-transposing staff. That the remainder is exactly the residue-0
+set is the check that the correction is the right shape rather than a fitted constant.
