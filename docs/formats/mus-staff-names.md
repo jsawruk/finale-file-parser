@@ -87,6 +87,23 @@ articulation-definition table and matching by coincidence.
 So one anchor per document would resolve every name in it. That is the whole of the remaining gap,
 and it is a much smaller one than "there is a lookup record nobody can find".
 
+**Searched for, and not found: a record holding the base.** With the anchors above the target is
+exact — for a document with an anchor, the base *is* `id - block` — so a candidate can be required to
+equal it in **every** anchored document rather than merely correlate. 17 documents have an anchor
+with a single consistent delta. **No `others` record at any offset up to +80 matches all 17**; the
+best explains 4. Nor is the delta a constant: it takes values −28, 61, 69, 70 and 71 across those
+documents.
+
+The 25 anchors themselves are sound — each resolves to a plausible name in its own `.mus`
+(`Voice`, `Percussion`, `Soprano-Alto`, `1st Trumpet`, `Trombone`), which is what rules out the
+worry that requiring only "the id is *a* textBlock cmper" would manufacture anchors that merely
+point somewhere.
+
+Worth recording for whoever picks this up: tag 183 at +0 is the *shape* a base would have — one value
+per document, constant while the block varies — and §3's original table dismissed it for exactly that
+property, on the assumption the record should hold the block number. It is not the base either
+(4 of 17), but the reasoning that dismissed it was looking for the wrong thing.
+
 So there is a genuine lookup record, equivalent to the `.musx`'s `textBlock[cmper] -> textID`, and it
 has not been located. Ruled out so far, each against the 45 name/block pairs the corpus yields:
 

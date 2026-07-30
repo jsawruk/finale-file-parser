@@ -124,10 +124,15 @@ UNTRANSLATED = (
     "against, and this reader does not guess at one. A 2001-2005 document whose "
     "staves are laid out out of order therefore still comes out numerically.",
     "Text repeats (Fine, D.C. al Coda): the .musx reading is implemented, the "
-    ".mus one is not. Exactly one paired document carries a text repeat, with "
-    "two assignments, and a key set that small matches several tags by chance -- "
-    "so no .mus tag can be identified from this corpus. A .mus therefore exports "
-    "no markings. See enigma.jumps.",
+    ".mus one is not, and the corpus offers NO evidence to identify the tag "
+    "from -- not a little, none. This entry used to say one paired document "
+    "carries a text repeat, with two assignments; that document was a "
+    "MISPAIRING. Ten corpus .musx files carry text repeats (17 assignments) and "
+    "three of their filename stems also have a .mus, but not one of those .musx "
+    "holds the same music as its .mus: the entry counts are 172 vs 189, 192 vs "
+    "89, and 76 vs 719/294/165. They are different arrangements that share a "
+    "name. So a .mus exports no markings, and identifying the tag needs a "
+    "document this corpus does not contain. See enigma.jumps.",
     "Repeat jumps: repeatBack's target/trigger/action, and textRepeatAssign's "
     "action/target, describe where a repeat sends the player rather than what is "
     "printed. Neither container reads them, so both are equally silent -- a "
