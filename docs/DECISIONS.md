@@ -380,3 +380,43 @@ every aggregate total stayed green, because a document contributing nothing chan
 per-document assertion caught it — the same trap as the blank scores three days ago, in a third
 costume. The rule that keeps catching it: **a sweep that only adds things up cannot see a document
 that adds up to nothing.**
+
+## 2026-07-29 — RESOLVED: a 2011 `.mus` staff layout order is others tag 159
+
+A `.musx` lists its staves in the order the score lays them out, which is not always ascending.
+`enigma.groups.staff_order` reads that from `instUsed`; the `.mus` reader had no equivalent and fell
+back to numeric order. Both this file's predecessor entries and the code itself recorded the reason as
+**unidentifiable**: "every paired document numbers its slots and staves alike, so no pair
+distinguishes a right guess from a wrong one."
+
+That was false, and worth understanding why it was believed. Two paired documents *do* lay five
+staves out as 1 2 5 3 4 and 5 1 2 3 4. They were reaching no paired sweep, because pairing chose a
+`.musx` for a stem by directory-walk order and the candidate it happened to pick for those two
+failed the same-music filter. **The corpus had the evidence the whole time; the test harness was
+discarding it.** Fixing the pairing rule surfaced it, and identifying the record took one afternoon
+after that.
+
+**The record**: others tag 159, keyed by instrument list (`cmper` 0 is the score's, exactly as a
+`.musx` keys its own). The payload is an array of **24-byte slots, one per staff**, each opening with
+the staff number as a u16.
+
+**Why 24 and not a coincidence.** In all **95** paired documents the record's length is exactly
+`24 x` the staff count, and the u16 at each slot start reproduces the `.musx` layout order in all 95
+— including both permuted documents. Length agreeing with staff count in every document is the part
+a wrong tag would not survive; a five-element sequence that merely fits is easy to find, and looking
+for one first produced a page of coincidences. The other 22 bytes of a slot are not decoded, because
+the layout order does not need them.
+
+**Confirmation from the other direction**: once the order is read, those two documents agree with
+their `.musx` on structure, measure attributes, rhythm and tuplets exactly, having previously
+differed only in part sequence.
+
+**Not extended to 2001–2005.** That era carries an ETF `^Iu` row which is very likely the same
+record, but the whole DCL cohort has no paired `.musx` anywhere, so there is nothing to check a slot
+layout against. It keeps the numeric fallback, and `UNTRANSLATED` says so.
+
+**The process lesson, and it is a new one.** A gap can be documented as unresolvable when what is
+actually true is that the test harness cannot see the evidence. The claim "no pair distinguishes a
+right guess" was a statement about the corpus, but it was only ever measured through the pairing
+code — and that code was silently dropping the distinguishing pairs. **Before recording that
+evidence does not exist, check that the thing which looked for it could have found it.**

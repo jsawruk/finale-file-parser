@@ -26,6 +26,7 @@ Translated:
 | options | `clefOptions` (109) | the clef table: `adjust`, `clefChar`, `clefYDisp`, `shapeID` |
 | details | `tupletDef` (1072) | `symbolicNum`, `symbolicDur`, `refNum`, `refDur` |
 | others | `staffSpec` (231) | `transposition.keysig.adjust` only — see below |
+| others | `instUsed` (159) | `inst` per 24-byte slot — the staff layout order |
 | details | `lyrDataVerse` (1108) | `lyricNumber`, `syll`, `wext`, per 20-byte group |
 | details | `articAssign` (1009) | `articDef` |
 | others | `articDef` (121) | `charMain` — at +0 (2011) or +2 (2012) |
@@ -71,6 +72,7 @@ from finale_file_parser.enigma.mus_others import (
     TAG_ARTIC_DEF,
     TAG_CLEF_OPTIONS,
     TAG_FRAME_SPEC,
+    TAG_INST_USED,
     TAG_MEAS_SPEC,
     TAG_REPEAT_BACK,
     TAG_REPEAT_ENDING_START,
@@ -111,15 +113,13 @@ UNTRANSLATED = (
     "the same missing chain as staffSpec part names. Groups therefore come out "
     "unnamed rather than labelled with a raw block number; 4 of the 14 paired "
     "documents with groups differ from their .musx in nothing else.",
-    "Staff layout order (instUsed): a .musx lists its staves in the order the "
-    "score lays them out, which is not always ascending. The .mus tag for that "
-    "list is unidentified, so staves come out in numeric order. This entry used "
-    "to add that no corpus pair could separate a right guess from a wrong one; "
-    "that is no longer true. Two paired documents lay five identical parts out "
-    "as P1 P2 P5 P3 P4 and P5 P1 P2 P3 P4, and they were invisible only because "
-    "stem pairing picked a different .musx for their stem. They are pinned as "
-    "PART_ORDER in the .mus-to-IR sweep and are the oracle to identify the tag "
-    "against. Staff groups are read through this order; see enigma.groups.",
+    "Staff layout order in a 2001-2005 .mus: the 2011 tag IS identified (159, "
+    "see mus_others.TAG_INST_USED) and read, so a 2011 .mus now lays its staves "
+    "out in score order rather than numeric order. The DCL era carries an ETF "
+    "^Iu row, which is very likely the same record, but that cohort has no "
+    "paired .musx anywhere -- so there is nothing to check a slot layout "
+    "against, and this reader does not guess at one. A 2001-2005 document whose "
+    "staves are laid out out of order therefore still comes out numerically.",
     "Text repeats (Fine, D.C. al Coda): the .musx reading is implemented, the "
     ".mus one is not. Exactly one paired document carries a text repeat, with "
     "two assignments, and a key set that small matches several tags by chance -- "
@@ -592,6 +592,16 @@ def _clef_def(entry: bytes, stride: int) -> Record:
     return Record(tag="clefDef", attrs={}, text="", fields=fields)
 
 
+_INST_SLOT = 24
+"""Bytes per `instUsed` slot, one slot per staff, staff number in the first u16.
+
+The slot size is not inferred from one document: the record's length is exactly
+`24 x` the staff count in all 95 paired documents, which is what distinguishes
+this record from a sequence that merely happens to fit. The remaining 22 bytes of
+a slot are not decoded. See `mus_others.TAG_INST_USED`.
+"""
+
+
 def _others_records(records: tuple[MusOther, ...]) -> list[Record]:
     out: list[Record] = []
     for record in records:
@@ -639,6 +649,19 @@ def _others_records(records: tuple[MusOther, ...]) -> list[Record]:
             # The bracket's geometry is not read; its presence is what says an
             # ending opens here, and `measSpec.barEnding` says where it closes.
             out.append(Record(tag="repeatEndingStart", attrs=attrs, text="", fields={}))
+        elif record.tag == TAG_INST_USED and len(record.payload) >= _INST_SLOT:
+            # One Record per slot, keyed by `inci`, because that is the shape
+            # `groups.staff_order` reads -- and the shape a `.musx` writes.
+            for inci in range(len(record.payload) // _INST_SLOT):
+                staff = _u16(record.payload, inci * _INST_SLOT)
+                out.append(
+                    Record(
+                        tag="instUsed",
+                        attrs={**attrs, "inci": str(inci)},
+                        text="",
+                        fields={"inst": str(staff)},
+                    )
+                )
         elif record.tag == TAG_REPEAT_PASS_LIST and len(record.payload) >= 2:
             acts = _pass_list(record.payload)
             if acts:

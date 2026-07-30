@@ -28,14 +28,14 @@ CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
-COMPARED = 89
+COMPARED = 91
 """Same-content pairs whose `.mus` builds a Score.
 
-Was 73, then 76, then 81 as the two pool-walk fixes landed, and now 89 because
-pairing stopped guessing which `.musx` a stem meant. The eight added contribute
-no structural, attribute, rhythm or tuplet difference of any kind -- more oracle
-at the same fidelity, which is the useful part. Two more pair correctly but are
-held back by `PART_ORDER`; they are counted there, not lost.
+Was 73, then 76, then 81 as the two pool-walk fixes landed, and now 91: pairing
+stopped guessing which `.musx` a stem meant, and the staff layout order those
+last two disagreed about is now read rather than assumed. All ten added
+contribute no structural, attribute, rhythm or tuplet difference of any kind --
+more oracle at the same fidelity, which is the useful part.
 """
 
 UNBUILDABLE = 4
@@ -46,20 +46,23 @@ of failure, counted, not four separate mysteries. Two are newly paired documents
 that were never reaching this sweep to fail in it.
 """
 
-PART_ORDER = 2
-"""Pairs holding the same parts in a different order.
+PART_ORDER = 0
+"""Pairs holding the same parts in a different order. **Zero, and that is new.**
 
-**The oracle for a gap that was documented as having none.** A `.musx` lists its
-staves in score-layout order; the `.mus` reader emits them in numeric order, and
-`mus_document.UNTRANSLATED` records that the tag naming the layout is
-unidentified -- adding that "every paired document numbers its slots and staves
-alike, so no pair separates a right guess from a wrong one".
+A `.musx` lists its staves in score-layout order. The `.mus` reader used to emit
+them numerically because the record naming the layout was unidentified, and this
+sweep pinned the two documents where those differ -- five identical parts laid
+out 1 2 5 3 4 and 5 1 2 3 4 -- as the oracle to identify it against.
 
-That was true only because the two stems that *do* separate them paired, by
-directory-walk accident, with a `.musx` that never reached this sweep. Both show
-the same thing: five identical parts, resequenced (`P1 P2 P5 P3 P4` and
-`P5 P1 P2 P3 P4`). Pinned at 2 so the day the layout tag is identified, this
-goes to 0 and says so.
+It is identified: others tag 159, one 24-byte slot per staff (see
+`mus_others.TAG_INST_USED`). Both documents now agree with their `.musx`, and
+they contribute no other difference of any kind, which is the useful part of the
+confirmation.
+
+Kept pinned at 0 rather than deleted. Everything downstream compares parts by
+index, so a regression here would not fail loudly -- it would compare one
+instrument against another. It once produced 435 spurious beam differences that
+way.
 """
 
 TUPLET_EVENTS = 0
@@ -98,7 +101,7 @@ OTHER_PITCHES = 3
 notes in the two containers. All three are `.mus`/`.musx` content differences
 already pinned by the entry-pool sweep, not decode errors."""
 
-CLEF_MEASURES = 16
+CLEF_MEASURES = 20
 """Measures whose clef differs, down from 327 before the clef table was decoded
 and from 22 before clefs were carried across a silence.
 

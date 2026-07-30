@@ -49,12 +49,26 @@ this counts what is understood rather than what is present -- the corpus assigns
 29 distinct characters.
 """
 
-PAIRED_WITH_ARTICULATIONS = 74
+PAIRED_WITH_ARTICULATIONS = 75
+ARTICULATION_DIFFERENCES = 7
+"""Events whose articulations differ, all in one pair.
+
+**Not a reader gap: the marks are not in the `.mus`.** The `.musx` assigns its
+accent 12 times and the `.mus` 5, on entries that carry a staccato in both, and
+the two files' `articDef` tables are identical. What rules out a dropped record is
+`test_the_pool_tiles_its_stream_exactly`: the details walk accounts for every byte
+of the pool, so 174 assignments read is 174 assignments present.
+
+The two are the same music from different collections -- a later edition with
+seven more accents -- which the entry-count pairing filter cannot separate from an
+identical save. Pinned in the same spirit as `OTHER_PITCHES`: a content
+difference between two files, counted rather than explained away.
+"""
 
 BEAM_DOCUMENTS = 366
 BEAMS = 84593
 
-PAIRED_WITH_BEAMS = 88
+PAIRED_WITH_BEAMS = 90
 BEAM_EVENT_DIFFERENCES = 2
 """Two events whose beams differ between containers.
 
@@ -82,8 +96,8 @@ brackets and 1 unmapped -- section brackets over staves the numeric order split
 apart. No brace was ever affected, which fits: all 132 span two adjacent staves
 of one instrument."""
 
-PAIRED_WITH_GROUPS = 20
-GROUP_NAME_ONLY_DIFFERENCES = 4
+PAIRED_WITH_GROUPS = 22
+GROUP_NAME_ONLY_DIFFERENCES = 6
 """Pairs differing from their `.musx` in the group name and nothing else.
 
 A `.mus` recovers the name's text-block id but carries no text blocks to
@@ -109,7 +123,7 @@ on bars no part reached. Every measure now belongs to every part, so a barline
 always has somewhere to be drawn.
 """
 
-PAIRED_WITH_REPEATS = 22
+PAIRED_WITH_REPEATS = 24
 """Same-content pairs where either container carries a repeat."""
 
 FINGERING_DOCUMENTS = 18
@@ -136,9 +150,9 @@ BARLINE_STYLES = {"light-light": 216, "light-heavy": 110}
 `normal` is not counted: it is the default barline and needs no element.
 """
 
-PAIRED_WITH_BARLINES = 8
+PAIRED_WITH_BARLINES = 9
 """Same-content pairs where either container styles a barline. Still small, and
-still why a `.mus` refuses to guess at `final`: none of the eight carries one."""
+still why a `.mus` refuses to guess at `final`: none of the nine carries one."""
 
 JUMP_DOCUMENTS = 3
 JUMP_MARKINGS = 6
@@ -162,10 +176,10 @@ RESERVED_STAFF_PARTS = 0
 none lays out. Must stay zero: it was one per document until it was excluded,
 and nothing else in the corpus is absent from the instrument list."""
 
-PAIRED_WITH_LYRICS = 13
+PAIRED_WITH_LYRICS = 15
 """Same-content pairs where the `.musx` carries lyrics, so the two containers
 can be compared. The only oracle for the `.mus` side, and it was 6 until pairing
-stopped guessing which `.musx` a stem meant -- seven of these thirteen were being
+stopped guessing which `.musx` a stem meant -- nine of these fifteen were being
 discarded because an arbitrary same-stem candidate failed the same-music check
 while a sibling would have passed. The comparison below is unchanged and still
 finds no difference, which is what makes the extra coverage worth having."""
@@ -605,7 +619,7 @@ def test_both_containers_produce_the_same_articulations(
     Identical output is what shows the repeat is handled."""
     documents, identical, different = articulation_agreement
     assert documents == PAIRED_WITH_ARTICULATIONS
-    assert different == 0
+    assert different == ARTICULATION_DIFFERENCES
     assert identical > 16_000
 
 

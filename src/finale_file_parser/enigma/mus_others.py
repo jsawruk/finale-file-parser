@@ -45,6 +45,7 @@ __all__ = [
     "OPTIONS_CMPER",
     "TAG_ARTIC_DEF",
     "TAG_CLEF_OPTIONS",
+    "TAG_INST_USED",
     "TAG_FRAME_SPEC",
     "TAG_MEAS_SPEC",
     "TAG_STAFF_SPEC",
@@ -94,6 +95,26 @@ TAG_REPEAT_PASS_LIST = 206
 because the two records always share a measure; the payloads separate them. 206
 is 12 bytes and opens with the pass number itself (1 for a first ending, 2 for a
 second, 31 of 31 paired records), while 204 is 24 bytes of bracket geometry."""
+
+TAG_INST_USED = 159
+"""`instUsed` — the staves the score lays out, in layout order.
+
+One record per instrument list, keyed by list: `cmper` 0 is the score's, and the
+`.musx` keys its own `instUsed` the same way. The payload is an **array of
+24-byte slots, one per staff**, each opening with the staff number.
+
+Identified against the paired corpus, and the length is what makes it more than a
+sequence that happens to fit: in **95 of 95 paired documents** the record is
+exactly `24 x` the number of staves long, and the u16 at each slot's start
+reproduces the `.musx` layout order. Two of those documents lay five staves out
+as 1 2 5 3 4 and 5 1 2 3 4, so the order is genuinely being read rather than
+re-derived by sorting -- and those two are the only reason this could be
+identified at all. They reached a paired sweep for the first time when oracle
+pairing stopped choosing a `.musx` by directory-walk order.
+
+What the other 22 bytes of a slot hold is not decoded; only the staff number is
+read, because that is all the layout order needs.
+"""
 
 TAG_CLEF_OPTIONS = 109
 """The clef definition table — confirmed by payload.
