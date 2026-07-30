@@ -104,7 +104,8 @@ limit is verified by mutation, because no real corpus archive trips one.
       and `gfhold.clefID`.
 - [x] **Layers** — `EntryLocation.layer`. Each layer fills its measure independently, so duration sums
       must group by (staff, measure, layer).
-- [ ] The remaining detail records (beams, stems, articulations, lyrics).
+- [x] The remaining detail records — beams, articulations and lyrics read in both containers.
+      Stems are not read: the IR does not model them, and no container's reading is blocked on it.
 
 ## MusicXML exporter — slice 1 done
 
@@ -161,38 +162,53 @@ limit is verified by mutation, because no real corpus archive trips one.
 ## Later
 
 <!-- Things deliberately deferred. Keep them out of Phase 1 so the MVP stays small. -->
-- [ ] Notes, pitches, and rhythms as a Python data model.
-- [ ] Staves, measures, and score structure.
+- [x] Notes, pitches, and rhythms as a Python data model — `enigma/music.py` and `ir.py`.
+- [x] Staves, measures, and score structure — `ir.py`, built by `enigma/to_ir.py`.
 - [x] `.mus` header provenance stamps (created/modified with date, application, platform).
 - [x] Unify `.musx` provenance onto `ProvenanceStamp` (see `docs/DECISIONS.md`). `MusxDetail.platform`
       was dropped in favour of a platform on each stamp, matching `.mus`.
-- [ ] `.mus` internal record pools — part done. The payload decodes (both eras), the entry pool
-      reads, and the **`others` pool now reads generically**: its records are self-identifying
-      (`tag`, `cmper`, `part`, `length`), so the whole pool walks from byte zero without an oracle
-      — see `enigma/mus_others.py`. The **`details` pool reads the same way** (one extra key
-      field; `enigma/mus_details.py`), and `gfhold` is payload-confirmed, which is the link from a
-      (staff, measure) to its entry frames. Remaining: the per-tag payload layouts, and the seven
-      corpus documents whose walk halts inside one unrecognised record type.
-- [ ] **2001–2005 (`DCL`-era) `.mus`** — part done, and this is 139 of the 238 `.mus` corpus.
-      The container reads: four labelled pools per file, tiling exactly, 139/139, with the byte
-      order (102 little-endian, 37 big-endian) taken from the file. The **entry pool reads** —
-      70,428 entries over 137 documents, same 38-byte slots as the 2011 era. Remaining: the
-      `others`/`details` rows, which `read_mus_rows` now reads for all 139 — fixed 16-byte rows
-      carrying ETF's two-character tags. `MS` (measure spec), `IS` (staff spec, including
-      `fullName`), `FR` (frame) and `GF` are all confirmed, **including the frame link**: a `GF`
-      record's frame array starts at +4 in a 2001 file and +6 in a 2005 one, told apart by the staff
-      spec's incidence count. That takes frames referenced to 13,241 of 13,322 and entries reached
-      to 92.3%. `read_mus_document` now takes the row path, so **110 of the 139 build a `Score`**
-      (297 parts, 8,938 measures, 49,693 pitches) and 15 more `.mus` documents export. Remaining:
-      the 5,435 entries in 56 documents that sit inside referenced frames and read as a second
-      voice, and the unidentified leading block that pushes 122 frames' entry pair from +0 to +12. This cohort has **no paired `.musx`**, so the evidence has to be the ETF spec,
-      internal cross-references, and a control against the 2011 cohort. See
+- [ ] **2011-era `.mus` internal record pools** — mostly done. The payload decodes, the entry pool
+      reads, and both the `others` and `details` pools walk generically from byte zero: their
+      records are self-identifying (`tag`, `cmper`, `part`, `length`), so no oracle is needed. See
+      `enigma/mus_others.py` and `enigma/mus_details.py`.
+      **93 of the 99 build a `Score`.** Of the 6 that do not, 4 name an entry the pool does not hold
+      — a dangling reference rather than a decode gap. Remaining: the per-tag payload layouts still
+      listed in `mus_document.UNTRANSLATED`.
+- [x] **2001–2005 (`DCL`-era) `.mus`** — **done for reading**, and this is 139 of the 238 `.mus`
+      corpus. Four labelled pools per file, tiling exactly, 139/139, byte order (102 little-endian,
+      37 big-endian) taken from the file. The entry pool reads — 71,801 entries over all 139
+      documents. The `others`/`details` rows read as fixed 16-byte rows carrying ETF's
+      two-character tags; `MS`, `IS`, `FR` and `GF` are payload-confirmed, including the frame link
+      (a `GF` record's frame array starts at +4 in a 2001 file and +6 in a 2005 one, told apart by
+      the staff spec's incidence count) and all four layer slots.
+      **131 of the 139 build a `Score`** — 410 parts, 14,107 measures, 68,530 pitches — and export.
+
+      **The reader has no unexplained readings left.** Two guesses became rules: an entry the frames
+      never reach is dead pool space and is discarded (88% of them provably duplicate live music),
+      and a frame's entry pair sits in its last incidence, the leading one carrying a `startTime`.
+
+      Of the 8 that do not build, **6 are correctly refused** — blank scores, carrying staves and
+      measures but no music the frames reach. The other two are one entry two frames both claim, and
+      one `gfhold` placing entries in a measure that defines no key.
+
+      This cohort has **no paired `.musx`**, so the evidence is the ETF spec, internal
+      cross-references, and a control against the 2011 cohort. See
       `docs/formats/mus-dcl-container.md`.
-- [ ] **Durations above a whole note.** `duration_from_edu` caps at 4096 EDU, so it rejects a breve
-      (8192) and, more awkwardly, a **dotted whole** (6144) — ordinary notation. Two DCL-era
-      documents fail on it today; a `.musx` carrying one would fail identically. Needs `NoteValue`,
-      the range check and the MusicXML `<type>` map together.
-- [ ] MusicXML exporter over the IR (DECIDED — see DECISIONS.md).
+- [ ] **Staff layout order in a DCL `.mus`.** Solved for 2011 (others tag 159, one 24-byte slot per
+      staff). The DCL era carries an ETF `^Iu` row that is very likely the same record, but with no
+      paired `.musx` anywhere in the cohort there is nothing to check a slot layout against, so it
+      keeps the numeric fallback.
+- [x] **Durations above a whole note.** A breve (8192 EDU) is a note value now, and the range check
+      bounds the *base* rather than the total — which is what had been rejecting a **dotted whole**
+      (6144), ordinary notation. `NoteValue`, the range check and the MusicXML `<type>` map moved
+      together. A longa is deliberately still refused: no corpus document carries one.
+- [x] MusicXML exporter over the IR — shipped and W3C schema-validated across all 398 `.musx`
+      documents and 224 `.mus`. See `enigma/to_ir.py` and `export/musicxml.py`.
 - [ ] Desktop frontend: hex viewer with decoded structure values (DECIDED — framework still open).
 - [ ] Desktop frontend: notation rendering.
 - [ ] CLI for dumping file structure.
+- [ ] **`.musx` `tupletDef` without `symbolicNum`.** Three corpus `.musx` documents fail to build on
+      it — the only remaining `.musx` failures, and the largest single unread thing on that side.
+- [ ] **Staff and group names from a `.mus`.** The names are in the file and the id that selects one
+      is known; what is missing is the per-document base that turns that id into a text block. One
+      anchor per document would resolve every name in it. See `docs/formats/mus-staff-names.md`.
