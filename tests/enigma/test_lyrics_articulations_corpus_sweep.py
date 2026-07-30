@@ -40,8 +40,8 @@ A count rather than a ratio: it measures the exporter, not what fraction of the
 corpus happens to be vocal music.
 """
 
-ARTICULATION_DOCUMENTS = 273
-ARTICULATIONS = 22821
+ARTICULATION_DOCUMENTS = 276
+ARTICULATIONS = 26301
 """Articulations exported across the corpus.
 
 Only the five characters `enigma.articulations` has evidence for are emitted, so
@@ -65,8 +65,8 @@ identical save. Pinned in the same spirit as `OTHER_PITCHES`: a content
 difference between two files, counted rather than explained away.
 """
 
-BEAM_DOCUMENTS = 366
-BEAMS = 84593
+BEAM_DOCUMENTS = 369
+BEAMS = 90824
 
 PAIRED_WITH_BEAMS = 90
 BEAM_EVENT_DIFFERENCES = 2
@@ -77,8 +77,8 @@ revision the entry-pool sweep already pins -- and a bit that opens a group
 changes the beams of the note on each side of the break.
 """
 
-GROUP_DOCUMENTS = 155
-GROUPS = 209
+GROUP_DOCUMENTS = 158
+GROUPS = 230
 """Staff groups reaching the IR -- every one of the 209 in the pool.
 
 It was 201 while parts were ordered by staff number, which left 8 groups
@@ -87,14 +87,17 @@ layout makes all of them contiguous. The equality with the pool count is also
 the check that no part-variant record is counted twice.
 """
 
-GROUP_SYMBOLS = {"brace": 129, "bracket": 72, None: 8}
+GROUP_SYMBOLS = {"brace": 132, "bracket": 78, None: 20}
 """Only bracket ids with evidence get a symbol; id 8's groups are emitted
 without one rather than guessed at.
 
 The 8 groups recovered by ordering parts along the score's staff layout are 7
 brackets and 1 unmapped -- section brackets over staves the numeric order split
-apart. No brace was ever affected, which fits: all 132 span two adjacent staves
-of one instrument."""
+apart. No brace was ever affected, which fits: a brace spans two adjacent staves
+of one instrument.
+
+Rose again when three documents that had never built started to: see
+`enigma.tuplet.tuplets_by_entry`."""
 
 PAIRED_WITH_GROUPS = 22
 GROUP_NAME_ONLY_DIFFERENCES = 6
@@ -143,8 +146,8 @@ document verifies it**: six pairs carry a fingering in the `.musx`, four have a
 is the field -- `articDef.charMain` agrees across 72 pairs -- not these values.
 """
 
-BARLINE_DOCUMENTS = 89
-BARLINE_STYLES = {"light-light": 216, "light-heavy": 110}
+BARLINE_DOCUMENTS = 92
+BARLINE_STYLES = {"light-light": 228, "light-heavy": 110}
 """Double and final bars exported, counted per measure.
 
 `normal` is not counted: it is the default barline and needs no element.
@@ -164,7 +167,7 @@ glyph rather than words. What is left is "Fine" and "D.C. al Coda". The palette
 every document carries is deliberately not counted -- see `enigma.jumps`.
 """
 
-MEASURE_RESTS = 6362
+MEASURE_RESTS = 7013
 """Bars a part rests through, across the corpus.
 
 They were absent entirely until parts were given every measure: 420 of 731

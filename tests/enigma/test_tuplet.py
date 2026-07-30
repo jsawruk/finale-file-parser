@@ -131,3 +131,43 @@ def test_grace_notes_do_not_consume_a_tuplet_span() -> None:
     got = sounded_durations(chain, {2: (triplet(),)})
     assert got[1] == 0
     assert got[2] == got[3] == got[4] == Fraction(2 * EIGHTH, 3)
+
+
+def test_a_linked_part_tuplet_override_is_not_read_as_a_tuplet() -> None:
+    """A part variant carries only what it overrides.
+
+    All 12 in the corpus are `shared="true"` and hold bracket-hook geometry and
+    nothing else -- no `symbolicNum`, because the score record has it. Reading one
+    as a tuplet definition raised, which cost three documents; reading one that
+    *did* carry a ratio would be worse, since an entry's tuplets are a tuple and
+    the override would arrive as a second, nested tuplet.
+    """
+    from finale_file_parser.enigma.document import DetailsPool, EnigmaDocument, Pool, Record
+    from finale_file_parser.enigma.tuplet import tuplets_by_entry
+
+    score = Record(
+        tag="tupletDef",
+        attrs={"entnum": "1", "inci": "0"},
+        text="",
+        fields={"symbolicNum": "3", "symbolicDur": "512", "refNum": "2", "refDur": "512"},
+    )
+    override = Record(
+        tag="tupletDef",
+        attrs={"entnum": "1", "inci": "0", "part": "2", "shared": "true"},
+        text="",
+        fields={"leftHookLen": "-18", "rightHookLen": "-18"},
+    )
+    empty: tuple[Record, ...] = ()
+    document = EnigmaDocument(
+        version="test",
+        header=Pool(records=empty),
+        mappings=Pool(records=empty),
+        options=Pool(records=empty),  # type: ignore[arg-type]
+        others=Pool(records=empty),  # type: ignore[arg-type]
+        details=DetailsPool(records=(score, override)),
+        entries=Pool(records=empty),  # type: ignore[arg-type]
+        texts=Pool(records=empty),  # type: ignore[arg-type]
+    )
+    by_entry = tuplets_by_entry(document)
+    assert len(by_entry[1]) == 1
+    assert by_entry[1][0].symbolic_number == 3

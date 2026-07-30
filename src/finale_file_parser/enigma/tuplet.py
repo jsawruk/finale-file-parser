@@ -130,10 +130,20 @@ def tuplets_by_entry(document: EnigmaDocument) -> dict[int, tuple[Tuplet, ...]]:
 
     An entry can start more than one (nested tuplets), which is why the value is a
     tuple rather than a single tuplet.
+
+    **Score records only.** A linked part can override a tuplet, and what it
+    stores is only what it overrides: all 12 in the corpus are `shared="true"`
+    and carry bracket-hook geometry and nothing else -- no ratio at all, because
+    the score record already has it. Reading one as a definition raised on the
+    missing `symbolicNum` and cost three documents. Reading one that *did* carry
+    a ratio would be the worse failure: an entry's tuplets are a tuple, so the
+    override would arrive as a second, nested tuplet and silently rescale the
+    music. Every other pool reader in this package filters part variants the same
+    way, and this one simply did not.
     """
     out: dict[int, list[Tuplet]] = {}
     for record in document.details.records:
-        if record.tag != _TUPLET_TAG:
+        if record.tag != _TUPLET_TAG or "part" in record.attrs:
             continue
         raw = record.attrs.get("entnum")
         if raw is None:
