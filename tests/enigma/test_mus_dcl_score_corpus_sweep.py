@@ -28,13 +28,13 @@ pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not pr
 LAST_DCL_YEAR = 2005
 EXPECTED_DOCUMENTS = 139
 
-EXPECTED_SCORES = 129
+EXPECTED_SCORES = 131
 """Documents that build. Before this reader, none of the 139 did."""
 
-EXPECTED_PARTS = 402
-EXPECTED_MEASURES = 13717
-EXPECTED_EVENTS = 60476
-EXPECTED_PITCHES = 66847
+EXPECTED_PARTS = 410
+EXPECTED_MEASURES = 14107
+EXPECTED_EVENTS = 61851
+EXPECTED_PITCHES = 68530
 """The shape of what comes out. A reader that built empty scores would still
 pass a "did it build" test; these are what stop that."""
 
@@ -64,11 +64,14 @@ Pinned rather than tolerated: these are known, named gaps, and the number should
 fall, never rise. See `docs/formats/mus-dcl-container.md`.
 """
 
-EXPECTED_CORRUPT = 8
-"""Two whose entry pool holds a breve or a dotted whole, which
-`duration_from_edu` rejects -- a note-value limit, not a container one -- and
-six that carry no music the frames reach. Three of those six have no frame holds
-at all; the other three have frame holds that resolve to nothing, so their whole
+EXPECTED_CORRUPT = 6
+"""Six documents that carry no music the frames reach.
+
+Was 8: two held a breve or a dotted whole and were refused by the note-value
+model rather than by anything in this container. Both build now.
+
+Three of the six have no frame holds at all; the other three have frame holds
+that resolve to nothing, so their whole
 entry pool is unreachable. All six are blank scores: they have staves and
 measures but no music, and building one yields a Score with no parts, which is
 not valid MusicXML."""

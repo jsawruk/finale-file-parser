@@ -449,3 +449,29 @@ documents able to test the relation is now itself pinned, so the same silence ca
 
 The gap is still open: a `.mus` still exports positional part names. What changed is that the reason
 written down for it is no longer false.
+
+## 2026-07-30 — FIXED: a breve and a dotted whole are note values
+
+`duration_from_edu` refused any duration over 4096 EDU, which cost two corpus documents. Two
+distinct defects hid behind one symptom.
+
+**The range check tested the total, not the base.** A dotted whole is 6144 EDU, and it was rejected
+for being "larger than a whole note" — but *every* dotted note exceeds its own base, so the limit was
+never the right thing to test the total against. The check now bounds the base value.
+
+**A breve was not in the model.** 8192 EDU, two whole notes, and ordinary notation in early music —
+the corpus document that needed it is a Renaissance motet. `NoteValue` gained it, and the MusicXML
+exporter with it: its note-type table is keyed by the denominator of the written value as a fraction
+of a whole note, which quietly assumes every note value is a whole note or shorter. A breve is 2/1,
+the one exception, so it is handled explicitly rather than by extending the table.
+
+Nothing longer is added. A longa would be next and no corpus document carries one, so there is
+nothing to check a guess at it against — the same rule that keeps `final` barlines unread.
+
+**Effect**: 129 → 131 of 139 DCL documents build, 66,847 → 68,530 pitches, and the `.mus` export
+audit rises 222 → 224 with every invariant unchanged. The DCL entry-pool sweep now reads all 139
+pools rather than 137.
+
+**Worth noting about the pin that caught it.** `EXPECTED_DURATION_FAILURES` was set to 2 with the
+docstring "pinned here so that fixing it shows up as this number falling to 0". It did exactly that.
+A known gap recorded as a number, rather than as a comment, is what makes closing it visible.

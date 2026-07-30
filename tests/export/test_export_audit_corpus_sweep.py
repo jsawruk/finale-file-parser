@@ -51,7 +51,7 @@ records whose entry is a rest, against 16,591 on notes. Pinned so that a change
 in the count means the lyric-to-entry mapping moved, rather than going unnoticed.
 """
 
-MUS_EXPORTED = 222
+MUS_EXPORTED = 224
 """`.mus` documents that export. The same invariants are asserted on them: a
 reader-specific defect would otherwise hide behind the `.musx` path.
 
@@ -60,7 +60,8 @@ through a case-sensitive glob that never saw the corpus's 101 `.MUS` files at
 all. The Windows cohort had been outside this audit since it was written, and
 nothing failed to say so, because a sweep that walks fewer files simply reports
 a smaller number. Every one of the 99 documents that walk now brings in passes
-every invariant below unchanged."""
+every invariant below unchanged. The last two arrived when a breve and a dotted
+whole stopped being refused as durations."""
 
 _BARLINE_ORDER = ("bar-style", "ending", "repeat")
 

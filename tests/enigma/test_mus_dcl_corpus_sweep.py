@@ -53,17 +53,22 @@ first record, not from the banner."""
 EXPECTED_EMPTY_ENTRY_POOLS = 3
 """Three documents carry a six-byte entry record: the pool is there and empty."""
 
-EXPECTED_ENTRY_POOLS_READ = 137
-EXPECTED_ENTRIES = 70_428
-"""Entries decoded from the 137 documents whose pool reads end to end."""
+EXPECTED_ENTRY_POOLS_READ = 139
+EXPECTED_ENTRIES = 71_801
+"""Entries decoded from the 139 documents whose pool reads end to end.
 
-EXPECTED_DURATION_FAILURES = 2
-"""Two documents hold a breve (8192 EDU) or a dotted whole (6144).
+Every document in the cohort, since a breve and a dotted whole stopped being
+refused -- three of them carry no entries at all, which is a pool that reads and
+holds nothing rather than a pool that fails."""
 
-`duration_from_edu` caps at 4096, so it rejects both -- a limit of the note-value
-model, not of this container: a dotted whole note is ordinary notation and a
-`.musx` holding one would fail the same way. Pinned here so that fixing it shows
-up as this number falling to 0.
+EXPECTED_DURATION_FAILURES = 0
+"""Documents whose entry pool holds a duration the note-value model refuses.
+
+**Was 2, and is now 0**, which is what this pin was put here to show. One document
+holds a breve (8192 EDU) and one a dotted whole (6144); `duration_from_edu`
+rejected both because its range check tested the *total* rather than the base,
+and every dotted note exceeds its own base. A breve is now a note value in its
+own right -- see `music.NoteValue` -- and both documents build.
 """
 
 MIN_DISTINCT_DURATIONS = 12

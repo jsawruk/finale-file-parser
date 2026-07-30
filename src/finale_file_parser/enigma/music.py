@@ -17,6 +17,11 @@ from finale_file_parser.enigma.document import Record
 from finale_file_parser.errors import FinaleFileError
 
 _WHOLE_EDU = 4096
+_LONGEST_EDU = 8192
+"""The longest base note value read: a breve."""
+
+_MAX_DURATION_EDU = 2 * _LONGEST_EDU - 1
+"""Refuse anything a breve cannot reach even fully dotted -- a longa and beyond."""
 _DIATONIC_STEPS = 7
 
 
@@ -25,8 +30,15 @@ class MalformedEntryError(FinaleFileError):
 
 
 class NoteValue(Enum):
-    """A base written note value, in EDU (a whole note is 4096)."""
+    """A base written note value, in EDU (a whole note is 4096).
 
+    A breve -- two whole notes -- is ordinary notation in early music and one
+    corpus document uses it. Nothing longer is listed: a longa would be the next
+    value up and no corpus document carries one, so there is nothing to check a
+    guess at it against.
+    """
+
+    BREVE = 8192
     WHOLE = 4096
     HALF = 2048
     QUARTER = 1024
@@ -111,9 +123,12 @@ def duration_from_edu(edu: int) -> Duration:
     quantity, so the decode belongs in one place rather than being reimplemented
     per container.
     """
-    if edu <= 0 or edu > _WHOLE_EDU:
+    # The limit belongs on the base value, not on the total: every dotted note
+    # exceeds its own base, so testing the total rejected a dotted whole (6144)
+    # for being "larger than a whole note".
+    if edu <= 0 or edu > _MAX_DURATION_EDU:
         raise MalformedEntryError(f"dura {edu} is out of range")
-    base_edu = _WHOLE_EDU
+    base_edu = _LONGEST_EDU
     while base_edu > edu:
         base_edu //= 2
     total = base_edu
