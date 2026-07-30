@@ -420,3 +420,32 @@ actually true is that the test harness cannot see the evidence. The claim "no pa
 right guess" was a statement about the corpus, but it was only ever measured through the pairing
 code — and that code was silently dropping the distinguishing pairs. **Before recording that
 evidence does not exist, check that the thing which looked for it could have found it.**
+
+## 2026-07-29 — RETRACTED: "the `.mus` staff-name id is not arithmetic"
+
+`docs/formats/mus-staff-names.md` recorded that the id at `staffSpec` +30 cannot reach a text block
+by arithmetic. That is withdrawn. Both grounds for it were artefacts of how the corpus was being
+read.
+
+The first was "only one document resolves two names, so within-document constancy is vacuous — and
+that one document's delta varies." Five documents resolve two or three names. They were reaching no
+paired sweep because pairing chose a `.musx` per filename stem by directory-walk order and picked, for
+those five, a candidate that failed the same-music filter. In all five the delta is constant
+(70, 71, 71, 71, 69), and the blocks it selects hold the right names in the right order —
+`1st/2nd/3rd Violin`, `Oboe / English Horn / Clarinet in B♭` — which arithmetic alone would not give.
+
+The second was "across documents the delta ranges 63–87." That was computed across two different id
+spaces. The `.mus` id and the `.musx` `textBlock` cmper agree for only 25 of 83 named staves: a
+re-saved `.musx` renumbers its text blocks, so it says `fullName` 2 where the `.mus` says 93.
+
+**What remains is one unknown, not a missing record**: the per-document base. One anchor per document
+would resolve every name in it. Also confirmed on the way: the `.musx`'s `textID` *is* the `.mus`
+stream-3 block number, so the containers agree on block numbering even where they disagree on ids.
+
+**This is the second gap in two days that turned out to be a harness artefact**, after the staff
+layout order (tag 159) the same day. Both were recorded as "the corpus cannot distinguish this", and
+in both cases the corpus could — the code that looked was dropping the evidence. The count of
+documents able to test the relation is now itself pinned, so the same silence cannot recur unnoticed.
+
+The gap is still open: a `.mus` still exports positional part names. What changed is that the reason
+written down for it is no longer false.

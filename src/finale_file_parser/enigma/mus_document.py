@@ -89,13 +89,16 @@ __all__ = ["UNTRANSLATED", "read_mus_document"]
 
 UNTRANSLATED = (
     "staffSpec part names: the names ARE in the file -- text stream 3 carries "
-    "them as ^block(N) sections, and staffSpec +30 selects one (non-zero "
-    "exactly when the .musx names the staff, 156 of 157; the only offset that "
-    "distinguishes differently-named staves within a document). What is missing "
-    "is the lookup from that id to the block number: ids run 92-97 against "
-    "blocks 1-30, no record keyed at the id holds the block number, and the "
-    "delta is not constant across documents. Parts therefore still fall back to "
-    "positional names. See docs/formats/mus-staff-names.md.",
+    "them as ^block(N) sections, and staffSpec +30 selects one. What is missing "
+    "is now only the PER-DOCUMENT BASE: the delta id-minus-block is constant "
+    "within a document (5 documents resolving 2-3 names each, deltas 70/71/71/"
+    "71/69, landing on the right names -- 1st/2nd/3rd Violin, Oboe/English Horn/"
+    "Clarinet), but it differs between documents and nothing found supplies it. "
+    "One anchor per document would resolve every name in it. This entry "
+    "previously said the relation is not arithmetic; that was retracted -- it "
+    "rested on a single document, because the test harness was discarding the "
+    "ones that could test it. Parts still fall back to positional names. See "
+    "docs/formats/mus-staff-names.md.",
     "Instrument-derived clefs: where a gfhold stores clefID 0 it means 'use the "
     "staff's defaultClef', and for some staves the .mus stores 0 there too while "
     "the .musx materialises a real clef. Those measures come out treble. Same "
