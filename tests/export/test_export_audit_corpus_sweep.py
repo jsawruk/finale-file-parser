@@ -39,9 +39,12 @@ CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
-EXPORTED = 398
-"""Corpus documents that export. The other three fail to decode before any of
-this, which the container sweeps already pin."""
+EXPORTED = 401
+"""Corpus documents that export -- **every `.musx` in the corpus**.
+
+Was 398. The three added were not failing to decode: they were failing to
+build, on a linked-part `tupletDef` override read as if it were a tuplet
+definition. See `enigma.tuplet.tuplets_by_entry`."""
 
 LYRICS_ON_RESTS = 165
 """Syllables Finale itself attaches to a rest.
