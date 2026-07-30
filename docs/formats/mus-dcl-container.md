@@ -230,13 +230,29 @@ nothing changes no sum. What caught it was the export audit's "parts disagree ab
 exist", asserted per document. The reader now refuses them outright, and the sweep asserts
 per document that a built score has parts and music in them. Aggregates cannot see an empty file.
 
-### One fallback, named as such
+### The leading block is a `startTime` — the fallback is gone
 
-A frame's `startEntry`/`endEntry` pair is at +0 for 13,200 of 13,322 frames. The other 122 carry a
-leading block — always a second incidence — that pushes the pair to +12, where 106 of them read
-correctly. **What that leading block is has not been identified.** The reader takes whichever pair
-names entries the pool actually holds, and drops the frame when neither does (16 frames). That is a
-fallback, not an explanation, and it is worth replacing with the real rule.
+**A frame's entry pair sits in its last incidence.** 13,208 of 13,322 `FR` records have one
+incidence and the pair is the whole of it; 114 have two, and the first holds a `startTime` in EDU —
+a frame whose entries do not begin at the start of its measure.
+
+That is the format's own shape rather than a reading fitted to this corpus, and a `.musx` settles it:
+**exactly 15 `.musx` frameSpec cmpers carry more than one incidence, and exactly 15 records carry a
+`startTime`.** Its values there are 2048, 3072 and 3584, every one of which also appears among the
+DCL leading blocks — which take 1024, 1536, 2048, 2560, 3072, 3584 and 5632, all multiples of 512.
+`enigma.location` has read that shape for the 2011 era all along: *"a frame cmper can carry two,
+where the first is empty and the second holds the entry chain"*.
+
+The leading incidence decodes as `[u32 startTime][u32 0][u16 0][u16 2048]` in both byte orders.
+
+This replaced a fallback that tried +0, then +12, and kept whichever pair named entries the pool
+held. **The two agree on all 13,306 frames the fallback resolved, and drop the same 16** — so no
+frame moved. What changed is that the reader can now say which reading is right rather than only
+which one worked, and the `startTime` it used to skip past is carried onto the `frameSpec`.
+
+The 16 still dropped are not an offset problem: they name entries the pool does not hold at all, the
+same dangling-reference class as the `gfhold` whose `frame1` names a frameSpec neither container
+defines.
 
 Dropping a frame also drops the `gfhold` references to it: `build_score` rejects a gfhold naming a
 frameSpec that is absent, so keeping the reference would cost the whole document instead of one
