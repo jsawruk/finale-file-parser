@@ -161,6 +161,50 @@ limit is verified by mutation, because no real corpus archive trips one.
 
 ## Later
 
+### Recommended order for the remaining work
+
+<!-- Written 2026-07-30, from a measurement of the corpus rather than from memory.
+     Re-derive before trusting: this file has been stale before. -->
+
+The corpus reads well — **625 of 639 documents build** (`.musx` 401/401, DCL `.mus` 131/139,
+2011 `.mus` 93/99), and 6 of the 14 that do not are blank scores refused on purpose. The gaps that
+remain are therefore mostly *not* about reading more bytes.
+
+1. **A CLI, before any more format work.** This project is for people who need to migrate, analyse
+   or archive scores, and none of them can reach the converter without writing Python: there is no
+   `[project.scripts]` entry and no cli module. That is the largest gap between what works and what
+   is usable, and it carries no research risk. Conversion is the headline command
+   (`in.mus -> out.musicxml`); the structure dump already listed below is the second one.
+
+2. **Staff and group names.** The most visible defect in every `.mus` export — parts come out
+   `Staff 1` rather than `Flute`. Narrowed to one unknown, the per-document base, and it unblocks
+   group names too. **Time-box it**: the broad search has already been run and failed. Start with
+   the one untested idea — whether the base is `lowest id - lowest name block` within a document,
+   which falls straight out of the anchors pinned in
+   `tests/enigma/test_mus_staff_name_link_corpus_sweep.py`.
+
+3. **Re-derive the `UNTRANSLATED` claims that cite corpus counts.** Cheap and overdue. Several were
+   measured when far fewer documents were readable: the final-barline entry says a nibble "does not
+   occur once in 4,427 measures across 99 corpus `.mus` documents", and 224 `.mus` documents are
+   readable now; the fingering-font entry cites "363 of 373 paired records", and pairing changed
+   twice since. Three claims of this exact shape turned out to be harness artefacts in one week
+   (see `docs/DECISIONS.md`, 2026-07-29 and 2026-07-30). Some may simply close.
+
+4. **The two documents with no recognisable entry pool.** The only genuinely *unread containers*
+   left, and a bounded question — possibly a small container variant.
+
+5. **Verify, then close, the rest.** The 4 dangling `frameSpec` chains, the one entry two frames
+   claim, and the one `gfhold` in a measure without a key are one document each, and the dangling
+   ones look like data the file simply does not contain. Confirm that once and pin them as not
+   fixable, the way the blank scores are — leaving them in a gap list makes them read as open work.
+
+**Deliberately not next.** Text repeats and DCL staff layout order are blocked on the corpus rather
+than on effort: no `.mus`/`.musx` pair of the same music carries a text repeat, and the DCL cohort
+has no paired `.musx` at all. Rather than searching again, write down what a contributed file would
+have to contain to unblock each. The desktop frontend is larger than everything above combined, and
+the CLI serves the practical need first.
+
+
 <!-- Things deliberately deferred. Keep them out of Phase 1 so the MVP stays small. -->
 - [x] Notes, pitches, and rhythms as a Python data model — `enigma/music.py` and `ir.py`.
 - [x] Staves, measures, and score structure — `ir.py`, built by `enigma/to_ir.py`.
