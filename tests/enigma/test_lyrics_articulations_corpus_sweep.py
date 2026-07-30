@@ -21,6 +21,7 @@ from typing import NamedTuple
 
 import pytest
 from conftest import PairedCorpus
+from corpus_files import oracle_pairs
 
 from finale_file_parser.enigma.to_ir import RESERVED_STAFF
 from finale_file_parser.ir import Lyric, Score
@@ -48,12 +49,12 @@ this counts what is understood rather than what is present -- the corpus assigns
 29 distinct characters.
 """
 
-PAIRED_WITH_ARTICULATIONS = 72
+PAIRED_WITH_ARTICULATIONS = 74
 
 BEAM_DOCUMENTS = 366
 BEAMS = 84593
 
-PAIRED_WITH_BEAMS = 81
+PAIRED_WITH_BEAMS = 88
 BEAM_EVENT_DIFFERENCES = 2
 """Two events whose beams differ between containers.
 
@@ -81,7 +82,7 @@ brackets and 1 unmapped -- section brackets over staves the numeric order split
 apart. No brace was ever affected, which fits: all 132 span two adjacent staves
 of one instrument."""
 
-PAIRED_WITH_GROUPS = 15
+PAIRED_WITH_GROUPS = 20
 GROUP_NAME_ONLY_DIFFERENCES = 4
 """Pairs differing from their `.musx` in the group name and nothing else.
 
@@ -108,7 +109,7 @@ on bars no part reached. Every measure now belongs to every part, so a barline
 always has somewhere to be drawn.
 """
 
-PAIRED_WITH_REPEATS = 19
+PAIRED_WITH_REPEATS = 22
 """Same-content pairs where either container carries a repeat."""
 
 FINGERING_DOCUMENTS = 18
@@ -135,9 +136,9 @@ BARLINE_STYLES = {"light-light": 216, "light-heavy": 110}
 `normal` is not counted: it is the default barline and needs no element.
 """
 
-PAIRED_WITH_BARLINES = 6
-"""Same-content pairs where either container styles a barline. Small, and it is
-why a `.mus` refuses to guess at `final`: no pair carries one."""
+PAIRED_WITH_BARLINES = 8
+"""Same-content pairs where either container styles a barline. Still small, and
+still why a `.mus` refuses to guess at `final`: none of the eight carries one."""
 
 JUMP_DOCUMENTS = 3
 JUMP_MARKINGS = 6
@@ -161,9 +162,13 @@ RESERVED_STAFF_PARTS = 0
 none lays out. Must stay zero: it was one per document until it was excluded,
 and nothing else in the corpus is absent from the instrument list."""
 
-PAIRED_WITH_LYRICS = 6
+PAIRED_WITH_LYRICS = 13
 """Same-content pairs where the `.musx` carries lyrics, so the two containers
-can be compared. Small, but it is the only oracle for the `.mus` side."""
+can be compared. The only oracle for the `.mus` side, and it was 6 until pairing
+stopped guessing which `.musx` a stem meant -- seven of these thirteen were being
+discarded because an arbitrary same-stem candidate failed the same-music check
+while a sibling would have passed. The comparison below is unchanged and still
+finds no difference, which is what makes the extra coverage worth having."""
 
 
 def musx_files() -> list[Path]:
@@ -171,9 +176,7 @@ def musx_files() -> list[Path]:
 
 
 def pairs() -> list[tuple[Path, Path]]:
-    mus = {p.stem: p for p in CORPUS.rglob("*.mus")}
-    musx = {p.stem: p for p in CORPUS.rglob("*.musx")}
-    return [(mus[s], musx[s]) for s in sorted(set(mus) & set(musx))]
+    return oracle_pairs()
 
 
 class MeasureRepeat(NamedTuple):

@@ -22,12 +22,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
-from corpus_files import CORPUS, corpus_paths
+from corpus_files import corpus_paths, oracle_pairs
 
 from finale_file_parser.enigma.document import parse_enigma
 from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.mus_document import read_mus_document
-from finale_file_parser.enigma.mus_entries import read_mus_entries
 from finale_file_parser.enigma.score import score_xml
 from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.ir import Score
@@ -42,21 +41,8 @@ def mus_paths() -> list[Path]:
 
 
 def stem_pairs() -> list[tuple[Path, Path]]:
-    """`.mus`/`.musx` sharing a filename stem, in stem order.
-
-    **Deliberately left on the old walk**, case-sensitive glob and all, because
-    which oracle a `.mus` is compared against is not well defined here and this
-    is not the change to redefine it in. 401 `.musx` files share only 123 stems,
-    so 278 of them are shadowed, and `{p.stem: p}` keeps whichever the walk
-    yielded last. Making the walk case insensitive also reorders it, which
-    silently swaps the oracle under a third of the pairs -- moving one sweep's
-    agreement from 91 documents to 84 with no bug in sight. Widening this needs
-    pairing that names one document, not a re-glob. See the note in
-    `corpus_files.corpus_paths`.
-    """
-    mus = {p.stem: p for p in CORPUS.rglob("*.mus")}
-    musx = {p.stem: p for p in CORPUS.rglob("*.musx")}
-    return [(mus[s], musx[s]) for s in sorted(set(mus) & set(musx))]
+    """Each `.mus` with its same-music `.musx` oracle. See `corpus_files`."""
+    return oracle_pairs()
 
 
 @pytest.fixture(scope="session")
@@ -103,6 +89,18 @@ class PairedCorpus:
 
     pairs: list[tuple[Score, Score]] = field(default_factory=list)
     unbuildable: int = 0
+    reordered: int = 0
+    """Pairs holding the same parts in a different order.
+
+    Carried, not dropped quietly, for the same reason as `unbuildable`. Every
+    comparison in this suite lines parts up by position, which is only meaningful
+    while both sides agree on the order -- and for these the `.musx` lays its
+    staves out in score order while the `.mus` reader emits them numerically
+    (`mus_document.UNTRANSLATED`, the `instUsed` gap). Comparing them positionally
+    measures one instrument against another: it produced 435 spurious beam
+    differences before this filter existed. Excluded from `pairs`, counted here,
+    and pinned by the sweeps.
+    """
 
 
 @pytest.fixture(scope="session")
@@ -111,18 +109,27 @@ def paired_scores() -> PairedCorpus:
 
     A shared filename stem is not enough: some pairs are different arrangements
     entirely. Matching the entry count is the filter every container comparison
-    in this suite has used, and it belongs here rather than repeated in each.
+    in this suite has used, and it belongs here rather than repeated in each --
+    `corpus_files.oracle_pairs` applies it when choosing the oracle.
+
+    Pairs whose parts come out in a different order are held back in
+    `reordered` rather than returned, because everything downstream compares
+    parts by position. See that field.
     """
     out = PairedCorpus()
     for mus_path, musx_path in stem_pairs():
         try:
             document = parse_enigma(score_xml(musx_path))
-            if len(read_mus_entries(mus_path)) != len(document.entries.records):
-                continue
         except CorruptScoreError:
             continue
         try:
-            out.pairs.append((build_score(read_mus_document(mus_path)), build_score(document)))
+            mine = build_score(read_mus_document(mus_path))
+            theirs = build_score(document)
         except Exception:  # noqa: BLE001 - the point is to count them, not to diagnose
             out.unbuildable += 1
+            continue
+        if [part.id for part in mine.parts] != [part.id for part in theirs.parts]:
+            out.reordered += 1
+            continue
+        out.pairs.append((mine, theirs))
     return out

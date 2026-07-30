@@ -18,6 +18,7 @@ import struct
 from pathlib import Path
 
 import pytest
+from corpus_files import oracle_pairs
 
 from finale_file_parser.enigma.document import EnigmaDocument, parse_enigma
 from finale_file_parser.enigma.models import CorruptScoreError
@@ -40,10 +41,10 @@ CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
-PAIRS = 91
+PAIRS = 95
 """Filename stems present as both a `.mus` and a `.musx`."""
 
-READABLE = 91
+READABLE = 95
 """Every pair's `.mus` others pool tiles its stream exactly.
 
 It was 84 until two things were fixed: `0xFFFF` recognised as filler, and the
@@ -51,18 +52,22 @@ payload cap raised. The cap was the larger cause and was measured circularly --
 see `_MAX_PAYLOAD` in `mus_others.py`.
 """
 
-SAME_CONTENT = 83
+SAME_CONTENT = 95
 """Readable pairs whose two containers hold the same music."""
 
-FRAME_SPEC_KEY_EXCEPTIONS = 2
-"""One document's `.musx` carries three part-override frameSpec records that its
-`.mus` does not. Every `.mus` key is present in the `.musx`; the `.musx` simply
-has three more. Pinned rather than explained away."""
+FRAME_SPEC_KEY_EXCEPTIONS = 5
+"""Documents whose `.musx` carries part-override frameSpec records its `.mus`
+does not. Every `.mus` key is present in the `.musx`; the `.musx` simply has
+more. Pinned rather than explained away.
 
-FRAME_SPEC_PAYLOAD_MISSES = 7
+Was 2 until pairing stopped guessing which `.musx` a stem meant. The three added
+are the same shape as the original two -- more documents in the sweep, not a new
+kind of difference."""
+
+FRAME_SPEC_PAYLOAD_MISSES = 15
 """Three `startEntry`/`endEntry` pairs differ, out of 7,922."""
 
-MEAS_SPEC_WIDTH_MISSES = 49
+MEAS_SPEC_WIDTH_MISSES = 59
 """Measure widths that differ, all of them in a single document.
 
 `width` is layout, not music: a score re-spaced between the two saves changes
@@ -71,9 +76,7 @@ every width while leaving `beats`/`divbeat` -- which match everywhere -- alone.
 
 
 def pairs() -> list[tuple[Path, Path]]:
-    mus = {p.stem: p for p in CORPUS.rglob("*.mus")}
-    musx = {p.stem: p for p in CORPUS.rglob("*.musx")}
-    return [(mus[s], musx[s]) for s in sorted(set(mus) & set(musx))]
+    return oracle_pairs()
 
 
 def keyed(records: tuple[MusOther, ...], tag: int) -> dict[tuple[int, int], bytes]:

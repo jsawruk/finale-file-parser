@@ -31,7 +31,7 @@ Translated:
 | others | `articDef` (121) | `charMain` — at +0 (2011) or +2 (2012) |
 | others | `repeatBack` (203) | `actuate` — Finale's "Total Passes" |
 | others | `repeatEndingStart` (204) | presence only; the bracket's extent comes from `barEnding` |
-| others | `repeatPassList` (206) | `act` — which pass the ending is taken on |
+| others | `repeatPassList` (206) | `act` — the passes the ending is taken on, a u16 array |
 | details | `staffGroup` (1057) | `startInst`, `endInst`, `bracket.id`, `fullID`, the barline bit |
 | texts | `verse` | the `^verse(N)…^end` sections of the text stream |
 
@@ -113,11 +113,13 @@ UNTRANSLATED = (
     "documents with groups differ from their .musx in nothing else.",
     "Staff layout order (instUsed): a .musx lists its staves in the order the "
     "score lays them out, which is not always ascending. The .mus tag for that "
-    "list is unidentified and the corpus cannot identify it -- every paired "
-    "document numbers its slots and staves alike, so no pair separates a right "
-    "guess from a wrong one. Staves therefore come out in numeric order, which "
-    "is right for every document there is evidence about. Staff groups are read "
-    "through that order; see enigma.groups.",
+    "list is unidentified, so staves come out in numeric order. This entry used "
+    "to add that no corpus pair could separate a right guess from a wrong one; "
+    "that is no longer true. Two paired documents lay five identical parts out "
+    "as P1 P2 P5 P3 P4 and P5 P1 P2 P3 P4, and they were invisible only because "
+    "stem pairing picked a different .musx for their stem. They are pinned as "
+    "PART_ORDER in the .mus-to-IR sweep and are the oracle to identify the tag "
+    "against. Staff groups are read through this order; see enigma.groups.",
     "Text repeats (Fine, D.C. al Coda): the .musx reading is implemented, the "
     ".mus one is not. Exactly one paired document carries a text repeat, with "
     "two assignments, and a key set that small matches several tags by chance -- "
@@ -638,12 +640,42 @@ def _others_records(records: tuple[MusOther, ...]) -> list[Record]:
             # ending opens here, and `measSpec.barEnding` says where it closes.
             out.append(Record(tag="repeatEndingStart", attrs=attrs, text="", fields={}))
         elif record.tag == TAG_REPEAT_PASS_LIST and len(record.payload) >= 2:
-            act = _u16(record.payload, 0)
-            if act:
+            acts = _pass_list(record.payload)
+            if acts:
                 out.append(
-                    Record(tag="repeatPassList", attrs=attrs, text="", fields={"act": str(act)})
+                    Record(
+                        tag="repeatPassList",
+                        attrs=attrs,
+                        text="",
+                        # One pass stays a scalar, which is the shape the `.musx`
+                        # reader writes too; `repeats._acts` accepts either.
+                        fields={"act": acts[0] if len(acts) == 1 else acts},
+                    )
                 )
     return out
+
+
+def _pass_list(payload: bytes) -> tuple[str, ...]:
+    """Which passes an ending is taken on: a u16 array from +0, ended by a zero.
+
+    **An array, not a value.** An ending marked "1., 2." is taken on both, and
+    Finale stores one entry per pass; reading only +0 turns it into a "1."
+    ending -- the same notes under a different repeat structure. The `.musx`
+    reader has always allowed for this (`repeats._acts` accepts a tuple because
+    "an ending taken on both the first and second pass writes it twice"); only
+    the `.mus` side read a single value.
+
+    The array reading agrees with the paired `.musx` on 40 of 40 records, where
+    reading +0 alone agrees on 38. The two it fixes were invisible until oracle
+    pairing stopped discarding the document that contains them.
+    """
+    out: list[str] = []
+    for offset in range(0, len(payload) - 1, 2):
+        value = _u16(payload, offset)
+        if not value:
+            break
+        out.append(str(value))
+    return tuple(out)
 
 
 def _repeat_back(payload: bytes) -> dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]]:

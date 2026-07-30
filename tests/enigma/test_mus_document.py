@@ -658,3 +658,37 @@ def test_a_cyclic_chain_terminates() -> None:
     entries = (entry_record(1, next_=2), entry_record(2, next_=1))
     live = adapter._live_entries(entries, {7: (1, 99)}, [gfhold_record(7)])
     assert [r.attrs["entnum"] for r in live] == ["1", "2"]
+
+
+def pass_list_payload(*passes: int) -> bytes:
+    """A `repeatPassList` payload: a u16 array, zero-terminated."""
+    return b"".join(p.to_bytes(2, "little") for p in passes) + bytes(12)
+
+
+def test_an_ending_taken_on_two_passes_keeps_both(pools: Callable[..., None]) -> None:
+    """A "1., 2." ending stores both passes.
+
+    Reading only the first at +0 turns it into a "1." ending -- the same notes
+    with a different repeat structure. The `.musx` reader already treats `act` as
+    possibly-a-tuple for exactly this case; the `.mus` side did not.
+    """
+    pools(others=(MusOther(REPEAT_PASS_LIST, 30, 0, pass_list_payload(1, 2)),))
+    record = read_mus_document(PATH).others.get("repeatPassList", 30)
+    assert record is not None
+    assert record.fields["act"] == ("1", "2")
+
+
+def test_an_ending_taken_on_one_pass_stays_a_single_act(pools: Callable[..., None]) -> None:
+    """One pass keeps the scalar shape the `.musx` reader also produces."""
+    pools(others=(MusOther(REPEAT_PASS_LIST, 31, 0, pass_list_payload(1)),))
+    record = read_mus_document(PATH).others.get("repeatPassList", 31)
+    assert record is not None
+    assert record.fields["act"] == "1"
+
+
+def test_a_zero_ends_the_pass_list(pools: Callable[..., None]) -> None:
+    """The array is zero-terminated, so trailing padding is not a pass."""
+    pools(others=(MusOther(REPEAT_PASS_LIST, 32, 0, pass_list_payload(1, 2, 0, 7)),))
+    record = read_mus_document(PATH).others.get("repeatPassList", 32)
+    assert record is not None
+    assert record.fields["act"] == ("1", "2")
