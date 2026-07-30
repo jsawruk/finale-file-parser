@@ -17,6 +17,7 @@ from finale_file_parser.enigma import mus_document as adapter
 from finale_file_parser.enigma.articulations import articulations_by_entry
 from finale_file_parser.enigma.clef import ClefSign, clef_definitions
 from finale_file_parser.enigma.document import Record
+from finale_file_parser.enigma.groups import staff_order
 from finale_file_parser.enigma.mus_details import (
     TAG_ARTIC_ASSIGN,
     TAG_LYRIC_VERSE,
@@ -692,3 +693,59 @@ def test_a_zero_ends_the_pass_list(pools: Callable[..., None]) -> None:
     record = read_mus_document(PATH).others.get("repeatPassList", 32)
     assert record is not None
     assert record.fields["act"] == ("1", "2")
+
+
+INST_USED = 159
+_SLOT = 24
+
+
+def inst_used_payload(*staves: int) -> bytes:
+    """An `instUsed` payload: one 24-byte slot per staff, staff number first."""
+    return b"".join(s.to_bytes(2, "little") + bytes(_SLOT - 2) for s in staves)
+
+
+def test_the_score_staff_list_becomes_one_inst_used_record_per_slot(
+    pools: Callable[..., None],
+) -> None:
+    """`groups.staff_order` reads one record per slot, keyed by `inci`."""
+    pools(others=(MusOther(INST_USED, 0, 0, inst_used_payload(1, 2, 3)),))
+    records = read_mus_document(PATH).others.of_tag("instUsed")
+    assert [r.attrs["inci"] for r in records] == ["0", "1", "2"]
+    assert [r.fields["inst"] for r in records] == ["1", "2", "3"]
+
+
+def test_a_staff_list_that_is_not_ascending_keeps_its_order(
+    pools: Callable[..., None],
+) -> None:
+    """The whole point: sorting would give the same answer for every ascending
+    document and the wrong one for these. Two corpus documents lay five staves
+    out this way, and they are the only evidence this record could be identified
+    from."""
+    pools(others=(MusOther(INST_USED, 0, 0, inst_used_payload(1, 2, 5, 3, 4)),))
+    document = read_mus_document(PATH)
+    assert [r.fields["inst"] for r in document.others.of_tag("instUsed")] == [
+        "1",
+        "2",
+        "5",
+        "3",
+        "4",
+    ]
+    assert staff_order(document) == (1, 2, 5, 3, 4)
+
+
+def test_a_part_instrument_list_is_marked_as_a_part_variant(
+    pools: Callable[..., None],
+) -> None:
+    """`staff_order` skips part variants; a list read as the score's would order
+    the score by a part's staves."""
+    pools(others=(MusOther(INST_USED, 0, 1, inst_used_payload(3, 1)),))
+    records = read_mus_document(PATH).others.of_tag("instUsed")
+    assert records and all("part" in r.attrs for r in records)
+
+
+def test_a_staff_list_payload_that_is_not_whole_slots_is_skipped(
+    pools: Callable[..., None],
+) -> None:
+    """Hostile input: a trailing partial slot must not read past the payload."""
+    pools(others=(MusOther(INST_USED, 0, 0, inst_used_payload(1, 2)[:-3]),))
+    assert [r.fields["inst"] for r in read_mus_document(PATH).others.of_tag("instUsed")] == ["1"]

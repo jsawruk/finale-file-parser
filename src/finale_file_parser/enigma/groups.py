@@ -89,13 +89,17 @@ def staff_order(document: EnigmaDocument) -> tuple[int, ...]:
     order their staff numbers do not follow -- so it cannot be replaced by
     sorting where the record exists.
 
-    Where it does not, the staves are returned in numeric order. A `.mus` always
-    takes that path: its `instUsed` equivalent is unidentified, and the corpus
-    cannot identify it, because **every** paired document numbers its slots and
-    staves alike, so no pair distinguishes a right guess from a wrong one. The
-    fallback is therefore equivalent on all available evidence, and wrong only
-    for a `.mus` whose staves are laid out out of order -- which no paired
-    document is. See `enigma.mus_document.UNTRANSLATED`.
+    Where it does not, the staves are returned in numeric order. **A 2011 `.mus`
+    no longer takes that path**: its `instUsed` is others tag 159, one 24-byte
+    slot per staff, and it is read like the `.musx`'s. This docstring used to say
+    the corpus could not identify that record because every paired document
+    numbered its slots and staves alike; two do not, and they were reaching no
+    paired sweep because oracle pairing chose a `.musx` by walk order. See
+    `mus_others.TAG_INST_USED`.
+
+    A 2001-2005 `.mus` still falls back to numeric order -- that cohort has no
+    paired `.musx` to check a slot layout against. See
+    `enigma.mus_document.UNTRANSLATED`.
     """
     slots: list[tuple[int, int]] = []
     for record in document.others.all_with(_INST_USED, _SCORE_LIST):
