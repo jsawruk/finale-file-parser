@@ -45,10 +45,47 @@ template. Only the within-document test discriminates.
 * no `others` record keyed at the id contains the block number at any stable offset. The one
   apparent hit, tag 148, is the chord-suffix table ("Dim 7 (add maj7)", "Aug") and matched by
   coincidence;
-* it is **not arithmetic**. The delta `id - block` is constant within a document in 40 of 41 cases,
-  which looks promising until you notice nearly all of those documents resolve only *one* name, so
-  constancy is vacuous — and the single document resolving two names has a delta that varies. Across
-  documents the delta ranges 63–87 with no relation to the block count.
+* ~~it is **not arithmetic**~~ — **RETRACTED, 2026-07-29. See §3a.**
+
+### 3a. The arithmetic route was retracted, and why that matters
+
+The bullet above used to say the relation is not arithmetic, on two grounds. Both were artefacts of
+how the corpus was being read, not facts about the corpus.
+
+**"Only one document resolves two names, so constancy is vacuous — and that one varies."** Five
+documents resolve two or three. They were invisible because oracle pairing chose a `.musx` for each
+filename stem by directory-walk order, and the candidate it happened to pick for those five failed
+the same-music filter, so they reached no paired sweep. In **all five** the delta `id - block` is
+constant: 70, 71, 71, 71, 69.
+
+And the blocks it lands on are the right ones, which is the part arithmetic alone would not give:
+`1st Violin / 2nd Violin / 3rd Violin`, `Oboe / English Horn / Clarinet in B♭`,
+`Soprano-Alto / Tenor-Bass`, `Trombone`. Three staves, three different correct names, in order.
+
+**"Across documents the delta ranges 63–87."** That number was computed across two *different id
+spaces* and therefore measured nothing. The `.mus` id and the `.musx` `textBlock` cmper agree for only
+**25 of 83** named staves: where a `.musx` was re-saved it renumbered its text blocks, so it says
+`fullName` 2 where the `.mus` says 93. A cross-container delta is meaningful only for those 25.
+
+Both of these, and the count of documents that can test the relation at all, are pinned in
+`tests/enigma/test_mus_staff_name_link_corpus_sweep.py` — including the count itself, because a
+harness that hid this evidence once can hide it again.
+
+**One other fact confirmed on the way:** the `.musx`'s `textID` *is* the `.mus` stream-3 block number.
+Following `staffSpec.fullName -> textBlock -> textID` in a `.musx` and reading that block number out
+of the paired `.mus` yields the staff's own name. So the two containers agree on block numbering even
+where they disagree on id numbering.
+
+### 3b. What is actually still missing
+
+**The per-document base.** The delta is constant within a document but differs between documents, and
+nothing yet found supplies it. Searching for a record keyed at the id that holds the block number
+still fails: with the exact oracle above (the `.musx`'s `textID` rather than a name string, which only
+matches verbatim 45 times in 75) the best candidate explains 27 of 83 — tag 121 at +42, which is the
+articulation-definition table and matching by coincidence.
+
+So one anchor per document would resolve every name in it. That is the whole of the remaining gap,
+and it is a much smaller one than "there is a lookup record nobody can find".
 
 So there is a genuine lookup record, equivalent to the `.musx`'s `textBlock[cmper] -> textID`, and it
 has not been located. Ruled out so far, each against the 45 name/block pairs the corpus yields:
