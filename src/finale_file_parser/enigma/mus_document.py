@@ -309,15 +309,29 @@ in any corpus document, and reading the third and fourth reaches 1,058 entries
 that two leave orphaned. Finale has four layers, so this is the format's own
 number rather than a fitted one."""
 
-_FRAME_ENTRY_OFFSETS = (0, 12)
-"""Where a frame's `startEntry`/`endEntry` pair sits.
+_ROW_DATA = 12
+"""Bytes of data in one `others` row, so `incidences` gives the payload's shape."""
 
-+0 for 13,200 of 13,322 corpus frames. The other 122 carry a leading block --
-always a second incidence -- that pushes the pair into it, and 106 of those read
-correctly at +12. What that leading block is has not been identified, so the
-reader takes **whichever pair names entries the pool actually holds** and drops
-the frame when neither does. That is a fallback, not an explanation, and it is
-the reason 16 frames are dropped rather than read.
+_FRAME_START_TIME = "startTime"
+"""The field the leading incidence carries.
+
+**The entry pair sits in a frame's LAST incidence.** Most `FR` records have one
+incidence and the pair is the whole of it. 114 of 13,322 have two, and the first
+holds a `startTime` in EDU -- a frame whose entries do not begin at the start of
+its measure.
+
+That is the format's own shape, not a reading of this corpus: a `.musx` does the
+same thing. Exactly 15 `.musx` frameSpec cmpers carry more than one incidence and
+exactly 15 records carry a `startTime`, its values 2048/3072/3584 all appearing
+among the DCL leading blocks (1024, 1536, 2048, 2560, 3072, 3584, 5632 -- every
+one a multiple of 512). `enigma.location` already reads that shape for the 2011
+era: "a frame cmper can carry two, where the first is empty and the second holds
+the entry chain".
+
+This replaced a fallback that tried +0, then +12, and kept whichever named
+entries the pool held. The two agree on all 13,306 frames the fallback resolved
+and drop the same 16 -- so nothing moved, but the reader can now say which
+reading is right rather than only which one worked.
 """
 
 
@@ -363,7 +377,7 @@ def _rows_document(path: str | os.PathLike[str]) -> EnigmaDocument:
 
 def _live_entries(
     entries: tuple[Record, ...],
-    frames: dict[int, tuple[int, int]],
+    frames: dict[int, tuple[int, int, int | None]],
     gfholds: list[Record],
 ) -> tuple[Record, ...]:
     """The entries some frame reaches, in pool order.
@@ -398,7 +412,7 @@ def _live_entries(
             span = frames.get(int(value))
             if span is None:
                 continue
-            start, end = span
+            start, end, _ = span
             entnum = start
             # Bounded by the pool: every step consumes an unvisited entry, so a
             # chain that cycles or never meets its endEntry still terminates.
@@ -418,30 +432,48 @@ def _rows_frame_base(rows: MusRows) -> int:
     return _FRAME_BASE_2001 if specs and specs[0].incidences == 3 else _FRAME_BASE_2005
 
 
-def _rows_frames(rows: MusRows, live: set[int]) -> tuple[dict[int, tuple[int, int]], set[int]]:
+def _rows_frames(
+    rows: MusRows, live: set[int]
+) -> tuple[dict[int, tuple[int, int, int | None]], set[int]]:
     """Each `FR` record's entry span, and the frames that could not be read.
 
     A frame naming entries the pool does not hold is dropped rather than
     emitted: `build_score` rejects a chain it cannot walk, so keeping one would
     cost the whole document instead of one frame's music.
     """
-    found: dict[int, tuple[int, int]] = {}
+    found: dict[int, tuple[int, int, int | None]] = {}
     dropped: set[int] = set()
     for (tag, cmper), record in rows.others.items():
         if tag != "FR":
             continue
-        for offset in _FRAME_ENTRY_OFFSETS:
-            start = _u32(record.payload, offset, rows.byte_order)
-            end = _u32(record.payload, offset + 4, rows.byte_order)
-            if start in live and end in live:
-                found[cmper] = (start, end)
-                break
-        else:
+        span = _frame_span(record.payload, record.incidences, rows.byte_order)
+        if span is None or span[0] not in live or span[1] not in live:
             dropped.add(cmper)
+            continue
+        found[cmper] = span
     return found, dropped
 
 
-def _rows_others(rows: MusRows, frames: dict[int, tuple[int, int]]) -> list[Record]:
+def _frame_span(
+    payload: bytes, incidences: int, order: ByteOrder
+) -> tuple[int, int, int | None] | None:
+    """A frame's `startEntry`, `endEntry` and `startTime`, or None if malformed.
+
+    The pair is in the last incidence; a leading one carries the start time. See
+    `_FRAME_START_TIME`.
+    """
+    if incidences < 1 or len(payload) < incidences * _ROW_DATA:
+        return None
+    base = (incidences - 1) * _ROW_DATA
+    start = _u32(payload, base, order)
+    end = _u32(payload, base + 4, order)
+    # A stored 0 is written as no startTime at all, the same omission convention
+    # as measSpec.key and gfhold.clefID.
+    start_time = _u32(payload, 0, order) if incidences > 1 else 0
+    return start, end, start_time or None
+
+
+def _rows_others(rows: MusRows, frames: dict[int, tuple[int, int, int | None]]) -> list[Record]:
     out: list[Record] = []
     for (tag, cmper), record in rows.others.items():
         attrs = {"cmper": str(cmper)}
@@ -464,15 +496,14 @@ def _rows_others(rows: MusRows, frames: dict[int, tuple[int, int]]) -> list[Reco
                 )
             )
         elif tag == "FR" and cmper in frames:
-            start, end = frames[cmper]
-            out.append(
-                Record(
-                    tag="frameSpec",
-                    attrs=attrs,
-                    text="",
-                    fields={"startEntry": str(start), "endEntry": str(end)},
-                )
-            )
+            start, end, start_time = frames[cmper]
+            fields: dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]] = {
+                "startEntry": str(start),
+                "endEntry": str(end),
+            }
+            if start_time is not None:
+                fields[_FRAME_START_TIME] = str(start_time)
+            out.append(Record(tag="frameSpec", attrs=attrs, text="", fields=fields))
     return out
 
 

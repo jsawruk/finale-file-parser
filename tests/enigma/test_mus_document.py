@@ -625,14 +625,14 @@ def test_an_entry_no_frame_reaches_is_dropped_as_dead_pool_space() -> None:
     it until the file is compacted, so the frames -- not the pool -- say what the
     music is."""
     entries = (entry_record(1, next_=2), entry_record(2, prev=1), entry_record(9))
-    live = adapter._live_entries(entries, {7: (1, 2)}, [gfhold_record(7)])
+    live = adapter._live_entries(entries, {7: (1, 2, None)}, [gfhold_record(7)])
     assert [r.attrs["entnum"] for r in live] == ["1", "2"]
 
 
 def test_a_dead_entry_between_two_live_ones_does_not_break_the_chain() -> None:
     """Dead slots are not always a block at one end of the pool."""
     entries = (entry_record(1, next_=3), entry_record(2), entry_record(3, prev=1))
-    live = adapter._live_entries(entries, {7: (1, 3)}, [gfhold_record(7)])
+    live = adapter._live_entries(entries, {7: (1, 3, None)}, [gfhold_record(7)])
     assert [r.attrs["entnum"] for r in live] == ["1", "3"]
 
 
@@ -640,7 +640,12 @@ def test_every_layer_of_a_gfhold_keeps_its_music() -> None:
     """Reading fewer layer slots than a gfhold names would silently discard the
     rest as dead -- the failure this pruning could otherwise hide."""
     entries = tuple(entry_record(n) for n in range(1, 5))
-    frames = {1: (1, 1), 2: (2, 2), 3: (3, 3), 4: (4, 4)}
+    frames: dict[int, tuple[int, int, int | None]] = {
+        1: (1, 1, None),
+        2: (2, 2, None),
+        3: (3, 3, None),
+        4: (4, 4, None),
+    }
     live = adapter._live_entries(entries, frames, [gfhold_record(1, 2, 3, 4)])
     assert [r.attrs["entnum"] for r in live] == ["1", "2", "3", "4"]
 
@@ -649,7 +654,7 @@ def test_a_chain_that_never_meets_its_end_entry_stops_at_the_pool_edge() -> None
     """A `next` of 0 ends the walk: a frame whose endEntry is unreachable must
     not spin, and must not claim the whole pool."""
     entries = (entry_record(1, next_=0), entry_record(5))
-    live = adapter._live_entries(entries, {7: (1, 99)}, [gfhold_record(7)])
+    live = adapter._live_entries(entries, {7: (1, 99, None)}, [gfhold_record(7)])
     assert [r.attrs["entnum"] for r in live] == ["1"]
 
 
@@ -657,7 +662,7 @@ def test_a_cyclic_chain_terminates() -> None:
     """Hostile input: two entries pointing at each other, and an endEntry never
     reached."""
     entries = (entry_record(1, next_=2), entry_record(2, next_=1))
-    live = adapter._live_entries(entries, {7: (1, 99)}, [gfhold_record(7)])
+    live = adapter._live_entries(entries, {7: (1, 99, None)}, [gfhold_record(7)])
     assert [r.attrs["entnum"] for r in live] == ["1", "2"]
 
 
@@ -749,3 +754,39 @@ def test_a_staff_list_payload_that_is_not_whole_slots_is_skipped(
     """Hostile input: a trailing partial slot must not read past the payload."""
     pools(others=(MusOther(INST_USED, 0, 0, inst_used_payload(1, 2)[:-3]),))
     assert [r.fields["inst"] for r in read_mus_document(PATH).others.of_tag("instUsed")] == ["1"]
+
+
+def entry_pair(start: int, end: int) -> bytes:
+    return start.to_bytes(4, "little") + end.to_bytes(4, "little") + bytes(4)
+
+
+def start_time_row(edu: int) -> bytes:
+    """A `startTime` incidence: the block that precedes the entry pair."""
+    return edu.to_bytes(4, "little") + bytes(4) + bytes(2) + (2048).to_bytes(2, "little")
+
+
+def test_a_frame_with_no_start_time_keeps_its_entry_pair_first() -> None:
+    """One incidence: the pair is the whole record."""
+    assert adapter._frame_span(entry_pair(9, 12), 1, "little") == (9, 12, None)
+
+
+def test_a_frame_with_a_start_time_takes_the_pair_from_the_last_incidence() -> None:
+    """Two incidences: `startTime` comes first and the entry pair follows.
+
+    The reader used to try +0 then +12 and keep whichever named entries the pool
+    held -- a fallback that could say which worked, never which was right.
+    """
+    payload = start_time_row(3072) + entry_pair(9, 12)
+    assert adapter._frame_span(payload, 2, "little") == (9, 12, 3072)
+
+
+def test_a_zero_start_time_is_not_written_out() -> None:
+    """The same omit-the-default convention as `measSpec.key` and `gfhold.clefID`."""
+    payload = start_time_row(0) + entry_pair(9, 12)
+    assert adapter._frame_span(payload, 2, "little") == (9, 12, None)
+
+
+def test_a_frame_payload_too_short_for_its_incidence_count_is_refused() -> None:
+    """Hostile input: the incidence count must not index past the payload."""
+    assert adapter._frame_span(entry_pair(9, 12)[:6], 1, "little") is None
+    assert adapter._frame_span(entry_pair(9, 12), 2, "little") is None
