@@ -556,3 +556,23 @@ def test_a_chords_fingerings_sit_on_its_principal_note() -> None:
 
 def test_a_note_without_fingerings_writes_no_technical() -> None:
     assert "<technical>" not in to_musicxml(_score(_note())).decode()
+
+
+BREVE = Fraction(2, 1)
+DOTTED_WHOLE = Fraction(3, 2)
+
+
+def test_a_breve_exports_as_a_breve() -> None:
+    """The note-type table is keyed by denominator, which assumes a note value is
+    a whole note or shorter. A breve is the one that is not, and one corpus
+    document -- a Renaissance motet -- uses it."""
+    root = _tree(_score(_note(duration=BREVE, written_duration=BREVE)))
+    assert [e.text for e in root.iter("type")] == ["breve"]
+
+
+def test_a_dotted_whole_exports_as_a_dotted_whole() -> None:
+    """It was refused at the reader for exceeding a whole note; the limit belongs
+    on the base value, since every dotted note exceeds its own base."""
+    root = _tree(_score(_note(duration=DOTTED_WHOLE, written_duration=DOTTED_WHOLE, dots=1)))
+    assert [e.text for e in root.iter("type")] == ["whole"]
+    assert len(list(root.iter("dot"))) == 1

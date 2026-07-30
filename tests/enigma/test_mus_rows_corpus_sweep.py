@@ -43,10 +43,17 @@ EXPECTED_SIX_INCIDENCE_DOCS = 37
 """A staff spec is three incidences in a 2001 file and six in a 2005 one.
 `etfspec.pdf` documents the three-incidence shape and its field order."""
 
-FRAMES_CHECKED_AGAINST_ENTRIES = 13322
-"""Frames in documents whose entry pool also reads."""
+FRAMES_CHECKED_AGAINST_ENTRIES = 13710
+"""Frames in documents whose entry pool also reads.
 
-NOTE_VALUES = frozenset({64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048, 3072, 4096})
+Was 13,322 until a breve and a dotted whole stopped being refused: two more
+documents' pools read end to end, so their frames are checked too."""
+
+NOTE_VALUES = frozenset(
+    {64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048, 3072, 4096, 6144, 8192}
+)
+"""Written durations the corpus holds, in EDU. 6144 is a dotted whole and 8192 a
+breve; both appear once the note-value model stops refusing them."""
 
 LAYERS = 4
 """Frame slots per `GF` record, one per Finale layer, from the base."""

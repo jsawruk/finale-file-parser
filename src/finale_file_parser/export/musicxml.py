@@ -36,6 +36,10 @@ _DOCTYPE = (
     f'"http://www.musicxml.org/dtds/{MUSICXML_VERSION}/partwise.dtd">'
 )
 
+_BREVE = Fraction(2, 1)
+"""A breve is two whole notes, so it is the one note value whose fraction is not
+`1/n` -- see `_note_type`."""
+
 _NOTE_TYPES = {
     1: "whole",
     2: "half",
@@ -183,6 +187,10 @@ def _note_type(event: Event) -> str:
     -- which is not a note value. Removing the dots recovers the base 1/4.
     """
     undotted = event.written_duration / (2 - Fraction(1, 2**event.dots))
+    if undotted == _BREVE:
+        # The table below is keyed by denominator, which assumes a note value is
+        # a whole note or shorter. A breve is the exception.
+        return "breve"
     if undotted.numerator != 1:
         raise ExportError(f"written duration {event.written_duration} is not a note value")
     name = _NOTE_TYPES.get(undotted.denominator)

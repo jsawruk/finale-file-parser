@@ -9,6 +9,7 @@ from finale_file_parser.enigma.music import (
     MalformedEntryError,
     Note,
     NoteValue,
+    duration_from_edu,
     read_entry,
 )
 
@@ -137,3 +138,34 @@ def test_rejects_numnotes_disagreeing_with_note_count() -> None:
 def test_rejects_non_integer_harmlev() -> None:
     with pytest.raises(MalformedEntryError):
         read_entry(_entry("1024", (_note("x"),)))
+
+
+def test_a_dotted_whole_decodes() -> None:
+    """4096 + 2048. It was rejected for being larger than a whole note, but the
+    limit belongs on the base value, not on the total: every dotted note exceeds
+    its own base."""
+    duration = duration_from_edu(6144)
+    assert (duration.base, duration.dots) == (NoteValue.WHOLE, 1)
+
+
+def test_a_breve_decodes() -> None:
+    """Two whole notes, and ordinary notation in early music -- the corpus
+    document that needed it is a Renaissance motet."""
+    duration = duration_from_edu(8192)
+    assert (duration.base, duration.dots) == (NoteValue.BREVE, 0)
+
+
+def test_a_dotted_breve_decodes() -> None:
+    duration = duration_from_edu(12288)
+    assert (duration.base, duration.dots) == (NoteValue.BREVE, 1)
+
+
+def test_a_longa_is_still_refused() -> None:
+    """No corpus document carries one, so nothing checks a guess at it."""
+    with pytest.raises(MalformedEntryError):
+        duration_from_edu(16384)
+
+
+def test_a_value_between_note_values_is_still_refused() -> None:
+    with pytest.raises(MalformedEntryError):
+        duration_from_edu(9000)
