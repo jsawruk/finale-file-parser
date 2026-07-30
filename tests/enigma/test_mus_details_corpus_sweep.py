@@ -14,6 +14,7 @@ import struct
 from pathlib import Path
 
 import pytest
+from corpus_files import oracle_pairs
 
 from finale_file_parser.enigma.document import EnigmaDocument, parse_enigma
 from finale_file_parser.enigma.models import CorruptScoreError
@@ -28,7 +29,7 @@ CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
-READABLE = 91
+READABLE = 95
 """Every pair's `.mus` details pool tiles its stream exactly.
 
 It was 84 until `0xFFFF` was recognised as filler alongside `0x0000`. The seven
@@ -38,14 +39,27 @@ refuses those seven for an unrelated reason -- a `tupletDef`-sized record under
 tag 158 whose length field is not understood.
 """
 
-SAME_CONTENT = 83
+SAME_CONTENT = 95
 """Readable pairs holding the same music and carrying `gfhold` records.
 
 Was 80 until `0xFFFF` was recognised as filler; the three added are documents
 whose details pool the walk could not previously finish.
 """
 
-CLEF_ID = 8356
+FRAME1_DANGLING = 1
+"""`gfhold` records whose `frame1` differs between the two containers.
+
+Exactly one, and it is not a decode difference: the `.mus` stores 105 there and
+the `.musx` 125, and **neither document defines a frameSpec with either number**
+-- both top out at 61. The reference is dangling in both files, so the bytes at
++6 are leftovers rather than a frame, and the two saves left different ones.
+Same class as the dead entry-pool slots the `.mus` reader discards.
+
+Pinned as a subtraction rather than folded into an equality so that the offset
+under test still has to be right on all 9,932 records that name a real frame.
+"""
+
+CLEF_ID = 9673
 CLEF_ID_DEFAULTED = 272
 """`clefID` matches outright in 8,356 records. The other 272 are `.mus` storing
 0 where the `.musx` materialises that staff's `defaultClef` -- so every record
@@ -53,9 +67,7 @@ is accounted for, and a regression would show up as an *unexplained* miss."""
 
 
 def pairs() -> list[tuple[Path, Path]]:
-    mus = {p.stem: p for p in CORPUS.rglob("*.mus")}
-    musx = {p.stem: p for p in CORPUS.rglob("*.musx")}
-    return [(mus[s], musx[s]) for s in sorted(set(mus) & set(musx))]
+    return oracle_pairs()
 
 
 def gfhold_payloads(records: tuple[MusDetailRecord, ...]) -> dict[tuple[int, int], bytes]:
@@ -142,7 +154,8 @@ def test_gfhold_payload_matches_the_paired_musx(sweep: Sweep) -> None:
                 frame_ok += fields[3] == int(frame)
     assert percent_seen > 8_000
     assert frame_seen > 8_000
-    assert (percent_ok, frame_ok) == (percent_seen, frame_seen)
+    assert percent_ok == percent_seen
+    assert frame_seen - frame_ok == FRAME1_DANGLING
 
 
 def test_every_gfhold_clef_is_accounted_for(sweep: Sweep) -> None:

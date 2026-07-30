@@ -21,6 +21,7 @@ import re
 from pathlib import Path
 
 import pytest
+from corpus_files import oracle_pairs
 
 from finale_file_parser.enigma.document import parse_enigma
 from finale_file_parser.enigma.location import locate_entries
@@ -46,9 +47,7 @@ Both sit in the single document the entry-pool sweep already pins as a
 
 
 def pairs() -> list[tuple[Path, Path]]:
-    mus = {p.stem: p for p in CORPUS.rglob("*.mus")}
-    musx = {p.stem: p for p in CORPUS.rglob("*.musx")}
-    return [(mus[s], musx[s]) for s in sorted(set(mus) & set(musx))]
+    return oracle_pairs()
 
 
 def intervals(xml: str) -> dict[int, int]:

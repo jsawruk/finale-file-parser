@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 from conftest import PairedCorpus
+from corpus_files import oracle_pairs
 
 from finale_file_parser.ir import Event, Score
 
@@ -27,20 +28,38 @@ CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
-COMPARED = 81
+COMPARED = 89
 """Same-content pairs whose `.mus` builds a Score.
 
-Was 73, then 76, now 81, as the two pool-walk fixes landed. The five added by
-the payload-cap fix contribute **no differences of any kind** -- more coverage at
-the same fidelity.
+Was 73, then 76, then 81 as the two pool-walk fixes landed, and now 89 because
+pairing stopped guessing which `.musx` a stem meant. The eight added contribute
+no structural, attribute, rhythm or tuplet difference of any kind -- more oracle
+at the same fidelity, which is the useful part. Two more pair correctly but are
+held back by `PART_ORDER`; they are counted there, not lost.
 """
 
-UNBUILDABLE = 2
+UNBUILDABLE = 4
 """Documents whose `.mus` frame chain references an entry the pool does not hold.
 
-Both fail the same way (`frameSpec N chain references missing entry M`). One is
-newly readable, so this is a second instance of a known class rather than a new
-failure mode.
+All fail the same way (`frameSpec N chain references missing entry M`): one class
+of failure, counted, not four separate mysteries. Two are newly paired documents
+that were never reaching this sweep to fail in it.
+"""
+
+PART_ORDER = 2
+"""Pairs holding the same parts in a different order.
+
+**The oracle for a gap that was documented as having none.** A `.musx` lists its
+staves in score-layout order; the `.mus` reader emits them in numeric order, and
+`mus_document.UNTRANSLATED` records that the tag naming the layout is
+unidentified -- adding that "every paired document numbers its slots and staves
+alike, so no pair separates a right guess from a wrong one".
+
+That was true only because the two stems that *do* separate them paired, by
+directory-walk accident, with a `.musx` that never reached this sweep. Both show
+the same thing: five identical parts, resequenced (`P1 P2 P5 P3 P4` and
+`P5 P1 P2 P3 P4`). Pinned at 2 so the day the layout tag is identified, this
+goes to 0 and says so.
 """
 
 TUPLET_EVENTS = 0
@@ -79,7 +98,7 @@ OTHER_PITCHES = 3
 notes in the two containers. All three are `.mus`/`.musx` content differences
 already pinned by the entry-pool sweep, not decode errors."""
 
-CLEF_MEASURES = 10
+CLEF_MEASURES = 16
 """Measures whose clef differs, down from 327 before the clef table was decoded
 and from 22 before clefs were carried across a silence.
 
@@ -108,12 +127,20 @@ class Tally:
     octave_only_pitches: int = 0
     other_pitches: int = 0
     clef_measures: int = 0
+    part_order: int = 0
+    """Pairs holding the same parts in a different order.
+
+    The `.musx` lists staves in score-layout order, the `.mus` reader emits them
+    in numeric order, and `mus_document.UNTRANSLATED` records that the tag naming
+    that layout is unidentified. It also said no corpus pair could tell a right
+    guess from a wrong one -- true only while the arbitrary `.musx` candidate for
+    these two stems was one that never reached this sweep. Deterministic pairing
+    surfaced them, so the oracle for that gap now exists.
+    """
 
 
 def pairs() -> list[tuple[Path, Path]]:
-    mus = {p.stem: p for p in CORPUS.rglob("*.mus")}
-    musx = {p.stem: p for p in CORPUS.rglob("*.musx")}
-    return [(mus[s], musx[s]) for s in sorted(set(mus) & set(musx))]
+    return oracle_pairs()
 
 
 def rhythm(event: Event) -> tuple[object, ...]:
@@ -132,6 +159,13 @@ def compare(mine: Score, theirs: Score, tally: Tally) -> None:
     # document's staff layout rather than staff number, so a positional zip
     # could quietly line up two different staves and report them as matching.
     if [part.id for part in mine.parts] != [part.id for part in theirs.parts]:
+        if sorted(p.id for p in mine.parts) == sorted(p.id for p in theirs.parts):
+            # Same parts, different order: the documented `instUsed` gap, not a
+            # structural failure. Counted apart so that a real one -- a part
+            # missing, or two documents that are not the same music -- still
+            # shows up in `structure` rather than hiding behind a known cause.
+            tally.part_order += 1
+            return
         tally.structure += 1
         return
     for part, other in zip(mine.parts, theirs.parts, strict=True):
@@ -180,6 +214,11 @@ def tally(paired_scores: PairedCorpus) -> Tally:
     return out
 
 
+def test_the_part_order_gap_is_still_two_documents(paired_scores: PairedCorpus) -> None:
+    """The oracle for `instUsed`. See `PART_ORDER`."""
+    assert paired_scores.reordered == PART_ORDER
+
+
 def test_a_mus_file_builds_the_same_score_shape(tally: Tally) -> None:
     """Parts, measures and events, one for one, with no exceptions.
 
@@ -191,6 +230,8 @@ def test_a_mus_file_builds_the_same_score_shape(tally: Tally) -> None:
     assert tally.compared == COMPARED
     assert tally.unbuildable == UNBUILDABLE
     assert tally.structure == 0
+    # Held back by the fixture, so this is a check on the filter, not on the gap.
+    assert tally.part_order == 0
 
 
 def test_keys_and_time_signatures_match_exactly(tally: Tally) -> None:
