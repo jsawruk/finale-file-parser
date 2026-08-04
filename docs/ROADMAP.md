@@ -170,7 +170,7 @@ The corpus reads well — **625 of 639 documents build** (`.musx` 401/401, DCL `
 2011 `.mus` 93/99), and 6 of the 14 that do not are blank scores refused on purpose. The gaps that
 remain are therefore mostly *not* about reading more bytes.
 
-1. **A CLI, before any more format work.** This project is for people who need to migrate, analyse
+1. ~~**A CLI, before any more format work.**~~ **DONE** — `finale-parser`. This project is for people who need to migrate, analyse
    or archive scores, and none of them can reach the converter without writing Python: there is no
    `[project.scripts]` entry and no cli module. That is the largest gap between what works and what
    is usable, and it carries no research risk. Conversion is the headline command
@@ -250,7 +250,9 @@ the CLI serves the practical need first.
       documents and 224 `.mus`. See `enigma/to_ir.py` and `export/musicxml.py`.
 - [ ] Desktop frontend: hex viewer with decoded structure values (DECIDED — framework still open).
 - [ ] Desktop frontend: notation rendering.
-- [ ] CLI for dumping file structure.
+- [x] **CLI** — `finale-parser`, with `convert` and `inspect`. Takes a file or a
+      directory; a batch reports and skips what will not build rather than aborting, and
+      never overwrites without `--force`. See `src/finale_file_parser/cli.py`.
 - [ ] **`.musx` `tupletDef` without `symbolicNum`.** Three corpus `.musx` documents fail to build on
       it — the only remaining `.musx` failures, and the largest single unread thing on that side.
 - [ ] **Staff and group names from a `.mus`.** The names are in the file and the id that selects one
