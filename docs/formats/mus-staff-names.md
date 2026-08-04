@@ -87,6 +87,71 @@ articulation-definition table and matching by coincidence.
 So one anchor per document would resolve every name in it. That is the whole of the remaining gap,
 and it is a much smaller one than "there is a lookup record nobody can find".
 
+### 3d. RETRACTED AGAIN: there is no per-document base
+
+**The unknown was mis-stated, by me, twice.** §3a and §3b describe what is missing as a
+*per-document base* — a number that turns an id into a block and differs from document to document.
+It does not exist, because **the mapping is document-independent**.
+
+The evidence is a single id measured across genuinely different music. **Name id 2 selects text
+block 30 in ten documents — ten distinct pieces, ten distinct entry counts** (Angels We Have Heard,
+Away in a Manger, Deck the Hall, Good King Wenceslas, Hark! the Herald, Jingle Bells, Joy to the
+World, Ode to Joy, Silent Night, We Wish You). Across all 25 anchors and 9 distinct ids, **no id ever
+selects two different blocks**.
+
+The delta appeared to vary between documents only because different documents use different ids.
+Within a document it is constant because the ids and blocks both advance by two (§3c); between
+documents it "varies" for the trivial reason that a document starting at id 93 and one starting at
+id 2 are not comparable numbers.
+
+The independence matters as much as the constancy, and is pinned separately: three of the other
+repeats are variants of one arrangement, and reading those as ten-fold corroboration is exactly the
+near-duplicate trap this corpus has sprung before. Entry count stands in for "different music",
+which is the same filter the oracle pairing uses.
+
+**What this changes.** The remaining work is to recover a *fixed table*, not to compute anything per
+document. Observed so far, and never contradicted:
+
+| name id | text block |
+| --- | --- |
+| 2 | 30 |
+| 89 | 20 |
+| 91, 92, 93 | 22 |
+| 94, 95 | 24 |
+| 97 | 26 |
+| 98 | 37 |
+
+That is 9 ids over about 6 independent documents — enough to establish the *shape* of the answer and
+far too little to ship as a table. Note that the map is many-to-one and not arithmetic: 91, 92 and 93
+all select block 22. Any attempt to fit a formula to nine points would be the palette trap again.
+
+**So the gap is now a data problem rather than a reverse-engineering one.** It closes when either
+more paired documents cover more ids, or Finale's own default table is obtained from outside this
+corpus. It does not close by staring harder at these files.
+
+### 3c. Why the delta is constant, and four more approaches ruled out
+
+**The constancy now has a reason.** A staff has a full name and an abbreviated one, at `staffSpec`
++30 and +32, and those are consecutive ids. The blocks they select are consecutive too. So each named
+staff consumes **two ids and two blocks**, the sequences advance in lockstep — verified, id step 2 and
+block step 2, in all five multi-anchor documents — and `id - block` cannot drift within a document.
+
+That reduces the problem precisely: the two sequences are rigid, so **everything hinges on where they
+start**. One anchor per document is still the whole of it.
+
+Ruled out since, each stated with the method so it is not re-run:
+
+| searched | result |
+| --- | --- |
+| the block region derived from the shared palette | fails. Block 1 is the document title, so "first block whose text differs from the palette majority" is always 1; and the name blocks (20, 22, 24, 26, 30, 37 across the corpus) sit *inside* the palette's numeric range rather than after it |
+| the blocks a document overrides, as a set | not a rule, a heuristic. Blocks 14-19 hold title, composer and markup; the names are somewhere after, and picking them out by inspecting text is the kind of fit this file already warns about |
+| a record holding the base directly, at any offset to +80 | no `others` record matches all 17 anchored documents; the best explains 4 |
+| **a table indexed by the id** — the shape `instUsed` (tag 159) and `repeatPassList` both turned out to have | none. No `(tag, base, stride)` satisfies `u16(payload, base + stride x id) == block` for even one document's anchors, over strides 2-24 and bases 0-64, in `others` or `details` |
+
+The table search is the one worth noting as a genuine surprise: two other fields in this format
+resolved to arrays in a single record, so a text-block table was the natural next guess, and it is
+not there.
+
 **Searched for, and not found: a record holding the base.** With the anchors above the target is
 exact — for a document with an anchor, the base *is* `id - block` — so a candidate can be required to
 equal it in **every** anchored document rather than merely correlate. 17 documents have an anchor
