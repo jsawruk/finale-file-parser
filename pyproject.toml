@@ -10,6 +10,11 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = ["defusedxml>=0.7.1"]
 
+[project.scripts]
+# The command is shorter than the distribution, which is ordinary --
+# python-dateutil gives you `dateutil`. See src/finale_file_parser/cli.py.
+finale-parser = "finale_file_parser.cli:main"
+
 [dependency-groups]
 # Dev tooling. `uv sync` installs these by default.
 dev = [
