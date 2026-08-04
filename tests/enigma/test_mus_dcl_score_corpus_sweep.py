@@ -204,3 +204,38 @@ def test_the_cohort_draws_its_double_barlines() -> None:
                 if measure.barline_style:
                     styles[measure.barline_style] += 1
     assert styles["light-light"] == EXPECTED_DOUBLE_BARLINES
+
+
+DOCUMENTS_WITH_MIRRORED_FRAMES = 5
+"""Documents where two `frameSpec` records name the same entry span.
+
+That is Finale's **mirror**: one staff displays another's music, so both point at
+one passage. `docs/eeppd.txt` warns that "mirrors and voice 2 create
+complications", and this is the complication -- `locate_entries` maps an entry to
+one staff and measure, so a passage claimed twice is rejected.
+
+It is systematic rather than damage: one document carries 42 mirrored spans. Only
+one document actually fails on it, because only there do two `gfhold` records
+reference the same span; elsewhere the duplicate frame is never named. Pinned so
+that modelling mirrors shows up here, and so the count is not mistaken for
+corruption. See `mus_document.UNTRANSLATED`.
+"""
+
+
+def test_mirrored_frames_are_a_known_and_counted_shape() -> None:
+    """See `DOCUMENTS_WITH_MIRRORED_FRAMES`."""
+    documents = 0
+    for path in _dcl_files():
+        try:
+            document = read_mus_document(path)
+        except CorruptScoreError:
+            continue
+        spans: dict[tuple[str, str], int] = collections.Counter()
+        for frame in document.others.of_tag("frameSpec"):
+            if "part" in frame.attrs:
+                continue
+            start, end = frame.fields.get("startEntry"), frame.fields.get("endEntry")
+            if isinstance(start, str) and isinstance(end, str):
+                spans[(start, end)] += 1
+        documents += any(count > 1 for count in spans.values())
+    assert documents == DOCUMENTS_WITH_MIRRORED_FRAMES
