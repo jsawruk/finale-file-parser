@@ -658,18 +658,23 @@ def _others_records(records: tuple[MusOther, ...]) -> list[Record]:
             # A part-variant record; `part` absent means the score record, which
             # is the convention every downstream module filters on.
             attrs["part"] = str(record.part)
-        if record.tag == TAG_FRAME_SPEC and len(record.payload) >= 8:
-            out.append(
-                Record(
-                    tag="frameSpec",
-                    attrs=attrs,
-                    text="",
-                    fields={
-                        "startEntry": str(_u32(record.payload, 0)),
-                        "endEntry": str(_u32(record.payload, 4)),
-                    },
-                )
-            )
+        if record.tag == TAG_FRAME_SPEC and len(record.payload) >= _ROW_DATA:
+            # The pair is in the record's LAST incidence, exactly as in the
+            # 2001-2005 era: a frameSpec carrying a `startTime` is 24 bytes, the
+            # start time block first. Reading +0 regardless took the start time
+            # as the entry pair -- "chain references missing entry 3584", 3584
+            # EDU being a start time. 15 of the 10,465 corpus records are this
+            # shape. See `_FRAME_START_TIME`.
+            span = _frame_span(record.payload, len(record.payload) // _ROW_DATA, "little")
+            if span is not None:
+                start, end, start_time = span
+                frame_fields: dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]] = {
+                    "startEntry": str(start),
+                    "endEntry": str(end),
+                }
+                if start_time is not None:
+                    frame_fields[_FRAME_START_TIME] = str(start_time)
+                out.append(Record(tag="frameSpec", attrs=attrs, text="", fields=frame_fields))
         elif record.tag == TAG_MEAS_SPEC and len(record.payload) >= 8:
             out.append(
                 Record(tag="measSpec", attrs=attrs, text="", fields=_meas_spec(record.payload))

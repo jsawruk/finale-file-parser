@@ -93,9 +93,9 @@ def clef_entry(stride: int, adjust: int, char: int, ydisp: int, shape: int = 0) 
 
 
 def test_translates_a_frame_spec(pools: Callable[..., None]) -> None:
-    pools(
-        others=(MusOther(FRAME_SPEC, 3, 0, (9).to_bytes(4, "little") + (10).to_bytes(4, "little")),)
-    )
+    """A frame's own incidence is twelve bytes -- the pair, then four spare.
+    Every one of the 10,465 corpus records is twelve or twenty-four."""
+    pools(others=(MusOther(FRAME_SPEC, 3, 0, entry_pair(9, 10)),))
     record = read_mus_document(PATH).others.get("frameSpec", 3)
     assert record is not None
     assert (record.fields["startEntry"], record.fields["endEntry"]) == ("9", "10")
@@ -816,3 +816,33 @@ def test_the_flags_byte_is_unmoved_in_a_little_endian_document() -> None:
     fields = adapter._meas_spec(meas_spec_with_flags((2 << 4) | 0x08), "little")
     assert fields["barline"] == "double"
     assert "forRepBar" in fields
+
+
+def test_a_2011_frame_with_a_start_time_takes_the_pair_from_the_last_incidence(
+    pools: Callable[..., None],
+) -> None:
+    """The same shape as a 2001-2005 frame, and it was only fixed there.
+
+    A `frameSpec` carrying a `startTime` is 24 bytes: the start time block, then
+    the entry pair. Reading +0 unconditionally takes the start time as the pair,
+    which is why four corpus documents raised "chain references missing entry
+    3584" -- 3584 EDU being a start time, not an entry number.
+    """
+    payload = start_time_row(3584) + entry_pair(129, 140)
+    pools(others=(MusOther(FRAME_SPEC, 7, 0, payload),))
+    record = read_mus_document(PATH).others.get("frameSpec", 7)
+    assert record is not None
+    assert (record.fields["startEntry"], record.fields["endEntry"]) == ("129", "140")
+    assert record.fields["startTime"] == "3584"
+
+
+def test_a_2011_frame_without_a_start_time_is_unchanged(
+    pools: Callable[..., None],
+) -> None:
+    """10,450 of the 10,465 corpus records are this shape; the fix must not move
+    them."""
+    pools(others=(MusOther(FRAME_SPEC, 8, 0, entry_pair(9, 12)),))
+    record = read_mus_document(PATH).others.get("frameSpec", 8)
+    assert record is not None
+    assert (record.fields["startEntry"], record.fields["endEntry"]) == ("9", "12")
+    assert "startTime" not in record.fields

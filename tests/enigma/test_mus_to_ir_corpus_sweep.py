@@ -28,7 +28,7 @@ CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
-COMPARED = 93
+COMPARED = 97
 """Same-content pairs whose `.mus` builds a Score.
 
 Was 73, then 76, then 81 as the two pool-walk fixes landed, and now 91: pairing
@@ -38,12 +38,16 @@ contribute no structural, attribute, rhythm or tuplet difference of any kind --
 more oracle at the same fidelity, which is the useful part.
 """
 
-UNBUILDABLE = 4
-"""Documents whose `.mus` frame chain references an entry the pool does not hold.
+UNBUILDABLE = 0
+"""Paired documents whose `.mus` will not build. **None.**
 
-All fail the same way (`frameSpec N chain references missing entry M`): one class
-of failure, counted, not four separate mysteries. Two are newly paired documents
-that were never reaching this sweep to fail in it.
+Was 4, and all four failed the same way -- a frame chain naming an entry the pool
+does not hold. They were not missing entries at all: their `frameSpec` carried a
+`startTime`, and the reader took that block as the entry pair, so "missing entry
+3584" was a start time in EDU rather than an entry number. See
+`mus_document._FRAME_START_TIME`.
+
+Pinned at 0 so the next one is a regression rather than a statistic.
 """
 
 PART_ORDER = 0
