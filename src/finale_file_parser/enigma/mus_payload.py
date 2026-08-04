@@ -117,9 +117,17 @@ _MAX_POOLS = 64
 """Bound the walk. Real files carry four; the cap only has to stop a runaway."""
 
 _ZLIB_DEFLATE_METHOD = 8
-_MIN_STREAM_OUTPUT = 4096
-"""A real stream inflates to far more than this; the floor rejects byte pairs
-that merely look like a zlib header, which occur a few times per file by chance."""
+_MIN_FIRST_STREAM_OUTPUT = 4096
+"""How much the **first** stream must inflate to.
+
+Nothing frames the first one -- it is found by scanning -- so a chance byte pair
+that both looks like a zlib header and inflates could start the chain in the
+wrong place and drag every later offset with it. The floor rejects those.
+
+It applies to the first stream only. Applied to all of them it discarded the
+entry pool of two corpus documents, short carols whose pools inflate to 3,268 and
+2,394 bytes; each then read as three pools instead of four, with no entry pool
+among them. See `_zlib_streams`."""
 
 
 def _is_zlib_header(data: bytes, index: int) -> bool:
@@ -273,34 +281,67 @@ def _zlib_pools(data: bytes) -> tuple[MusPool, ...]:
 def _zlib_streams(data: bytes) -> list[bytes]:
     """Every zlib stream in `data`, in order. Raises if there are none.
 
-    Streams are located by their zlib header rather than a fixed offset: the
-    preamble ahead of the first one is variable-length, and two corpus files
-    start at 0x20A rather than the usual 0x216.
+    **The chain is framed, so only the first stream is searched for.** Each
+    stream is followed by the same ten-byte record header the DCL container
+    uses -- kind, length, checksum -- and then the next stream: the gap between
+    one stream's end and the next one's start is exactly 10 bytes in 297 of the
+    307 gaps across the 2011 corpus, and the ten exceptions are chance headers
+    that a size floor was previously needed to reject.
+
+    Following the framing instead of scanning finds four pools in **99 of 99**
+    corpus documents. Scanning with a 4,096-byte floor found three in two of
+    them, having discarded a small entry pool; scanning without one found
+    spurious streams.
+
+    The first stream is still located by scanning, because the preamble ahead of
+    it is variable-length -- two corpus files start at 0x20A rather than the
+    usual 0x216 -- and it alone must clear `_MIN_FIRST_STREAM_OUTPUT`.
     """
     out: list[bytes] = []
     total = 0
-    position = 0
-    while position < len(data) - 1:
+    start = _first_stream(data)
+    position = 0 if start is None else start
+    while start is not None and position < len(data) - 1:
         if not _is_zlib_header(data, position):
-            position += 1
-            continue
-        index = position
+            break
         try:
-            chunk, consumed = _inflate_bounded(data[index:], MAX_MUS_PAYLOAD - total)
+            chunk, consumed = _inflate_bounded(data[position:], MAX_MUS_PAYLOAD - total)
         except (zlib.error, CorruptScoreError):
-            # A byte pair that merely looks like a header; step past and go on.
-            position = index + 1
-            continue
-        if len(chunk) < _MIN_STREAM_OUTPUT:
-            position = index + 1
-            continue
+            break
         out.append(chunk)
         total += len(chunk)
         # Guard against a zero-width advance, which would loop forever.
-        position = index + max(consumed, 1)
+        end = position + max(consumed, 1)
+        # The framed position first, then the abutting one. Both are exact, so
+        # neither can drift; and a real record header cannot be mistaken for a
+        # zlib one, because its `kind` byte fails the deflate low-nibble test.
+        position = next(
+            (at for at in (end + _RECORD_HEADER, end) if _is_zlib_header(data, at)),
+            len(data),
+        )
     if not out:
         raise CorruptScoreError("no zlib stream found in payload")
     return out
+
+
+def _first_stream(data: bytes) -> int | None:
+    """Where the chain starts: the first header that inflates substantially.
+
+    See `_MIN_FIRST_STREAM_OUTPUT` for why this one is held to a size and the
+    rest are not.
+    """
+    position = 0
+    while position < len(data) - 1:
+        if _is_zlib_header(data, position):
+            try:
+                chunk, _ = _inflate_bounded(data[position:], MAX_MUS_PAYLOAD)
+            except (zlib.error, CorruptScoreError):
+                position += 1
+                continue
+            if len(chunk) >= _MIN_FIRST_STREAM_OUTPUT:
+                return position
+        position += 1
+    return None
 
 
 def _inflate_bounded(data: bytes, budget: int) -> tuple[bytes, int]:

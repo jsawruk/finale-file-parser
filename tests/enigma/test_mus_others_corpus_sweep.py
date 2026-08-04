@@ -41,10 +41,10 @@ CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
-PAIRS = 95
+PAIRS = 97
 """Filename stems present as both a `.mus` and a `.musx`."""
 
-READABLE = 95
+READABLE = 97
 """Every pair's `.mus` others pool tiles its stream exactly.
 
 It was 84 until two things were fixed: `0xFFFF` recognised as filler, and the
@@ -52,7 +52,7 @@ payload cap raised. The cap was the larger cause and was measured circularly --
 see `_MAX_PAYLOAD` in `mus_others.py`.
 """
 
-SAME_CONTENT = 95
+SAME_CONTENT = 97
 """Readable pairs whose two containers hold the same music."""
 
 FRAME_SPEC_KEY_EXCEPTIONS = 5

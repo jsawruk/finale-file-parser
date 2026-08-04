@@ -29,7 +29,7 @@ CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
-READABLE = 95
+READABLE = 97
 """Every pair's `.mus` details pool tiles its stream exactly.
 
 It was 84 until `0xFFFF` was recognised as filler alongside `0x0000`. The seven
@@ -39,7 +39,7 @@ refuses those seven for an unrelated reason -- a `tupletDef`-sized record under
 tag 158 whose length field is not understood.
 """
 
-SAME_CONTENT = 95
+SAME_CONTENT = 97
 """Readable pairs holding the same music and carrying `gfhold` records.
 
 Was 80 until `0xFFFF` was recognised as filler; the three added are documents
@@ -59,7 +59,7 @@ Pinned as a subtraction rather than folded into an equality so that the offset
 under test still has to be right on all 9,932 records that name a real frame.
 """
 
-CLEF_ID = 9673
+CLEF_ID = 9736
 CLEF_ID_DEFAULTED = 272
 """`clefID` matches outright in 8,356 records. The other 272 are `.mus` storing
 0 where the `.musx` materialises that staff's `defaultClef` -- so every record

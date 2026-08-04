@@ -54,7 +54,7 @@ records whose entry is a rest, against 16,591 on notes. Pinned so that a change
 in the count means the lyric-to-entry mapping moved, rather than going unnoticed.
 """
 
-MUS_EXPORTED = 224
+MUS_EXPORTED = 226
 """`.mus` documents that export. The same invariants are asserted on them: a
 reader-specific defect would otherwise hide behind the `.musx` path.
 
