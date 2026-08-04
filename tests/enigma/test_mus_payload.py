@@ -277,3 +277,53 @@ def test_dcl_stream_larger_than_the_cap_is_refused(tmp_path: Path) -> None:
     data = path.read_bytes()
     with pytest.raises(Exception, match="output cap"):
         blast_decompress(data, DCL_OFFSET, 4)
+
+
+ZLIB_HEADER_BYTES = 10
+"""kind (2) + length (4) + checksum (4), between one zlib stream and the next."""
+
+
+def _zlib_chain(*payloads: bytes, year: int = 2011) -> bytes:
+    """A 2011-era file: streams separated by their ten-byte record headers."""
+    out = _mus_header(year)
+    for payload in payloads:
+        out += bytes(ZLIB_HEADER_BYTES) + zlib.compress(payload)
+    return bytes(out)
+
+
+def test_a_small_pool_is_not_discarded(tmp_path: Path) -> None:
+    """A pool is found by the chain's framing, not by how much it inflates to.
+
+    The walker used to require 4,096 bytes of output, to reject byte pairs that
+    merely look like a zlib header. That floor also discarded the **entry pool**
+    of two corpus documents -- short carols, 86 and 63 entries, 3,268 and 2,394
+    bytes -- and each then read as three pools instead of four, with no entry
+    pool among them.
+    """
+    path = tmp_path / "small.mus"
+    big = b"A" * 8000
+    small = b"B" * 400
+    path.write_bytes(_zlib_chain(big, small, big))
+    pools = read_mus_pools(path)
+    assert [len(pool.data) for pool in pools] == [8000, 400, 8000]
+
+
+def test_the_first_stream_still_needs_to_be_substantial(tmp_path: Path) -> None:
+    """The floor is kept for the *first* stream, which is found by scanning.
+
+    Nothing frames the first one, so a chance header that happens to inflate
+    could otherwise start the chain in the wrong place and drag every later
+    offset with it.
+    """
+    path = tmp_path / "tiny-first.mus"
+    path.write_bytes(_zlib_chain(b"C" * 100))
+    with pytest.raises(CorruptScoreError):
+        read_mus_pools(path)
+
+
+def test_the_chain_stops_where_the_framing_does(tmp_path: Path) -> None:
+    """Trailing bytes that are not a framed stream end the walk rather than
+    being scanned past -- which is what keeps a false header out of the chain."""
+    path = tmp_path / "trailing.mus"
+    path.write_bytes(_zlib_chain(b"D" * 8000) + b"\x78\x9c" + b"\x00" * 64)
+    assert [len(pool.data) for pool in read_mus_pools(path)] == [8000]

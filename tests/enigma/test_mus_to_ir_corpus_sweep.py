@@ -28,7 +28,7 @@ CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
-COMPARED = 91
+COMPARED = 93
 """Same-content pairs whose `.mus` builds a Score.
 
 Was 73, then 76, then 81 as the two pool-walk fixes landed, and now 91: pairing

@@ -68,7 +68,7 @@ difference between two files, counted rather than explained away.
 BEAM_DOCUMENTS = 369
 BEAMS = 90824
 
-PAIRED_WITH_BEAMS = 90
+PAIRED_WITH_BEAMS = 91
 BEAM_EVENT_DIFFERENCES = 2
 """Two events whose beams differ between containers.
 
@@ -138,8 +138,8 @@ The distribution corroborates the reading: 3 is most common (261), then 1 (219),
 music.
 """
 
-MUS_FINGERING_DOCUMENTS = 5
-MUS_FINGERINGS = 218
+MUS_FINGERING_DOCUMENTS = 7
+MUS_FINGERINGS = 280
 """The legacy reader's own count. Pinned separately because **no paired
 document verifies it**: six pairs carry a fingering in the `.musx`, four have a
 `.mus` that does not read and two are a different arrangement. What is verified
@@ -179,7 +179,7 @@ RESERVED_STAFF_PARTS = 0
 none lays out. Must stay zero: it was one per document until it was excluded,
 and nothing else in the corpus is absent from the instrument list."""
 
-PAIRED_WITH_LYRICS = 15
+PAIRED_WITH_LYRICS = 17
 """Same-content pairs where the `.musx` carries lyrics, so the two containers
 can be compared. The only oracle for the `.mus` side, and it was 6 until pairing
 stopped guessing which `.musx` a stem meant -- nine of these fifteen were being
