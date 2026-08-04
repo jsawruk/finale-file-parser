@@ -87,6 +87,29 @@ articulation-definition table and matching by coincidence.
 So one anchor per document would resolve every name in it. That is the whole of the remaining gap,
 and it is a much smaller one than "there is a lookup record nobody can find".
 
+### 3c. Why the delta is constant, and four more approaches ruled out
+
+**The constancy now has a reason.** A staff has a full name and an abbreviated one, at `staffSpec`
++30 and +32, and those are consecutive ids. The blocks they select are consecutive too. So each named
+staff consumes **two ids and two blocks**, the sequences advance in lockstep — verified, id step 2 and
+block step 2, in all five multi-anchor documents — and `id - block` cannot drift within a document.
+
+That reduces the problem precisely: the two sequences are rigid, so **everything hinges on where they
+start**. One anchor per document is still the whole of it.
+
+Ruled out since, each stated with the method so it is not re-run:
+
+| searched | result |
+| --- | --- |
+| the block region derived from the shared palette | fails. Block 1 is the document title, so "first block whose text differs from the palette majority" is always 1; and the name blocks (20, 22, 24, 26, 30, 37 across the corpus) sit *inside* the palette's numeric range rather than after it |
+| the blocks a document overrides, as a set | not a rule, a heuristic. Blocks 14-19 hold title, composer and markup; the names are somewhere after, and picking them out by inspecting text is the kind of fit this file already warns about |
+| a record holding the base directly, at any offset to +80 | no `others` record matches all 17 anchored documents; the best explains 4 |
+| **a table indexed by the id** — the shape `instUsed` (tag 159) and `repeatPassList` both turned out to have | none. No `(tag, base, stride)` satisfies `u16(payload, base + stride x id) == block` for even one document's anchors, over strides 2-24 and bases 0-64, in `others` or `details` |
+
+The table search is the one worth noting as a genuine surprise: two other fields in this format
+resolved to arrays in a single record, so a text-block table was the natural next guess, and it is
+not there.
+
 **Searched for, and not found: a record holding the base.** With the anchors above the target is
 exact — for a document with an anchor, the base *is* `id - block` — so a candidate can be required to
 equal it in **every** anchored document rather than merely correlate. 17 documents have an anchor

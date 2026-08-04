@@ -162,3 +162,26 @@ def test_every_anchored_block_holds_a_name() -> None:
             assert len(set(texts)) == len(texts), "two staves resolved to one name"
         resolved += len(texts)
     assert resolved == ID_SPACES_AGREE
+
+
+def test_ids_and_blocks_advance_in_lockstep() -> None:
+    """**Why** the delta is constant, rather than just that it is.
+
+    A staff has a full name and an abbreviated one, at `staffSpec` +30 and +32,
+    and they are consecutive ids. The blocks they select are consecutive too, so
+    each named staff consumes two of each and the two sequences advance together
+    -- which is what pins `id - block` within a document. Observing the
+    constancy came first; this is the reason for it, and it says the remaining
+    unknown is only where the two sequences *start*.
+    """
+    checked = 0
+    for anchors, _ in _anchors():
+        if len(anchors) < 2:
+            continue
+        checked += 1
+        ordered = sorted(anchors.items())
+        id_steps = {b[0] - a[0] for a, b in zip(ordered, ordered[1:], strict=False)}
+        block_steps = {b[1] - a[1] for a, b in zip(ordered, ordered[1:], strict=False)}
+        assert id_steps == {2}, "name ids do not advance by two"
+        assert block_steps == {2}, "text blocks do not advance by two"
+    assert checked == ANCHORED_DOCUMENTS
