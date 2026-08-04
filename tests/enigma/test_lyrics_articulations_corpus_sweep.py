@@ -68,7 +68,7 @@ difference between two files, counted rather than explained away.
 BEAM_DOCUMENTS = 369
 BEAMS = 90824
 
-PAIRED_WITH_BEAMS = 91
+PAIRED_WITH_BEAMS = 95
 BEAM_EVENT_DIFFERENCES = 2
 """Two events whose beams differ between containers.
 
@@ -99,8 +99,8 @@ of one instrument.
 Rose again when three documents that had never built started to: see
 `enigma.tuplet.tuplets_by_entry`."""
 
-PAIRED_WITH_GROUPS = 22
-GROUP_NAME_ONLY_DIFFERENCES = 6
+PAIRED_WITH_GROUPS = 26
+GROUP_NAME_ONLY_DIFFERENCES = 7
 """Pairs differing from their `.musx` in the group name and nothing else.
 
 A `.mus` recovers the name's text-block id but carries no text blocks to
@@ -126,7 +126,7 @@ on bars no part reached. Every measure now belongs to every part, so a barline
 always has somewhere to be drawn.
 """
 
-PAIRED_WITH_REPEATS = 24
+PAIRED_WITH_REPEATS = 27
 """Same-content pairs where either container carries a repeat."""
 
 FINGERING_DOCUMENTS = 18
@@ -179,7 +179,7 @@ RESERVED_STAFF_PARTS = 0
 none lays out. Must stay zero: it was one per document until it was excluded,
 and nothing else in the corpus is absent from the instrument list."""
 
-PAIRED_WITH_LYRICS = 17
+PAIRED_WITH_LYRICS = 21
 """Same-content pairs where the `.musx` carries lyrics, so the two containers
 can be compared. The only oracle for the `.mus` side, and it was 6 until pairing
 stopped guessing which `.musx` a stem meant -- nine of these fifteen were being
