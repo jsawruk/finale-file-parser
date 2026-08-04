@@ -112,14 +112,16 @@ UNTRANSLATED = (
     "Final barlines: measSpec's flags byte at +10 holds the barline style in its "
     "high nibble, and 1 (normal) and 2 (double) ARE read -- see enigma.barlines. "
     "A final bar is not: nibble 3 is the obvious reading and it does not occur "
-    "once in 4,427 measures across 99 corpus .mus documents, so nothing checks a "
-    "guess. A .mus therefore ends a piece with an ordinary barline where the "
+    "once in 8,540 measures across all 238 corpus .mus documents -- re-derived, "
+    "and the DCL cohort's 4,113 measures had never been measured for it -- so "
+    "nothing checks a guess. A .mus therefore ends a piece with an ordinary barline where the "
     ".musx draws a final one.",
     "Staff group names: a staffGroup's fullID IS recovered, but resolving it "
     "needs the textBlock -> blockText chain, which a .mus does not supply -- "
     "the same missing chain as staffSpec part names. Groups therefore come out "
-    "unnamed rather than labelled with a raw block number; 4 of the 14 paired "
-    "documents with groups differ from their .musx in nothing else.",
+    "unnamed rather than labelled with a raw block number. 26 of the 95 paired "
+    "documents carry a group, and the ones differing from their .musx in "
+    "nothing but the name are pinned as GROUP_NAME_ONLY_DIFFERENCES.",
     "Staff layout order in a 2001-2005 .mus: the 2011 tag IS identified (159, "
     "see mus_others.TAG_INST_USED) and read, so a 2011 .mus now lays its staves "
     "out in score order rather than numeric order. The DCL era carries an ETF "
@@ -149,9 +151,12 @@ UNTRANSLATED = (
     "no paired corpus document uses a chorus or section track, so their tags are "
     "unknown and those lyrics are absent from a .mus-derived score.",
     "gfhold frame3-4 in a 2011 .mus: layers 3 and 4. Frames 1 and 2 are at "
-    "payload +6 and +8, confirmed against the corpus; no corpus .musx carries a "
-    "frame3 or frame4, so the next two slots are a guess this era's reader does "
-    "not make. A 2011 document using layer 3 or 4 therefore leaves those entries "
+    "payload +6 and +8, confirmed against the corpus. This entry used to say no "
+    "corpus .musx carries a frame3 or frame4; that is wrong -- 141 frame3 and "
+    "147 frame4 slots exist. What is true, and is the reason the next two slots "
+    "stay a guess, is that NONE of them is in a PAIRED document: 0 of 95. A "
+    ".musx with no .mus cannot verify a .mus offset. A 2011 document using "
+    "layer 3 or 4 therefore leaves those entries "
     "unplaced, which locate_entries rejects as orphans -- a loud failure rather "
     "than a silent misplacement. The 2001-2005 rows reader does read all four "
     "slots; see _FRAME_LAYERS for why the number is the format's, not a guess.",
@@ -801,13 +806,21 @@ def _meas_spec(
     key = _u16(payload, 2, order)
     if key:
         fields["keySig"] = Record(tag="keySig", attrs={}, text="", fields={"key": str(key)})
-    if len(payload) > _MEAS_FLAGS:
+    if len(payload) > _MEAS_FLAGS + 1:
+        # The **low byte of the u16 at +10**, not the byte at +10. ETF stores
+        # `others` data as two-byte values, so the flags sit at +10 in a
+        # little-endian file and +11 in a big-endian one. Reading +10 either way
+        # took the high byte from all 37 big-endian DCL documents: their barline
+        # nibble came out {0, 4, 6, 8, 12} where every little-endian file shows
+        # {1, 2} -- normal and double -- and where those same documents show
+        # {1, 2} at +11.
+        flags = _u16(payload, _MEAS_FLAGS, order) & 0xFF
         for name, bit in _MEAS_REPEAT_BITS.items():
-            if payload[_MEAS_FLAGS] & bit:
+            if flags & bit:
                 # Written as a bare presence, matching the `.musx`, where these
                 # are empty elements rather than values.
                 fields[name] = ""
-        style = _MEAS_BARLINE_STYLES.get(payload[_MEAS_FLAGS] >> 4)
+        style = _MEAS_BARLINE_STYLES.get(flags >> 4)
         if style is not None:
             fields["barline"] = style
     return fields

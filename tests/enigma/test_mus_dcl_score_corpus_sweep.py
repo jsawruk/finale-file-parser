@@ -10,6 +10,7 @@ Report counts only -- never a corpus filename, title, or record value.
 
 from __future__ import annotations
 
+import collections
 from pathlib import Path
 
 import pytest
@@ -54,6 +55,17 @@ overwhelmingly provable dead space -- 4,675 duplicate live passages chain for
 chain. (The three documents whose frames reach nothing at all are refused
 outright rather than pruned to nothing, so their 356 entries are not counted
 here.) See `docs/formats/mus-dcl-container.md`.
+"""
+
+EXPECTED_DOUBLE_BARLINES = 1020
+"""Measures the cohort draws a double bar on.
+
+**The pin that holds the flags byte's byte order.** It is the low byte of the u16
+at +10, so it sits at +10 in a little-endian file and +11 in a big-endian one;
+reading +10 either way took the high byte from all 37 big-endian documents. That
+was worth 461 double bars -- this number reads 559 if the byte order is ignored
+again -- and nothing else in the suite would have noticed, because no sweep
+counted a DCL barline.
 """
 
 EXPECTED_MALFORMED = 2
@@ -177,3 +189,18 @@ def test_the_reader_discards_only_dead_pool_space() -> None:
             continue
         dead += len(read_mus_entry_records(path)) - len(document.entries.records)
     assert dead == EXPECTED_DEAD_ENTRIES
+
+
+def test_the_cohort_draws_its_double_barlines() -> None:
+    """See `EXPECTED_DOUBLE_BARLINES`. Counted per measure across the cohort."""
+    styles: collections.Counter[str] = collections.Counter()
+    for path in _dcl_files():
+        try:
+            score = build_score(read_mus_document(path))
+        except (CorruptScoreError, MalformedScoreError):
+            continue
+        for part in score.parts:
+            for measure in part.measures:
+                if measure.barline_style:
+                    styles[measure.barline_style] += 1
+    assert styles["light-light"] == EXPECTED_DOUBLE_BARLINES
