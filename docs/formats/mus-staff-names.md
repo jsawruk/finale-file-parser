@@ -87,6 +87,48 @@ articulation-definition table and matching by coincidence.
 So one anchor per document would resolve every name in it. That is the whole of the remaining gap,
 and it is a much smaller one than "there is a lookup record nobody can find".
 
+### 3d. RETRACTED AGAIN: there is no per-document base
+
+**The unknown was mis-stated, by me, twice.** §3a and §3b describe what is missing as a
+*per-document base* — a number that turns an id into a block and differs from document to document.
+It does not exist, because **the mapping is document-independent**.
+
+The evidence is a single id measured across genuinely different music. **Name id 2 selects text
+block 30 in ten documents — ten distinct pieces, ten distinct entry counts** (Angels We Have Heard,
+Away in a Manger, Deck the Hall, Good King Wenceslas, Hark! the Herald, Jingle Bells, Joy to the
+World, Ode to Joy, Silent Night, We Wish You). Across all 25 anchors and 9 distinct ids, **no id ever
+selects two different blocks**.
+
+The delta appeared to vary between documents only because different documents use different ids.
+Within a document it is constant because the ids and blocks both advance by two (§3c); between
+documents it "varies" for the trivial reason that a document starting at id 93 and one starting at
+id 2 are not comparable numbers.
+
+The independence matters as much as the constancy, and is pinned separately: three of the other
+repeats are variants of one arrangement, and reading those as ten-fold corroboration is exactly the
+near-duplicate trap this corpus has sprung before. Entry count stands in for "different music",
+which is the same filter the oracle pairing uses.
+
+**What this changes.** The remaining work is to recover a *fixed table*, not to compute anything per
+document. Observed so far, and never contradicted:
+
+| name id | text block |
+| --- | --- |
+| 2 | 30 |
+| 89 | 20 |
+| 91, 92, 93 | 22 |
+| 94, 95 | 24 |
+| 97 | 26 |
+| 98 | 37 |
+
+That is 9 ids over about 6 independent documents — enough to establish the *shape* of the answer and
+far too little to ship as a table. Note that the map is many-to-one and not arithmetic: 91, 92 and 93
+all select block 22. Any attempt to fit a formula to nine points would be the palette trap again.
+
+**So the gap is now a data problem rather than a reverse-engineering one.** It closes when either
+more paired documents cover more ids, or Finale's own default table is obtained from outside this
+corpus. It does not close by staring harder at these files.
+
 ### 3c. Why the delta is constant, and four more approaches ruled out
 
 **The constancy now has a reason.** A staff has a full name and an abbreviated one, at `staffSpec`

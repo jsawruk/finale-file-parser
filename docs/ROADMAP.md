@@ -176,7 +176,11 @@ remain are therefore mostly *not* about reading more bytes.
    is usable, and it carries no research risk. Conversion is the headline command
    (`in.mus -> out.musicxml`); the structure dump already listed below is the second one.
 
-2. **Staff and group names.** The most visible defect in every `.mus` export — parts come out
+2. **Staff and group names.** ~~The per-document base~~ — **there is none**; the id-to-block mapping
+   is document-independent, so what is missing is a *fixed table*. That makes this a data problem,
+   not a reverse-engineering one: it closes when more paired documents cover more ids, or Finale's
+   own table is obtained from outside this corpus. Nine ids are known. Do not fit a formula to them.
+   The original entry, for context — the most visible defect in every `.mus` export — parts come out
    `Staff 1` rather than `Flute`. Narrowed to one unknown, the per-document base, and it unblocks
    group names too. **Time-box it**: the broad search has already been run and failed. Start with
    the one untested idea — whether the base is `lowest id - lowest name block` within a document,

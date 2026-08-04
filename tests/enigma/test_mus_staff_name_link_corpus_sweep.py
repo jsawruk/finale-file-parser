@@ -185,3 +185,59 @@ def test_ids_and_blocks_advance_in_lockstep() -> None:
         assert id_steps == {2}, "name ids do not advance by two"
         assert block_steps == {2}, "text blocks do not advance by two"
     assert checked == ANCHORED_DOCUMENTS
+
+
+DISTINCT_NAME_IDS = 9
+INDEPENDENT_DOCUMENTS_FOR_ID_TWO = 10
+"""Documents mapping name id 2 to text block 30, all of them different music.
+
+Ten distinct pieces with ten distinct entry counts. This is the evidence that the
+id-to-block mapping does not vary by document, and it is worth pinning the
+*independence* rather than the count: three of the other repeats are variants of
+one arrangement, and reading those as corroboration is how this corpus has misled
+this project before.
+"""
+
+
+def test_no_name_id_maps_to_two_different_blocks() -> None:
+    """**The mapping is document-independent**, and this is what says so.
+
+    `mus-staff-names.md` long described the unknown as a *per-document base*.
+    That was wrong: the delta appeared to vary between documents only because
+    different documents use different ids. Across every anchor the corpus yields,
+    an id selects one block and always the same one -- so what is missing is a
+    fixed table, not a per-document computation.
+    """
+    blocks_for: dict[int, set[int]] = {}
+    for anchors, _ in _anchors():
+        for name_id, block in anchors.items():
+            blocks_for.setdefault(name_id, set()).add(block)
+    assert len(blocks_for) == DISTINCT_NAME_IDS
+    for name_id, blocks in blocks_for.items():
+        assert len(blocks) == 1, f"id {name_id} selects more than one block: {sorted(blocks)}"
+
+
+def test_one_id_is_evidenced_by_ten_independent_documents() -> None:
+    """Guards the claim above against the near-duplicate trap.
+
+    Entry count stands in for "different music" here: it is the same filter the
+    oracle pairing uses, and ten distinct counts cannot be one arrangement
+    counted ten times.
+    """
+    from finale_file_parser.enigma.mus_entries import read_mus_entries
+
+    sizes: set[int] = set()
+    for mus_path, musx_path in oracle_pairs():
+        try:
+            musx = parse_enigma(score_xml(musx_path))
+            ids = _name_ids(mus_path)
+        except CorruptScoreError:
+            continue
+        text_id: dict[str, int] = {}
+        for block in musx.others.of_tag("textBlock"):
+            value = block.fields.get("textID")
+            if "part" not in block.attrs and isinstance(value, str):
+                text_id[block.attrs["cmper"]] = int(value)
+        if any(name_id == 2 and text_id.get("2") == 30 for name_id in ids.values()):
+            sizes.add(len(read_mus_entries(mus_path)))
+    assert len(sizes) == INDEPENDENT_DOCUMENTS_FOR_ID_TWO
