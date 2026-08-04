@@ -790,3 +790,29 @@ def test_a_frame_payload_too_short_for_its_incidence_count_is_refused() -> None:
     """Hostile input: the incidence count must not index past the payload."""
     assert adapter._frame_span(entry_pair(9, 12)[:6], 1, "little") is None
     assert adapter._frame_span(entry_pair(9, 12), 2, "little") is None
+
+
+def meas_spec_be(width: int, key: int, beats: int, divbeat: int, flags: int) -> bytes:
+    """A big-endian `measSpec`, flags in the low byte of the u16 at +10."""
+    head = b"".join(v.to_bytes(2, "big") for v in (width, key, beats, divbeat))
+    return head + bytes(2) + (flags).to_bytes(2, "big") + bytes(14)
+
+
+def test_the_flags_byte_follows_the_documents_byte_order() -> None:
+    """It is the low byte of a u16, so it moves with the byte order.
+
+    Reading payload[10] unconditionally takes the *high* byte in a big-endian
+    file. Every one of the 37 big-endian DCL documents was reading its barline
+    style and repeat flags from the wrong byte -- the corpus shows nibble {1, 2}
+    at +11 there, exactly the distribution little-endian files show at +10.
+    """
+    fields = adapter._meas_spec(meas_spec_be(305, 0, 4, 1024, (2 << 4) | 0x08), "big")
+    assert fields["barline"] == "double"
+    assert "forRepBar" in fields
+
+
+def test_the_flags_byte_is_unmoved_in_a_little_endian_document() -> None:
+    """The other half of the same claim: the fix must not shift the 102."""
+    fields = adapter._meas_spec(meas_spec_with_flags((2 << 4) | 0x08), "little")
+    assert fields["barline"] == "double"
+    assert "forRepBar" in fields
