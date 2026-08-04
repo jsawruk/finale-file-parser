@@ -163,51 +163,46 @@ limit is verified by mutation, because no real corpus archive trips one.
 
 ### Recommended order for the remaining work
 
-<!-- Written 2026-07-30, from a measurement of the corpus rather than from memory.
-     Re-derive before trusting: this file has been stale before. -->
+<!-- Rewritten 2026-08-04 after items 1-5 were worked through. Numbers from a
+     measurement, not memory. Re-derive before trusting: this file has been
+     stale before. -->
 
-The corpus reads well — **625 of 639 documents build** (`.musx` 401/401, DCL `.mus` 131/139,
-2011 `.mus` 93/99), and 6 of the 14 that do not are blank scores refused on purpose. The gaps that
-remain are therefore mostly *not* about reading more bytes.
+**631 of 639 corpus documents build** — `.musx` 401/401, 2011 `.mus` 99/99, DCL `.mus` 131/139.
 
-1. ~~**A CLI, before any more format work.**~~ **DONE** — `finale-parser`. This project is for people who need to migrate, analyse
-   or archive scores, and none of them can reach the converter without writing Python: there is no
-   `[project.scripts]` entry and no cli module. That is the largest gap between what works and what
-   is usable, and it carries no research risk. Conversion is the headline command
-   (`in.mus -> out.musicxml`); the structure dump already listed below is the second one.
+The previous list is done, and it is worth recording what it taught. Items 3, 4 and 5 were filed as
+documentation cleanup or verify-and-close; **all three contained live decoding bugs**:
 
-2. **Staff and group names.** ~~The per-document base~~ — **there is none**; the id-to-block mapping
-   is document-independent, so what is missing is a *fixed table*. That makes this a data problem,
-   not a reverse-engineering one: it closes when more paired documents cover more ids, or Finale's
-   own table is obtained from outside this corpus. Nine ids are known. Do not fit a formula to them.
-   The original entry, for context — the most visible defect in every `.mus` export — parts come out
-   `Staff 1` rather than `Flute`. Narrowed to one unknown, the per-document base, and it unblocks
-   group names too. **Time-box it**: the broad search has already been run and failed. Start with
-   the one untested idea — whether the base is `lowest id - lowest name block` within a document,
-   which falls straight out of the anchors pinned in
-   `tests/enigma/test_mus_staff_name_link_corpus_sweep.py`.
+- re-deriving a claim that cited a corpus count found `measSpec`'s flags byte being read at the wrong
+  offset in every big-endian document — 461 missing double barlines
+- "two documents with an unreadable entry pool" was a 4,096-byte floor discarding small pools; the
+  chain is framed and never needed scanning
+- "verify the dangling frame chains are unfixable" found the `startTime` incidence bug from the
+  2001-2005 reader still living in the 2011 one — 4 documents, and a silent-misplacement risk in
+  the rest
 
-3. **Re-derive the `UNTRANSLATED` claims that cite corpus counts.** Cheap and overdue. Several were
-   measured when far fewer documents were readable: the final-barline entry says a nibble "does not
-   occur once in 4,427 measures across 99 corpus `.mus` documents", and 224 `.mus` documents are
-   readable now; the fingering-font entry cites "363 of 373 paired records", and pairing changed
-   twice since. Three claims of this exact shape turned out to be harness artefacts in one week
-   (see `docs/DECISIONS.md`, 2026-07-29 and 2026-07-30). Some may simply close.
+The cheap-looking work has been the productive work. What remains:
 
-4. **The two documents with no recognisable entry pool.** The only genuinely *unread containers*
-   left, and a bounded question — possibly a small container variant.
+1. **Staff and group names.** Not a per-document computation — the id-to-block mapping is
+   document-independent, so what is missing is a **fixed table**. That makes it a *data* problem: it
+   closes when more paired documents cover more ids, or when Finale's own table is obtained from
+   outside this corpus. Nine ids are known. Do not fit a formula to them. See
+   `docs/formats/mus-staff-names.md`.
 
-5. **Verify, then close, the rest.** The 4 dangling `frameSpec` chains, the one entry two frames
-   claim, and the one `gfhold` in a measure without a key are one document each, and the dangling
-   ones look like data the file simply does not contain. Confirm that once and pin them as not
-   fixable, the way the blank scores are — leaving them in a gap list makes them read as open work.
+2. **Mirrors.** One staff displaying another's music, said by pointing two `frameSpec` records at one
+   entry span. 5 DCL documents carry them; one carries 42 and is the only document that fails,
+   because only there do two `gfhold` records name the same span. Modelling this means an entry
+   having more than one location, which the IR does not have — a real design change, not a decode.
 
-**Deliberately not next.** Text repeats and DCL staff layout order are blocked on the corpus rather
-than on effort: no `.mus`/`.musx` pair of the same music carries a text repeat, and the DCL cohort
-has no paired `.musx` at all. Rather than searching again, write down what a contributed file would
-have to contain to unblock each. The desktop frontend is larger than everything above combined, and
-the CLI serves the practical need first.
+3. **The last DCL failures, which are the files rather than the reader.** Six are blank scores
+   refused on purpose. One is a mirror (above). One has 36 `measSpec` records against `gfhold`
+   references reaching measure 111 — an incomplete file, and its sibling is named `..._Temp`.
 
+4. **The desktop frontend** — hex viewer and notation rendering. Much larger than anything above, and
+   the CLI now serves the practical need.
+
+**Blocked on the corpus, not on effort.** Text repeats: no `.mus`/`.musx` pair of the same music
+carries one. DCL staff layout order: that cohort has no paired `.musx` at all. Rather than searching
+again, write down what a contributed file would have to contain.
 
 <!-- Things deliberately deferred. Keep them out of Phase 1 so the MVP stays small. -->
 - [x] Notes, pitches, and rhythms as a Python data model — `enigma/music.py` and `ir.py`.

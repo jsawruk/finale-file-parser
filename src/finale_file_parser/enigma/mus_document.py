@@ -129,6 +129,16 @@ UNTRANSLATED = (
     "paired .musx anywhere -- so there is nothing to check a slot layout "
     "against, and this reader does not guess at one. A 2001-2005 document whose "
     "staves are laid out out of order therefore still comes out numerically.",
+    "Mirrors: Finale lets one staff display another's music, and the file says "
+    "so by pointing two frameSpec records at the same entry span. "
+    "docs/eeppd.txt warns that 'mirrors and voice 2 create complications'; this "
+    "is the complication. locate_entries maps an entry to one staff and measure, "
+    "so a passage two gfholds both claim is rejected rather than placed twice. "
+    "It is systematic, not damage: 5 DCL documents carry mirrored spans and one "
+    "carries 42 of them. Only that one fails to build, because only there do two "
+    "gfholds reference the same span. Modelling mirrors means an entry having "
+    "more than one location, which the IR does not have; the count is pinned as "
+    "DOCUMENTS_WITH_MIRRORED_FRAMES.",
     "Text repeats (Fine, D.C. al Coda): the .musx reading is implemented, the "
     ".mus one is not, and the corpus offers NO evidence to identify the tag "
     "from -- not a little, none. This entry used to say one paired document "
