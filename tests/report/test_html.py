@@ -61,3 +61,29 @@ def test_the_report_has_no_external_assets() -> None:
     """No CDN, no framework, no build step."""
     html = render_html(_inspection())
     assert "http://" not in html and "https://" not in html
+
+
+def test_a_cdata_terminator_in_document_text_does_not_break_xml() -> None:
+    """`]]>` is XML's CDATA section end marker; outside a CDATA section it is
+    illegal in character data. `json.dumps` emits it verbatim inside a string
+    value, so the embedded JSON must escape it. Exercised via two different
+    routes onto the page: a part name (through `_embed`'s JSON payload) and a
+    stage error (through `_ladder`'s own `html.escape`, which already handles
+    this correctly and must not regress)."""
+    inspection = _inspection(score={"parts": [{"id": "P1", "name": "]]>hi"}]})
+    inspection.stages = [
+        Stage("detect version", OK, {"family": "mus"}),
+        Stage("build score", "refused", error="broken at offset ]]>boom"),
+    ]
+    html = render_html(inspection)
+    DET.fromstring(html[html.index("<html") :])
+
+
+def test_a_fully_degenerate_inspection_still_renders_well_formed_markup() -> None:
+    """The ladder can stop at its very first rung: no stages ran at all, and
+    every depth -- score, document, records, raw -- is at its empty default.
+    Report generation must never fail, and what it produces must still parse."""
+    inspection = Inspection(file={"name": "score.mus", "size": "0", "sha256": ""})
+    html = render_html(inspection)
+    assert html
+    DET.fromstring(html[html.index("<html") :])

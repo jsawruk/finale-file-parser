@@ -70,6 +70,27 @@ function renderJson(id, value) {
     value ? '<pre>' + esc(JSON.stringify(value, null, 2)) + '</pre>'
           : '<p>Not available — the pipeline stopped before this stage.</p>';
 }
+function findStage(name) {
+  return (data.stages || []).find(s => s.name === name) || null;
+}
+function renderRecords() {
+  // `records` defaults to {} rather than null, and {} is truthy in JS, so
+  // renderJson's own truthiness check cannot tell "read fine, found nothing"
+  // apart from "never read". The "read records" stage's own status can: it
+  // is only ever OK when the read actually ran and returned (possibly empty).
+  const el = document.getElementById('records');
+  const stage = findStage('read records');
+  if (!stage || stage.status !== 'ok') {
+    let reason = 'the pipeline stopped before this stage';
+    if (stage) {
+      reason = stage.name + ': ' + stage.status;
+      if (stage.error) { reason += ' (' + stage.error + ')'; }
+    }
+    el.innerHTML = '<p>Not available — ' + esc(reason) + '</p>';
+    return;
+  }
+  el.innerHTML = '<pre>' + esc(JSON.stringify(data.records, null, 2)) + '</pre>';
+}
 function renderBytes() {
   const el = document.getElementById('bytes');
   const pools = Object.entries(data.raw || {});
@@ -87,7 +108,7 @@ function renderBytes() {
 }
 renderScore();
 renderJson('document', data.document);
-renderJson('records', data.records);
+renderRecords();
 renderBytes();
 show('score');
 """
@@ -98,11 +119,19 @@ def _embed(data: object) -> str:
 
     Document text reaches this -- titles, part names, lyrics -- and the input is
     untrusted. A `</script>` in a lyric would end the block and turn the rest of
-    the document into markup; a bare `<` or `&` would break well-formedness.
-    Escaping both as JSON unicode escapes fixes both at once and still parses as
+    the document into markup; a bare `<` or `&` would break well-formedness. So
+    would a bare `>`: XML forbids the literal sequence `]]>` in character data
+    outside a CDATA section (it is the CDATA end marker), and `json.dumps` will
+    happily emit e.g. `"]]>hi"` verbatim inside a string value. Escaping all
+    three as JSON unicode escapes closes every case at once and still parses as
     JSON on the other side.
     """
-    return json.dumps(data, default=str).replace("<", "\\u003c").replace("&", "\\u0026")
+    return (
+        json.dumps(data, default=str)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
 
 
 def _ladder(inspection: Inspection) -> str:
