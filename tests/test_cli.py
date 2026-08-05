@@ -157,3 +157,30 @@ def test_inspect_reports_a_score_that_does_not_build(
     monkeypatch.setattr(cli, "load_document", load)
     source = touch(tmp_path / "a.musx")
     assert cli.main(["inspect", str(source)]) == cli.EXIT_FAILURES
+
+
+def test_inspect_writes_a_report(tmp_path: Path, stub: None) -> None:
+    """The report is the whole point of the flag; the terminal output stays."""
+    source = touch(tmp_path / "a.mus")
+    report = tmp_path / "out.html"
+    assert cli.main(["inspect", str(source), "--report", str(report)]) == cli.EXIT_OK
+    assert report.read_text().startswith("<!doctype html>")
+
+
+def test_a_report_is_refused_rather_than_clobbered(tmp_path: Path, stub: None) -> None:
+    """Same rule as convert: nothing is overwritten without being asked."""
+    source = touch(tmp_path / "a.mus")
+    report = tmp_path / "out.html"
+    report.write_text("MINE")
+    assert cli.main(["inspect", str(source), "--report", str(report)]) == cli.EXIT_USAGE
+    assert report.read_text() == "MINE"
+
+
+def test_report_with_directory_is_a_usage_error(tmp_path: Path, stub: None) -> None:
+    """The --report flag takes exactly one file, not a directory."""
+    root = tmp_path / "in"
+    touch(root / "a.mus")
+    touch(root / "b.mus")
+    report = tmp_path / "out.html"
+    assert cli.main(["inspect", str(root), "--report", str(report)]) == cli.EXIT_USAGE
+    assert not report.exists()

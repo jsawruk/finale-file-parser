@@ -36,6 +36,8 @@ from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.errors import FinaleFileError
 from finale_file_parser.export.musicxml import to_musicxml
 from finale_file_parser.ir import Score
+from finale_file_parser.report import inspect_document
+from finale_file_parser.report.html import render_html
 from finale_file_parser.version.detect import detect_version
 
 __all__ = ["main"]
@@ -161,6 +163,21 @@ def _inspect(args: argparse.Namespace, out: object) -> int:
         print(f"{PROGRAM}: no .mus or .musx files under {args.input}", file=sys.stderr)
         return EXIT_USAGE
 
+    if args.report is not None:
+        if len(sources) != 1:
+            print(f"{PROGRAM}: --report takes one file, not a directory", file=sys.stderr)
+            return EXIT_USAGE
+        if args.report.exists() and not args.force:
+            print(
+                f"{PROGRAM}: {args.report.name} exists; pass --force to overwrite",
+                file=sys.stderr,
+            )
+            return EXIT_USAGE
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(render_html(inspect_document(sources[0])), encoding="utf-8")
+        print(f"{sources[0]} -> {args.report}", file=out)  # type: ignore[call-overload]
+        return EXIT_OK
+
     failures = 0
     for source in sources:
         print(f"{source}", file=out)  # type: ignore[call-overload]
@@ -204,6 +221,13 @@ def _parser() -> argparse.ArgumentParser:
 
     inspect = sub.add_parser("inspect", help="report what a file is and what was read from it")
     inspect.add_argument("input", type=Path, help="a .mus/.musx file, or a directory of them")
+    inspect.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        help="write a self-contained HTML report instead of terminal output",
+    )
+    inspect.add_argument("--force", action="store_true", help="overwrite an existing report")
 
     return parser
 
