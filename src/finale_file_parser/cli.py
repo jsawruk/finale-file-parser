@@ -106,6 +106,17 @@ def _reason(error: Exception) -> str:
     return text.replace(os.sep, "/").split("/")[-1] if text.startswith("/") else text
 
 
+def _clobber_reason(path: Path, force: bool) -> str | None:
+    """Why `path` must not be written, or None if it may be.
+
+    Shared so the two commands cannot drift: `convert` and `inspect --report`
+    refuse for the same reason and must say so in the same words.
+    """
+    if path.exists() and not force:
+        return f"{path.name} exists; pass --force to overwrite"
+    return None
+
+
 def _convert(args: argparse.Namespace, out: object) -> int:
     root: Path = args.input
     sources = source_paths(root)
@@ -117,8 +128,9 @@ def _convert(args: argparse.Namespace, out: object) -> int:
     failures: list[tuple[Path, str]] = []
     for source in sources:
         target = output_path(source, root, args.output)
-        if target.exists() and not args.force:
-            failures.append((source, f"{target.name} exists; pass --force to overwrite"))
+        reason = _clobber_reason(target, args.force)
+        if reason:
+            failures.append((source, reason))
             continue
         try:
             score = build_score(load_document(source))
@@ -126,8 +138,12 @@ def _convert(args: argparse.Namespace, out: object) -> int:
         except FinaleFileError as error:
             failures.append((source, _reason(error)))
             continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(data)
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+        except OSError as error:
+            failures.append((source, _reason(error)))
+            continue
         converted += 1
         if args.verbose:
             print(f"{source} -> {target}", file=out)  # type: ignore[call-overload]
@@ -167,14 +183,19 @@ def _inspect(args: argparse.Namespace, out: object) -> int:
         if len(sources) != 1:
             print(f"{PROGRAM}: --report takes one file, not a directory", file=sys.stderr)
             return EXIT_USAGE
-        if args.report.exists() and not args.force:
+        reason = _clobber_reason(args.report, args.force)
+        if reason:
+            print(f"{PROGRAM}: {reason}", file=sys.stderr)
+            return EXIT_USAGE
+        try:
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            args.report.write_text(render_html(inspect_document(sources[0])), encoding="utf-8")
+        except OSError as error:
             print(
-                f"{PROGRAM}: {args.report.name} exists; pass --force to overwrite",
+                f"{PROGRAM}: cannot write {args.report.name}: {_reason(error)}",
                 file=sys.stderr,
             )
             return EXIT_USAGE
-        args.report.parent.mkdir(parents=True, exist_ok=True)
-        args.report.write_text(render_html(inspect_document(sources[0])), encoding="utf-8")
         print(f"{sources[0]} -> {args.report}", file=out)  # type: ignore[call-overload]
         return EXIT_OK
 

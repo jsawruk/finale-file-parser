@@ -184,3 +184,43 @@ def test_report_with_directory_is_a_usage_error(tmp_path: Path, stub: None) -> N
     report = tmp_path / "out.html"
     assert cli.main(["inspect", str(root), "--report", str(report)]) == cli.EXIT_USAGE
     assert not report.exists()
+
+
+def test_force_overwrites_a_report(tmp_path: Path, stub: None) -> None:
+    """Pass --force to overwrite an existing report."""
+    source = touch(tmp_path / "a.mus")
+    report = tmp_path / "out.html"
+    report.write_text("MINE")
+    assert cli.main(["inspect", str(source), "--report", str(report), "--force"]) == cli.EXIT_OK
+    assert report.read_text().startswith("<!doctype html>")
+
+
+def test_inspect_write_failure_is_reported(
+    tmp_path: Path, stub: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Write failures produce a clean error, not a traceback."""
+    source = touch(tmp_path / "a.mus")
+    # Create a file where the parent directory should be
+    report_dir = tmp_path / "afile"
+    report_dir.write_bytes(b"")
+    # Try to write a report with afile/out.html as parent is not a directory
+    report = report_dir / "out.html"
+    assert cli.main(["inspect", str(source), "--report", str(report)]) == cli.EXIT_USAGE
+    assert not report.exists()
+    stderr = capsys.readouterr().err
+    assert "cannot write" in stderr
+    assert "afile" in stderr
+
+
+def test_convert_write_failure_is_skipped(
+    tmp_path: Path, stub: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Convert write failures skip the file but continue the batch."""
+    source = touch(tmp_path / "a.mus")
+    # Create a file where the parent directory should be
+    out_dir = tmp_path / "afile"
+    out_dir.write_bytes(b"")
+    assert cli.main(["convert", str(source), "-o", str(out_dir), "-v"]) == cli.EXIT_FAILURES
+    output = capsys.readouterr()
+    assert "0/1 converted" in output.out
+    assert "skipped" in output.err
