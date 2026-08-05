@@ -589,7 +589,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from finale_file_parser.enigma.document import parse_enigma
+from finale_file_parser.enigma.document import EnigmaDocument, parse_enigma
 from finale_file_parser.enigma.mus_document import read_mus_document
 from finale_file_parser.enigma.mus_payload import read_mus_pools
 from finale_file_parser.enigma.score import score_xml
@@ -680,17 +680,32 @@ def _musx_stages(ladder: Ladder, target: Path, inspection: Inspection) -> None:
     _finish(ladder, document, inspection)
 
 
-def _finish(ladder: Ladder, document: object, inspection: Inspection) -> None:
-    if document is not None:
-        inspection.document = summarise_document(document)  # type: ignore[arg-type]
-    score = ladder.run("build score", lambda: build_score(document))  # type: ignore[arg-type]
-    if score is not None:
-        inspection.score = summarise_score(score)
+def _finish(
+    ladder: Ladder, document: EnigmaDocument | None, inspection: Inspection
+) -> None:
+    """Typed rather than ignored: a None document means the ladder already
+    stopped, and `run` records the remaining rungs as skipped."""
+    if document is None:
+        ladder.run("build score", _unreachable)
+        ladder.run("export MusicXML", _unreachable)
+        return
+    inspection.document = summarise_document(document)
+    score = ladder.run("build score", lambda: build_score(document))
+    if score is None:
+        ladder.run("export MusicXML", _unreachable)
+        return
+    inspection.score = summarise_score(score)
     ladder.run(
         "export MusicXML",
-        lambda: to_musicxml(score),  # type: ignore[arg-type]
+        lambda: to_musicxml(score),
         lambda data: {"bytes": str(len(data))},
     )
+
+
+def _unreachable() -> None:
+    """Never called: `Ladder.run` short-circuits once stopped, and records the
+    stage as skipped without invoking it."""
+    raise AssertionError("ladder should have stopped")
 ```
 
 Modify `src/finale_file_parser/inspect/__init__.py`:
@@ -1183,6 +1198,13 @@ In `_parser()`, add to the `inspect` subparser:
     )
 ```
 
+Add to `cli.py`'s imports (top level -- no cycle justifies a local import):
+
+```python
+from finale_file_parser.inspect import inspect_document
+from finale_file_parser.inspect.html import render_html
+```
+
 In `_inspect()`, before the existing loop:
 
 ```python
@@ -1196,9 +1218,6 @@ In `_inspect()`, before the existing loop:
                 file=sys.stderr,
             )
             return EXIT_USAGE
-        from finale_file_parser.inspect import inspect_document
-        from finale_file_parser.inspect.html import render_html
-
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(render_html(inspect_document(sources[0])), encoding="utf-8")
         print(f"{sources[0]} -> {args.report}", file=out)  # type: ignore[call-overload]
@@ -1235,6 +1254,11 @@ The cross-check that keeps the report honest.
 """Inspecting every corpus document, and agreeing with the sweeps that already
 pin what builds.
 
+The corpus is walked **once**, into a module-scoped fixture. Three tests each
+inspecting all 639 documents would run the whole pipeline three times over; this
+project cut its suite from 34 minutes to about 5 by removing exactly that
+pattern, and reintroducing it here would undo a chunk of it.
+
 Report counts only -- never a corpus filename, title, or record value.
 """
 
@@ -1243,9 +1267,9 @@ from __future__ import annotations
 import pytest
 from corpus_files import CORPUS, corpus_paths
 
-from finale_file_parser.inspect import inspect_document
+from finale_file_parser.inspect import Inspection, inspect_document
 from finale_file_parser.inspect.html import render_html
-from finale_file_parser.inspect.ladder import OK
+from finale_file_parser.inspect.ladder import CRASHED, OK, REFUSED
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
@@ -1257,37 +1281,55 @@ asserts the two **agree**: the report must not develop its own opinion of what
 builds, because two independent counts of one thing drift.
 """
 
+CRASHES = 0
+"""Documents where a reader raised something other than a FinaleFileError.
 
-def test_every_corpus_document_inspects_without_raising() -> None:
+A crash is a reader bug rather than a bad file. Zero today, pinned so the next
+one is a regression rather than a statistic.
+"""
+
+
+@pytest.fixture(scope="module")
+def inspections() -> list[Inspection]:
+    """Every corpus document, inspected once."""
+    return [inspect_document(path) for path in corpus_paths(".mus") + corpus_paths(".musx")]
+
+
+def test_every_corpus_document_inspects_without_raising(
+    inspections: list[Inspection],
+) -> None:
     """Report generation never fails -- including on the documents that do not
     build, which are the ones it exists for."""
-    for path in corpus_paths(".mus") + corpus_paths(".musx"):
-        inspection = inspect_document(path)
+    assert len(inspections) == len(corpus_paths(".mus")) + len(corpus_paths(".musx"))
+    for inspection in inspections:
         assert inspection.stages, "a document produced no ladder at all"
 
 
-def test_the_report_agrees_with_the_sweeps_about_what_builds() -> None:
+def test_the_report_agrees_with_the_sweeps_about_what_builds(
+    inspections: list[Inspection],
+) -> None:
     built = 0
-    for path in corpus_paths(".mus") + corpus_paths(".musx"):
-        stages = {stage.name: stage.status for stage in inspect_document(path).stages}
+    for inspection in inspections:
+        stages = {stage.name: stage.status for stage in inspection.stages}
         built += stages.get("build score") == OK
     assert built == DOCUMENTS_THAT_BUILD
 
 
-def test_no_corpus_document_crashes_a_reader() -> None:
-    """A crash is a reader bug rather than a bad file. Zero today; pinned so the
-    next one is a regression."""
-    crashed = 0
-    for path in corpus_paths(".mus") + corpus_paths(".musx"):
-        crashed += any(s.status == "crashed" for s in inspect_document(path).stages)
-    assert crashed == 0
+def test_no_corpus_document_crashes_a_reader(inspections: list[Inspection]) -> None:
+    """See `CRASHES`."""
+    crashed = sum(
+        any(stage.status == CRASHED for stage in inspection.stages)
+        for inspection in inspections
+    )
+    assert crashed == CRASHES
 
 
-def test_a_report_renders_for_a_document_that_does_not_build() -> None:
+def test_a_report_renders_for_a_document_that_does_not_build(
+    inspections: list[Inspection],
+) -> None:
     """The tool is most informative when the file is most broken."""
-    for path in corpus_paths(".mus"):
-        inspection = inspect_document(path)
-        if any(stage.status in {"refused", "crashed"} for stage in inspection.stages):
+    for inspection in inspections:
+        if any(stage.status in {REFUSED, CRASHED} for stage in inspection.stages):
             assert render_html(inspection).startswith("<!doctype html>")
             return
     pytest.fail("no failing corpus document found to render")
