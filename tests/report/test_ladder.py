@@ -47,3 +47,24 @@ def test_stages_after_a_failure_are_skipped_not_attempted() -> None:
     ladder.run("second", lambda: ran.append(1))
     assert ran == []
     assert [s.status for s in ladder.stages] == [REFUSED, SKIPPED]
+
+
+def test_a_raising_detail_does_not_fail_the_stage() -> None:
+    """`detail` only formats a value `call` already produced -- it does not get
+    a vote on pass or fail. A `detail` bug (e.g. indexing an empty result) must
+    surface in the stage's own detail, not escape and stop the ladder."""
+    ladder = Ladder()
+
+    def bad_detail(value: int) -> dict[str, str]:
+        raise IndexError("list index out of range")
+
+    value = ladder.run("read", lambda: 7, bad_detail)
+
+    assert value == 7
+    assert ladder.stages[0].status == OK
+    assert "IndexError" in ladder.stages[0].detail.get("detail unavailable", "")
+
+    ran = []
+    ladder.run("second", lambda: ran.append(1))
+    assert ran == [1]
+    assert [s.status for s in ladder.stages] == [OK, OK]

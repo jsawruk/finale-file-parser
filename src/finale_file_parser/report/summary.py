@@ -14,7 +14,15 @@ from finale_file_parser.enigma.document import EnigmaDocument
 from finale_file_parser.enigma.mus_document import UNTRANSLATED
 from finale_file_parser.ir import Measure, Score
 
-__all__ = ["summarise_document", "summarise_score"]
+__all__ = [
+    "DocumentSummary",
+    "MeasureSummary",
+    "PartSummary",
+    "ScoreSummary",
+    "ScoreTotals",
+    "summarise_document",
+    "summarise_score",
+]
 
 
 class MeasureSummary(TypedDict):
@@ -41,20 +49,36 @@ def _measure(measure: Measure) -> MeasureSummary:
     }
 
 
-def summarise_score(score: Score) -> dict[str, object]:
+class PartSummary(TypedDict):
+    """Typed shape of a per-part summary."""
+
+    id: str
+    name: str
+    measures: list[MeasureSummary]
+
+
+class ScoreTotals(TypedDict):
+    """Typed shape of the score-level totals in a `ScoreSummary`."""
+
+    parts: int
+    measures: int
+    events: int
+    pitches: int
+
+
+class ScoreSummary(TypedDict):
+    """Typed shape of a score summary."""
+
+    parts: list[PartSummary]
+    totals: ScoreTotals
+
+
+def summarise_score(score: Score) -> ScoreSummary:
     """Per part, per measure -- not only totals.
 
     A measure that came out empty is exactly what someone diagnosing a bad
     conversion is looking for, and a total hides it.
     """
-
-    class PartSummary(TypedDict):
-        """Typed shape of a per-part summary."""
-
-        id: str
-        name: str
-        measures: list[MeasureSummary]
-
     parts: list[PartSummary] = [
         {
             "id": part.id,

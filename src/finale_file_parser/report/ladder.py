@@ -70,5 +70,18 @@ class Ladder:
             self._stopped = True
             self.stages.append(Stage(name, CRASHED, error=f"{type(error).__name__}: {error}"))
             return None
-        self.stages.append(Stage(name, OK, detail(value) if detail else {}))
+        self.stages.append(Stage(name, OK, self._detail(detail, value)))
         return value
+
+    @staticmethod
+    def _detail(detail: Callable[[T], dict[str, str]] | None, value: T) -> dict[str, str]:
+        """`detail` only formats an already-successful `call` -- it does not get
+        a vote on pass or fail. A `detail` that raises (e.g. indexing an empty
+        result) must not turn a working stage into a failed one or stop the
+        ladder; it goes in the stage's own detail instead."""
+        if detail is None:
+            return {}
+        try:
+            return detail(value)
+        except Exception as error:  # noqa: BLE001 - formatting is not the reader
+            return {"detail unavailable": f"{type(error).__name__}: {error}"}

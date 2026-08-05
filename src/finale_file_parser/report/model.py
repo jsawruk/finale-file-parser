@@ -12,16 +12,21 @@ import hashlib
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import cast
 
 from finale_file_parser.enigma.document import EnigmaDocument, parse_enigma
 from finale_file_parser.enigma.mus_document import read_mus_document
 from finale_file_parser.enigma.mus_payload import MusPool, read_mus_pools
 from finale_file_parser.enigma.score import score_xml
 from finale_file_parser.enigma.to_ir import build_score
+from finale_file_parser.errors import FinaleFileError
 from finale_file_parser.export.musicxml import to_musicxml
 from finale_file_parser.report.ladder import Ladder, Stage
-from finale_file_parser.report.summary import summarise_document, summarise_score
+from finale_file_parser.report.summary import (
+    DocumentSummary,
+    ScoreSummary,
+    summarise_document,
+    summarise_score,
+)
 from finale_file_parser.version.detect import detect_version
 
 __all__ = ["MAX_FIELD_DEPTH", "MAX_JSON_BYTES", "Inspection", "inspect_document"]
@@ -40,8 +45,8 @@ class Inspection:
 
     file: dict[str, str]
     stages: list[Stage] = field(default_factory=list)
-    score: dict[str, object] | None = None
-    document: dict[str, object] | None = None
+    score: ScoreSummary | None = None
+    document: DocumentSummary | None = None
     records: dict[str, object] = field(default_factory=dict)
     raw: dict[str, object] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
@@ -49,7 +54,16 @@ class Inspection:
 
 
 def _identity(path: Path) -> dict[str, str]:
-    data = path.read_bytes()
+    """The ladder's first rung: `path.read_bytes()` is the one call every later
+    stage depends on. A directory, a missing file, or a permission error is
+    not a reader bug -- it is the input declining to be read at all, which is
+    exactly what `FinaleFileError` means here, and what lets the ladder stop
+    cleanly instead of this raising past every guard the rest of the pipeline
+    gets (see `inspect_document`)."""
+    try:
+        data = path.read_bytes()
+    except OSError as error:
+        raise FinaleFileError(f"cannot read {path}: {error}") from error
     return {
         "name": path.name,
         "size": str(len(data)),
@@ -65,21 +79,31 @@ def _no_paths(text: str, path: Path) -> str:
 def _pools_detail(pools: tuple[MusPool, ...]) -> dict[str, str]:
     """Cannot raise, unlike indexing `pools[0]` directly.
 
-    A ladder stage's `detail` callable is not guarded by `Ladder.run` the way
-    `call` is (see `Ladder.run`'s docstring) — only the call it wraps is inside
-    the try/except. A decode that legitimately returns zero pools would make
-    `pools[0]` raise `IndexError` *outside* that guard, which would break
-    "report generation never fails". So this checks before indexing instead.
+    `Ladder.run` now catches a raising `detail` on the caller's behalf, so this
+    would no longer escape and break "report generation never fails" even
+    without the check. It stays anyway: a decode that legitimately returns
+    zero pools is the one case here known to hit this, and a real byte order
+    is a better answer than the ladder's generic "detail unavailable".
     """
     order = pools[0].byte_order if pools else "unknown"
     return {"pools": str(len(pools)), "byte order": order}
 
 
 def inspect_document(path: str | os.PathLike[str]) -> Inspection:
-    """Run the pipeline for `path`, recording how far it got."""
+    """Run the pipeline for `path`, recording how far it got.
+
+    File identity is read as the ladder's own first rung rather than before
+    the ladder exists: a directory, a missing path, or a permission error must
+    become a stopped-and-recorded ladder, not a raised exception that answers
+    "report generation never fails" with no.
+    """
     target = Path(path)
-    inspection = Inspection(file=_identity(target))
+    inspection = Inspection(file={"name": target.name})
     ladder = Ladder()
+
+    identity = ladder.run("read file", lambda: _identity(target), lambda d: d)
+    if identity is not None:
+        inspection.file = identity
 
     version = ladder.run(
         "detect version",
@@ -121,10 +145,7 @@ def _finish(ladder: Ladder, document: EnigmaDocument | None, inspection: Inspect
         ladder.run("build score", _unreachable)
         ladder.run("export MusicXML", _unreachable)
         return
-    # `summarise_document` returns the narrower `DocumentSummary` TypedDict;
-    # `Inspection.document` is the untyped `dict[str, object]` the renderer
-    # consumes, so this is a widening cast rather than an unsafe one.
-    inspection.document = cast(dict[str, object], summarise_document(document))
+    inspection.document = summarise_document(document)
     score = ladder.run("build score", lambda: build_score(document))
     if score is None:
         ladder.run("export MusicXML", _unreachable)

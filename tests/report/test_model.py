@@ -6,6 +6,9 @@ parser's behaviour.
 
 from __future__ import annotations
 
+import os
+import stat
+import sys
 from pathlib import Path
 
 import pytest
@@ -34,9 +37,10 @@ def test_the_ladder_stops_where_the_reader_refuses(
     monkeypatch.setattr(model, "read_mus_pools", refuse)
     inspection = model.inspect_document(path)
     names = [(s.name, s.status) for s in inspection.stages]
-    assert names[0] == ("detect version", OK)
-    assert names[1][1] == REFUSED
-    assert {status for _, status in names[2:]} == {SKIPPED}
+    assert names[0] == ("read file", OK)
+    assert names[1] == ("detect version", OK)
+    assert names[2][1] == REFUSED
+    assert {status for _, status in names[3:]} == {SKIPPED}
 
 
 def test_the_error_does_not_carry_an_absolute_path(
@@ -93,6 +97,43 @@ def test_inspecting_a_file_that_is_not_finale_at_all_still_returns(
     path.write_bytes(b"\x00\x01\x02")
     inspection = model.inspect_document(path)
     assert inspection.stages
+    assert inspection.score is None
+
+
+def test_inspecting_a_directory_still_returns() -> None:
+    """`path.read_bytes()` raises `IsADirectoryError` on a directory. That must
+    stop the ladder, not the function."""
+    inspection = model.inspect_document(Path(__file__).parent)
+    assert inspection.stages[0].name == "read file"
+    assert inspection.stages[0].status == REFUSED
+    assert {s.status for s in inspection.stages[1:]} == {SKIPPED}
+    assert inspection.score is None
+
+
+def test_inspecting_a_nonexistent_path_still_returns(tmp_path: Path) -> None:
+    """`path.read_bytes()` raises `FileNotFoundError`. Same requirement."""
+    inspection = model.inspect_document(tmp_path / "does-not-exist.mus")
+    assert inspection.stages[0].name == "read file"
+    assert inspection.stages[0].status == REFUSED
+    assert {s.status for s in inspection.stages[1:]} == {SKIPPED}
+    assert inspection.score is None
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="chmod permission bits are POSIX-only")
+def test_inspecting_an_unreadable_file_still_returns(tmp_path: Path) -> None:
+    """`path.read_bytes()` raises `PermissionError` on a file with no read bit."""
+    path = tmp_path / "locked.mus"
+    path.write_bytes(b"not really a mus file")
+    path.chmod(0o000)
+    try:
+        if os.access(path, os.R_OK):
+            pytest.skip("running as a user that bypasses file permissions")
+        inspection = model.inspect_document(path)
+    finally:
+        path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    assert inspection.stages[0].name == "read file"
+    assert inspection.stages[0].status == REFUSED
+    assert {s.status for s in inspection.stages[1:]} == {SKIPPED}
     assert inspection.score is None
 
 
