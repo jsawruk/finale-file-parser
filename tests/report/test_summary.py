@@ -81,10 +81,7 @@ def test_document_summary_counts_records_by_pool_and_tag() -> None:
         Record(tag="frameSpec", attrs={"cmper": "1"}, text="", fields={}),
     )
     summary = summarise_document(document)
-    assert summary["pools"]["others"] == {  # type: ignore[index]
-        "measSpec": 2,
-        "frameSpec": 1,
-    }
+    assert summary["pools"]["others"] == {"measSpec": 2, "frameSpec": 1}
 
 
 def test_document_summary_names_the_untranslated_gaps() -> None:
