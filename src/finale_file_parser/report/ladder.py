@@ -45,6 +45,12 @@ class Ladder:
 
     Stopping matters: a later stage given a value an earlier one never produced
     would either crash for the wrong reason or, worse, look like it passed.
+
+    Not every rung fits that model, though: a report depth that is independent
+    of the pipeline proper (e.g. a supplementary view built alongside it) can
+    fail on its own without the rest of the pipeline having received a bad
+    value. `halt=False` records exactly the same OK/REFUSED/CRASHED outcome
+    for such a rung without stopping the ladder for the ones after it.
     """
 
     def __init__(self) -> None:
@@ -56,6 +62,8 @@ class Ladder:
         name: str,
         call: Callable[[], T],
         detail: Callable[[T], dict[str, str]] | None = None,
+        *,
+        halt: bool = True,
     ) -> T | None:
         if self._stopped:
             self.stages.append(Stage(name, SKIPPED))
@@ -63,11 +71,11 @@ class Ladder:
         try:
             value = call()
         except FinaleFileError as error:
-            self._stopped = True
+            self._stopped = halt
             self.stages.append(Stage(name, REFUSED, error=str(error)))
             return None
         except Exception as error:  # noqa: BLE001 - a reader bug is a finding, not a crash
-            self._stopped = True
+            self._stopped = halt
             self.stages.append(Stage(name, CRASHED, error=f"{type(error).__name__}: {error}"))
             return None
         self.stages.append(Stage(name, OK, self._detail(detail, value)))

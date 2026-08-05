@@ -16,7 +16,7 @@ import pytest
 
 from finale_file_parser.errors import FinaleFileError
 from finale_file_parser.report import model
-from finale_file_parser.report.ladder import OK, REFUSED, SKIPPED
+from finale_file_parser.report.ladder import CRASHED, OK, REFUSED, SKIPPED
 
 CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
@@ -90,6 +90,42 @@ def test_a_reader_bug_is_reported_as_a_crash(
     stage = next(s for s in inspection.stages if s.error)
     assert stage.status == "crashed"
     assert "IndexError" in (stage.error or "")
+
+
+def test_a_crash_in_the_records_depth_does_not_stop_the_ladder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The records/raw depths are independent of the pipeline proper: a bug in
+    one must show up as its own CRASHED stage, using the ladder's own
+    OK/REFUSED/CRASHED vocabulary, without halting the stages after it -- so a
+    corpus sweep scanning `stages` for CRASHED can actually see it, and the
+    rest of the report (built from a separate call) still comes back."""
+    from finale_file_parser.enigma.mus_payload import MusPool
+
+    path = _file(tmp_path)
+    monkeypatch.setattr(model, "detect_version", lambda p: _FakeVersion())
+    monkeypatch.setattr(model, "read_mus_pools", lambda p: (MusPool(data=b"abc"),))
+
+    def crash(target: Path) -> dict[str, object]:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(model, "_mus_records", crash)
+    monkeypatch.setattr(
+        model,
+        "read_mus_document",
+        lambda p: (_ for _ in ()).throw(FinaleFileError("no document here")),
+    )
+
+    inspection = model.inspect_document(path)
+    by_name = {s.name: s for s in inspection.stages}
+
+    assert by_name["read records"].status == CRASHED
+    assert "RuntimeError" in (by_name["read records"].error or "")
+    assert "boom" in (by_name["read records"].error or "")
+    # Non-halting: the ladder still attempted (did not SKIP) the stage after
+    # the crash, and the one after that reports its own outcome too.
+    assert by_name["build document"].status == REFUSED
+    assert by_name["build score"].status == SKIPPED
 
 
 def test_inspecting_a_file_that_is_not_finale_at_all_still_returns(

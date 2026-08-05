@@ -12,8 +12,8 @@ import base64
 import hashlib
 import json
 import os
-from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from finale_file_parser.enigma.document import EnigmaDocument, Record, parse_enigma
@@ -166,8 +166,22 @@ def inspect_document(path: str | os.PathLike[str]) -> Inspection:
 def _mus_stages(ladder: Ladder, target: Path, inspection: Inspection) -> None:
     pools = ladder.run("decode payload", lambda: read_mus_pools(target), _pools_detail)
     if pools is not None:
-        _fill_mus_raw(pools, inspection)
-        _fill_mus_records(target, inspection)
+        raw = ladder.run(
+            "read raw bytes",
+            lambda: _mus_raw(pools),
+            lambda r: {"pools": str(len(r))},
+            halt=False,
+        )
+        if raw is not None:
+            inspection.raw = raw
+        records = ladder.run(
+            "read records",
+            lambda: _mus_records(target),
+            lambda r: {"pools": str(len(r))},
+            halt=False,
+        )
+        if records is not None:
+            inspection.records = records
     document = ladder.run("build document", lambda: read_mus_document(target))
     _finish(ladder, document, inspection)
 
@@ -178,25 +192,15 @@ def _musx_stages(ladder: Ladder, target: Path, inspection: Inspection) -> None:
     )
     document = ladder.run("parse EnigmaXML", lambda: parse_enigma(xml or b""))
     if document is not None:
-        inspection.records = _musx_records(document)
+        records = ladder.run(
+            "read records",
+            lambda: _musx_records(document),
+            lambda r: {"pools": str(len(r))},
+            halt=False,
+        )
+        if records is not None:
+            inspection.records = records
     _finish(ladder, document, inspection)
-
-
-def _safe_read[T](reader: Callable[[], T], inspection: Inspection, label: str) -> T | None:
-    """One optional report depth. `FinaleFileError` means this file's era does
-    not carry it -- absent, not a failure, so it is dropped without comment.
-    Anything else is a genuine reader bug: it must not escape (report
-    generation never fails) but is worth naming so it stays visible instead of
-    vanishing silently, which is what would turn this into the very kind of
-    bug it exists to surface.
-    """
-    try:
-        return reader()
-    except FinaleFileError:
-        return None
-    except Exception as error:  # noqa: BLE001 - a depth reader must not crash the report
-        inspection.notes.append(f"{label} unavailable: {type(error).__name__}: {error}")
-        return None
 
 
 def _pool_name(pool: MusPool, index: int) -> str:
@@ -208,15 +212,16 @@ def _pool_name(pool: MusPool, index: int) -> str:
     return _MUS_POOL_NAMES[index] if index < len(_MUS_POOL_NAMES) else f"pool{index}"
 
 
-def _fill_mus_raw(pools: tuple[MusPool, ...], inspection: Inspection) -> None:
+def _mus_raw(pools: tuple[MusPool, ...]) -> dict[str, object]:
     """Every decoded pool, base64, keyed by the role it plays.
 
-    Independent of whether the pools below decode into records: a payload that
-    fails every record walk is still worth looking at as bytes.
+    Independent of whether the pools decode into records below: a payload that
+    fails every record walk is still worth looking at as bytes. Pure, and
+    raises nothing of its own -- `_mus_stages` runs it through `Ladder.run`
+    regardless, so a change here that starts raising is still caught rather
+    than assumed away.
     """
-    inspection.raw = {
-        _pool_name(pool, index): encode_raw(pool.data) for index, pool in enumerate(pools)
-    }
+    return {_pool_name(pool, index): encode_raw(pool.data) for index, pool in enumerate(pools)}
 
 
 def _record_entry(
@@ -292,7 +297,7 @@ def _group_by_tag(
     return grouped
 
 
-def _fill_mus_records(target: Path, inspection: Inspection) -> None:
+def _mus_records(target: Path) -> dict[str, object]:
     """The `others`/`details` pools' own records, read raw rather than via the
     built `EnigmaDocument`.
 
@@ -301,28 +306,40 @@ def _fill_mus_records(target: Path, inspection: Inspection) -> None:
     what a diagnostic report needs to still show, so this depth calls the raw
     pool readers directly instead of reusing the "build document" stage.
 
-    Two eras, two readers (see `enigma.mus_rows`): whichever era the file is
-    not written in fails with `FinaleFileError`, which `_safe_read` turns into
-    "simply absent" rather than a stopped report.
+    Two eras, two readers (see `enigma.mus_rows`). Era detection lives here,
+    not in the caller: the 2011-era readers are tried first, each on its own,
+    since either can legitimately succeed while the other fails to recognise
+    its pool. Only when *neither* does is `read_mus_rows` tried for the
+    2001-2005 era, and only if that also raises does this function raise --
+    deliberately left unguarded, so `_mus_stages` running it through
+    `Ladder.run(..., halt=False)` is what turns a `FinaleFileError` into a
+    REFUSED stage and anything else (a bug in the entry-building below, not
+    just the reading) into a CRASHED one, without stopping the pipeline for
+    either.
     """
+    others: tuple[MusOther, ...] | None = None
+    details: tuple[MusDetailRecord, ...] | None = None
+    try:
+        others = read_mus_others(target)
+    except FinaleFileError:
+        others = None
+    try:
+        details = read_mus_details(target)
+    except FinaleFileError:
+        details = None
+
     records: dict[str, object] = {}
-    others = _safe_read(lambda: read_mus_others(target), inspection, "others records")
-    details = _safe_read(lambda: read_mus_details(target), inspection, "details records")
     if others is not None:
         records["others"] = _group_by_tag((str(r.tag), _mus_other_entry(r)) for r in others)
     if details is not None:
         records["details"] = _group_by_tag((str(r.tag), _mus_detail_entry(r)) for r in details)
-    if others is None and details is None:
-        rows = _safe_read(lambda: read_mus_rows(target), inspection, "row records")
-        if rows is not None:
-            records["others"] = _group_by_tag(
-                (r.tag, _mus_row_entry(r)) for r in rows.others.values()
-            )
-            records["details"] = _group_by_tag(
-                (r.tag, _mus_row_entry(r)) for r in rows.details.values()
-            )
-    if records:
-        inspection.records = records
+    if others is not None or details is not None:
+        return records
+
+    rows = read_mus_rows(target)  # a FinaleFileError here is left to propagate
+    records["others"] = _group_by_tag((r.tag, _mus_row_entry(r)) for r in rows.others.values())
+    records["details"] = _group_by_tag((r.tag, _mus_row_entry(r)) for r in rows.details.values())
+    return records
 
 
 def _musx_key(record: Record, index: int) -> str:
@@ -381,13 +398,19 @@ def walk_fields(fields: object, depth: int) -> object:
 
 
 def _weight(inspection: Inspection) -> int:
+    """The size of everything the report embeds, not only the two depths
+    `apply_budget` can drop: `file`, `stages` and `notes` are always small, but
+    the budget is on the embedded JSON as a whole, so they count too."""
     return len(
         json.dumps(
             {
+                "file": inspection.file,
+                "stages": [asdict(s) for s in inspection.stages],
                 "score": inspection.score,
                 "document": inspection.document,
                 "records": inspection.records,
                 "raw": inspection.raw,
+                "notes": inspection.notes,
             }
         )
     )
