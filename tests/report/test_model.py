@@ -6,6 +6,7 @@ parser's behaviour.
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 import sys
@@ -16,6 +17,8 @@ import pytest
 from finale_file_parser.errors import FinaleFileError
 from finale_file_parser.report import model
 from finale_file_parser.report.ladder import OK, REFUSED, SKIPPED
+
+CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
 
 def _file(tmp_path: Path) -> Path:
@@ -145,3 +148,94 @@ class _FakeVersion:
     label = "Finale 2005"
     confidence = None
     detail = None
+
+
+def test_record_fields_stop_nesting_at_the_cap() -> None:
+    """A record's fields may contain records. Hostile input must not recurse
+    without end."""
+    from finale_file_parser.enigma.document import Record
+    from finale_file_parser.report.model import MAX_FIELD_DEPTH, walk_fields
+
+    deepest = Record(tag="leaf", attrs={}, text="", fields={})
+    node = deepest
+    for _ in range(MAX_FIELD_DEPTH + 5):
+        node = Record(tag="branch", attrs={}, text="", fields={"child": node})
+
+    walked = walk_fields(node.fields, depth=0)
+    depth = 0
+    cursor: object = walked
+    while isinstance(cursor, dict) and "child" in cursor:
+        cursor = cursor["child"]
+        depth += 1
+    assert depth <= MAX_FIELD_DEPTH
+
+
+def test_raw_bytes_are_base64_not_hex() -> None:
+    """Base64 is 4/3 of the payload where hex is 2x."""
+    import base64
+
+    from finale_file_parser.report.model import encode_raw
+
+    assert base64.b64decode(encode_raw(b"\x00\xff\x10")) == b"\x00\xff\x10"
+
+
+def test_the_budget_drops_raw_before_records() -> None:
+    """Score and document summaries are never truncated; raw goes first."""
+    from finale_file_parser.report.model import Inspection, apply_budget
+
+    inspection = Inspection(file={"name": "x", "size": "0", "sha256": ""})
+    inspection.score = {
+        "parts": [],
+        "totals": {"parts": 1, "measures": 0, "events": 0, "pitches": 0},
+    }
+    inspection.raw = {"others": "A" * 2000}
+    inspection.records = {"others": {"measSpec": [{"key": "1"}]}}
+
+    apply_budget(inspection, limit=500)
+    assert inspection.raw == {}
+    assert inspection.score is not None
+    assert any("raw" in note for note in inspection.notes)
+
+
+@pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
+def test_a_real_mus_file_gets_raw_bytes_and_records() -> None:
+    """End-to-end: the wiring populates both lower depths from a real file,
+    and what it produces is actually JSON -- the shape `apply_budget` and a
+    renderer both depend on."""
+    path = next(CORPUS.rglob("*.mus"))
+    inspection = model.inspect_document(path)
+
+    assert inspection.raw
+    assert inspection.records
+    for _pool_name, by_tag in inspection.records.items():
+        assert isinstance(by_tag, dict)
+        for tag, entries in by_tag.items():
+            assert isinstance(tag, str)
+            for entry in entries:
+                assert entry.keys() == {"key", "fields", "offset", "length"}
+                assert isinstance(entry["key"], str)
+
+    # Round-trips through JSON without error: no bytes, no dataclasses left over.
+    json.dumps(inspection.raw)
+    json.dumps(inspection.records)
+
+
+@pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
+def test_a_real_musx_file_gets_records_but_no_raw() -> None:
+    """A `.musx` has no undecoded byte pools to embed -- only EnigmaXML's own
+    records, which are already the rawest view there is."""
+    path = next(CORPUS.rglob("*.musx"))
+    inspection = model.inspect_document(path)
+
+    assert inspection.raw == {}
+    assert inspection.records
+    assert set(inspection.records) == {
+        "header",
+        "mappings",
+        "options",
+        "others",
+        "details",
+        "entries",
+        "texts",
+    }
+    json.dumps(inspection.records)
