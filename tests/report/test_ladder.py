@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from finale_file_parser.errors import FinaleFileError
-from finale_file_parser.inspect.ladder import CRASHED, OK, REFUSED, SKIPPED, Ladder
+from finale_file_parser.report.ladder import CRASHED, OK, REFUSED, SKIPPED, Ladder
 
 
 def test_a_stage_that_succeeds_records_its_detail() -> None:

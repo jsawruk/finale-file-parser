@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from finale_file_parser.inspect.ladder import Stage
+from finale_file_parser.report.ladder import Stage
 
 __all__ = ["Stage"]
