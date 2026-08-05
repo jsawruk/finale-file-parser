@@ -59,7 +59,7 @@ of how the CLI behaves.
 ## Architecture
 
 ```
-finale_file_parser/inspect/
+finale_file_parser/report/
     model.py    path -> Inspection        pure, serialisable, renderer-agnostic
     html.py     Inspection -> str          self-contained HTML
 ```

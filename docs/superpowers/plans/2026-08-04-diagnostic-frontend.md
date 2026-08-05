@@ -28,17 +28,17 @@
 
 | File | Responsibility |
 | --- | --- |
-| `src/finale_file_parser/inspect/__init__.py` | Public surface: `inspect_document`, `render_html`, `Inspection`, `Stage` |
-| `src/finale_file_parser/inspect/ladder.py` | `Stage`, statuses, and the guarded `Ladder` runner. No knowledge of Finale. |
-| `src/finale_file_parser/inspect/model.py` | `Inspection`, `inspect_document(path)`. Builds both family ladders and the depth data. |
-| `src/finale_file_parser/inspect/summary.py` | Pure summarisers: `Score` → score depth, `EnigmaDocument` → document depth. |
-| `src/finale_file_parser/inspect/html.py` | `render_html(Inspection) -> str`. Embedding, escaping, panes. |
+| `src/finale_file_parser/report/__init__.py` | Public surface: `inspect_document`, `render_html`, `Inspection`, `Stage` |
+| `src/finale_file_parser/report/ladder.py` | `Stage`, statuses, and the guarded `Ladder` runner. No knowledge of Finale. |
+| `src/finale_file_parser/report/model.py` | `Inspection`, `inspect_document(path)`. Builds both family ladders and the depth data. |
+| `src/finale_file_parser/report/summary.py` | Pure summarisers: `Score` → score depth, `EnigmaDocument` → document depth. |
+| `src/finale_file_parser/report/html.py` | `render_html(Inspection) -> str`. Embedding, escaping, panes. |
 | `src/finale_file_parser/cli.py` | Add `--report PATH` to the existing `inspect` command. |
-| `tests/inspect/test_ladder.py` | Ladder primitives |
-| `tests/inspect/test_model.py` | Ladder shape per family, bounds, path stripping |
-| `tests/inspect/test_summary.py` | Summarisers |
-| `tests/inspect/test_html.py` | Escaping, well-formedness, embedded JSON |
-| `tests/inspect/test_inspect_corpus_sweep.py` | Every corpus document inspects; agreement with existing sweeps |
+| `tests/report/test_ladder.py` | Ladder primitives |
+| `tests/report/test_model.py` | Ladder shape per family, bounds, path stripping |
+| `tests/report/test_summary.py` | Summarisers |
+| `tests/report/test_html.py` | Escaping, well-formedness, embedded JSON |
+| `tests/report/test_inspect_corpus_sweep.py` | Every corpus document inspects; agreement with existing sweeps |
 
 ---
 
@@ -47,9 +47,9 @@
 The runner that turns an exception into data, and distinguishes a reader that *refused* a file from one that *crashed* on it.
 
 **Files:**
-- Create: `src/finale_file_parser/inspect/__init__.py`
-- Create: `src/finale_file_parser/inspect/ladder.py`
-- Test: `tests/inspect/test_ladder.py`
+- Create: `src/finale_file_parser/report/__init__.py`
+- Create: `src/finale_file_parser/report/ladder.py`
+- Test: `tests/report/test_ladder.py`
 
 **Interfaces:**
 - Consumes: `finale_file_parser.errors.FinaleFileError`
@@ -69,7 +69,7 @@ from __future__ import annotations
 import pytest
 
 from finale_file_parser.errors import FinaleFileError
-from finale_file_parser.inspect.ladder import CRASHED, OK, REFUSED, SKIPPED, Ladder
+from finale_file_parser.report.ladder import CRASHED, OK, REFUSED, SKIPPED, Ladder
 
 
 def test_a_stage_that_succeeds_records_its_detail() -> None:
@@ -117,24 +117,24 @@ def test_stages_after_a_failure_are_skipped_not_attempted() -> None:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/inspect/test_ladder.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'finale_file_parser.inspect'`
+Run: `uv run pytest tests/report/test_ladder.py -v`
+Expected: FAIL — `ModuleNotFoundError: No module named 'finale_file_parser.report'`
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `src/finale_file_parser/inspect/__init__.py`:
+Create `src/finale_file_parser/report/__init__.py`:
 
 ```python
 """Inspecting one document: what the parser saw, and how far it got."""
 
 from __future__ import annotations
 
-from finale_file_parser.inspect.ladder import Stage
+from finale_file_parser.report.ladder import Stage
 
 __all__ = ["Stage"]
 ```
 
-Create `src/finale_file_parser/inspect/ladder.py`:
+Create `src/finale_file_parser/report/ladder.py`:
 
 ```python
 """Running a pipeline stage so that failure becomes data rather than an exception.
@@ -217,13 +217,13 @@ class Ladder:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest tests/inspect/test_ladder.py -v`
+Run: `uv run pytest tests/report/test_ladder.py -v`
 Expected: PASS (4 tests)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/finale_file_parser/inspect/ tests/inspect/test_ladder.py
+git add src/finale_file_parser/report/ tests/report/test_ladder.py
 git commit -m "feat: add the stage ladder that turns a reader failure into data"
 ```
 
@@ -234,8 +234,8 @@ git commit -m "feat: add the stage ladder that turns a reader failure into data"
 Pure functions over already-built objects. Separated from `model.py` so they can be tested without touching a file.
 
 **Files:**
-- Create: `src/finale_file_parser/inspect/summary.py`
-- Test: `tests/inspect/test_summary.py`
+- Create: `src/finale_file_parser/report/summary.py`
+- Test: `tests/report/test_summary.py`
 
 **Interfaces:**
 - Consumes: `finale_file_parser.ir.Score`, `finale_file_parser.enigma.document.EnigmaDocument`
@@ -262,7 +262,7 @@ from finale_file_parser.enigma.document import (
     Record,
     TextsPool,
 )
-from finale_file_parser.inspect.summary import summarise_document, summarise_score
+from finale_file_parser.report.summary import summarise_document, summarise_score
 from finale_file_parser.ir import Event, Measure, Part, Pitch, Score, TimeSignature, Voice
 
 
@@ -342,12 +342,12 @@ def test_document_summary_names_the_untranslated_gaps() -> None:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/inspect/test_summary.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'finale_file_parser.inspect.summary'`
+Run: `uv run pytest tests/report/test_summary.py -v`
+Expected: FAIL — `ModuleNotFoundError: No module named 'finale_file_parser.report.summary'`
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `src/finale_file_parser/inspect/summary.py`:
+Create `src/finale_file_parser/report/summary.py`:
 
 ```python
 """Turning built objects into the report's two upper depths.
@@ -427,13 +427,13 @@ def summarise_document(document: EnigmaDocument) -> dict[str, object]:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest tests/inspect/test_summary.py -v`
+Run: `uv run pytest tests/report/test_summary.py -v`
 Expected: PASS (4 tests)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/finale_file_parser/inspect/summary.py tests/inspect/test_summary.py
+git add src/finale_file_parser/report/summary.py tests/report/test_summary.py
 git commit -m "feat: summarise a score and document for the report's upper depths"
 ```
 
@@ -442,9 +442,9 @@ git commit -m "feat: summarise a score and document for the report's upper depth
 ### Task 3: The `.mus` ladder and `Inspection`
 
 **Files:**
-- Create: `src/finale_file_parser/inspect/model.py`
-- Modify: `src/finale_file_parser/inspect/__init__.py`
-- Test: `tests/inspect/test_model.py`
+- Create: `src/finale_file_parser/report/model.py`
+- Modify: `src/finale_file_parser/report/__init__.py`
+- Test: `tests/report/test_model.py`
 
 **Interfaces:**
 - Consumes: `Ladder`, `Stage`, `summarise_score`, `summarise_document`
@@ -469,8 +469,8 @@ from pathlib import Path
 import pytest
 
 from finale_file_parser.errors import FinaleFileError
-from finale_file_parser.inspect import model
-from finale_file_parser.inspect.ladder import OK, REFUSED, SKIPPED
+from finale_file_parser.report import model
+from finale_file_parser.report.ladder import OK, REFUSED, SKIPPED
 
 
 def _file(tmp_path: Path) -> Path:
@@ -566,12 +566,12 @@ class _FakeVersion:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/inspect/test_model.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'finale_file_parser.inspect.model'`
+Run: `uv run pytest tests/report/test_model.py -v`
+Expected: FAIL — `ModuleNotFoundError: No module named 'finale_file_parser.report.model'`
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `src/finale_file_parser/inspect/model.py`:
+Create `src/finale_file_parser/report/model.py`:
 
 ```python
 """Building an `Inspection`: what the parser saw, and how far it got.
@@ -595,8 +595,8 @@ from finale_file_parser.enigma.mus_payload import read_mus_pools
 from finale_file_parser.enigma.score import score_xml
 from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.export.musicxml import to_musicxml
-from finale_file_parser.inspect.ladder import Ladder, Stage
-from finale_file_parser.inspect.summary import summarise_document, summarise_score
+from finale_file_parser.report.ladder import Ladder, Stage
+from finale_file_parser.report.summary import summarise_document, summarise_score
 from finale_file_parser.version.detect import detect_version
 
 __all__ = ["MAX_FIELD_DEPTH", "MAX_JSON_BYTES", "Inspection", "inspect_document"]
@@ -708,28 +708,28 @@ def _unreachable() -> None:
     raise AssertionError("ladder should have stopped")
 ```
 
-Modify `src/finale_file_parser/inspect/__init__.py`:
+Modify `src/finale_file_parser/report/__init__.py`:
 
 ```python
 """Inspecting one document: what the parser saw, and how far it got."""
 
 from __future__ import annotations
 
-from finale_file_parser.inspect.ladder import Stage
-from finale_file_parser.inspect.model import Inspection, inspect_document
+from finale_file_parser.report.ladder import Stage
+from finale_file_parser.report.model import Inspection, inspect_document
 
 __all__ = ["Inspection", "Stage", "inspect_document"]
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest tests/inspect/test_model.py -v`
+Run: `uv run pytest tests/report/test_model.py -v`
 Expected: PASS (5 tests)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/finale_file_parser/inspect/ tests/inspect/test_model.py
+git add src/finale_file_parser/report/ tests/report/test_model.py
 git commit -m "feat: build an Inspection by running the pipeline as a stage ladder"
 ```
 
@@ -738,8 +738,8 @@ git commit -m "feat: build an Inspection by running the pipeline as a stage ladd
 ### Task 4: Record and raw-byte depths, with the budget enforced
 
 **Files:**
-- Modify: `src/finale_file_parser/inspect/model.py`
-- Test: `tests/inspect/test_model.py` (append)
+- Modify: `src/finale_file_parser/report/model.py`
+- Test: `tests/report/test_model.py` (append)
 
 **Interfaces:**
 - Consumes: `Inspection`, `MAX_JSON_BYTES`, `MAX_FIELD_DEPTH`
@@ -754,7 +754,7 @@ def test_record_fields_stop_nesting_at_the_cap() -> None:
     """A record's fields may contain records. Hostile input must not recurse
     without end."""
     from finale_file_parser.enigma.document import Record
-    from finale_file_parser.inspect.model import MAX_FIELD_DEPTH, walk_fields
+    from finale_file_parser.report.model import MAX_FIELD_DEPTH, walk_fields
 
     deepest = Record(tag="leaf", attrs={}, text="", fields={})
     node = deepest
@@ -774,14 +774,14 @@ def test_raw_bytes_are_base64_not_hex() -> None:
     """Base64 is 4/3 of the payload where hex is 2x."""
     import base64
 
-    from finale_file_parser.inspect.model import encode_raw
+    from finale_file_parser.report.model import encode_raw
 
     assert base64.b64decode(encode_raw(b"\x00\xff\x10")) == b"\x00\xff\x10"
 
 
 def test_the_budget_drops_raw_before_records() -> None:
     """Score and document summaries are never truncated; raw goes first."""
-    from finale_file_parser.inspect.model import Inspection, apply_budget
+    from finale_file_parser.report.model import Inspection, apply_budget
 
     inspection = Inspection(file={"name": "x", "size": "0", "sha256": ""})
     inspection.score = {"totals": {"parts": 1}}
@@ -796,12 +796,12 @@ def test_the_budget_drops_raw_before_records() -> None:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/inspect/test_model.py -v -k "nesting or base64 or budget"`
+Run: `uv run pytest tests/report/test_model.py -v -k "nesting or base64 or budget"`
 Expected: FAIL — `ImportError: cannot import name 'walk_fields'`
 
 - [ ] **Step 3: Write minimal implementation**
 
-Append to `src/finale_file_parser/inspect/model.py`:
+Append to `src/finale_file_parser/report/model.py`:
 
 ```python
 import base64
@@ -868,13 +868,13 @@ Then call `apply_budget(inspection)` as the last line of `inspect_document` befo
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest tests/inspect/test_model.py -v`
+Run: `uv run pytest tests/report/test_model.py -v`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/finale_file_parser/inspect/model.py tests/inspect/test_model.py
+git add src/finale_file_parser/report/model.py tests/report/test_model.py
 git commit -m "feat: add record and raw-byte depths with a bounded budget"
 ```
 
@@ -883,9 +883,9 @@ git commit -m "feat: add record and raw-byte depths with a bounded budget"
 ### Task 5: The HTML renderer
 
 **Files:**
-- Create: `src/finale_file_parser/inspect/html.py`
-- Modify: `src/finale_file_parser/inspect/__init__.py`
-- Test: `tests/inspect/test_html.py`
+- Create: `src/finale_file_parser/report/html.py`
+- Modify: `src/finale_file_parser/report/__init__.py`
+- Test: `tests/report/test_html.py`
 
 **Interfaces:**
 - Consumes: `Inspection`
@@ -903,9 +903,9 @@ import re
 
 from defusedxml import ElementTree as DET
 
-from finale_file_parser.inspect.html import render_html
-from finale_file_parser.inspect.ladder import OK, Stage
-from finale_file_parser.inspect.model import Inspection
+from finale_file_parser.report.html import render_html
+from finale_file_parser.report.ladder import OK, Stage
+from finale_file_parser.report.model import Inspection
 
 
 def _inspection(**kwargs: object) -> Inspection:
@@ -961,12 +961,12 @@ def test_the_report_has_no_external_assets() -> None:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/inspect/test_html.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'finale_file_parser.inspect.html'`
+Run: `uv run pytest tests/report/test_html.py -v`
+Expected: FAIL — `ModuleNotFoundError: No module named 'finale_file_parser.report.html'`
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `src/finale_file_parser/inspect/html.py`. Key points the implementer must honour:
+Create `src/finale_file_parser/report/html.py`. Key points the implementer must honour:
 
 - Serialise with `json.dumps(...)` then replace `</` with `<\\/` before embedding, so no document string can end the `<script>` block. The test above pins this.
 - Escape every value interpolated into markup with `html.escape`.
@@ -987,7 +987,7 @@ from __future__ import annotations
 import html as html_escape
 import json
 
-from finale_file_parser.inspect.model import Inspection
+from finale_file_parser.report.model import Inspection
 
 __all__ = ["render_html"]
 
@@ -1135,13 +1135,13 @@ def render_html(inspection: Inspection) -> str:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest tests/inspect/test_html.py -v`
+Run: `uv run pytest tests/report/test_html.py -v`
 Expected: PASS (5 tests)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/finale_file_parser/inspect/html.py src/finale_file_parser/inspect/__init__.py tests/inspect/test_html.py
+git add src/finale_file_parser/report/html.py src/finale_file_parser/report/__init__.py tests/report/test_html.py
 git commit -m "feat: render an Inspection as a self-contained HTML report"
 ```
 
@@ -1201,8 +1201,8 @@ In `_parser()`, add to the `inspect` subparser:
 Add to `cli.py`'s imports (top level -- no cycle justifies a local import):
 
 ```python
-from finale_file_parser.inspect import inspect_document
-from finale_file_parser.inspect.html import render_html
+from finale_file_parser.report import inspect_document
+from finale_file_parser.report.html import render_html
 ```
 
 In `_inspect()`, before the existing loop:
@@ -1243,7 +1243,7 @@ git commit -m "feat: add finale-parser inspect --report"
 The cross-check that keeps the report honest.
 
 **Files:**
-- Create: `tests/inspect/test_inspect_corpus_sweep.py`
+- Create: `tests/report/test_inspect_corpus_sweep.py`
 
 **Interfaces:**
 - Consumes: `inspect_document`, `render_html`, `corpus_files.corpus_paths`
@@ -1267,9 +1267,9 @@ from __future__ import annotations
 import pytest
 from corpus_files import CORPUS, corpus_paths
 
-from finale_file_parser.inspect import Inspection, inspect_document
-from finale_file_parser.inspect.html import render_html
-from finale_file_parser.inspect.ladder import CRASHED, OK, REFUSED
+from finale_file_parser.report import Inspection, inspect_document
+from finale_file_parser.report.html import render_html
+from finale_file_parser.report.ladder import CRASHED, OK, REFUSED
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
@@ -1337,7 +1337,7 @@ def test_a_report_renders_for_a_document_that_does_not_build(
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/inspect/test_inspect_corpus_sweep.py -v`
+Run: `uv run pytest tests/report/test_inspect_corpus_sweep.py -v`
 Expected: FAIL on `DOCUMENTS_THAT_BUILD` if the ladder and the sweeps disagree — investigate rather than adjusting the number, since disagreement means one of them is wrong.
 
 - [ ] **Step 3: Reconcile**
@@ -1352,7 +1352,7 @@ Expected: ruff clean, `mypy --strict` clean, all tests pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tests/inspect/test_inspect_corpus_sweep.py
+git add tests/report/test_inspect_corpus_sweep.py
 git commit -m "test: pin that the report agrees with the sweeps about what builds"
 ```
 
