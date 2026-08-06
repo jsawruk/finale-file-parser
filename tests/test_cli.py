@@ -8,9 +8,11 @@ parts no corpus sweep exercises.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
+from defusedxml import ElementTree as DET
 
 from finale_file_parser import cli
 from finale_file_parser.ir import Part, Score
@@ -193,6 +195,40 @@ def test_force_overwrites_a_report(tmp_path: Path, stub: None) -> None:
     report.write_text("MINE")
     assert cli.main(["inspect", str(source), "--report", str(report), "--force"]) == cli.EXIT_OK
     assert report.read_text().startswith("<!doctype html>")
+
+
+def test_a_control_character_in_a_filename_still_writes_a_parseable_report(
+    tmp_path: Path, stub: None
+) -> None:
+    """A filename POSIX allows and macOS accepts. XML 1.0 forbids a C0 control
+    in character data even as a character reference, and `html.escape` leaves it
+    alone, so the report used to be written and then refuse to parse."""
+    source = touch(tmp_path / "ctl\x01x.mus")
+    report = tmp_path / "out.html"
+    assert cli.main(["inspect", str(source), "--report", str(report)]) == cli.EXIT_OK
+    html = report.read_text(encoding="utf-8")
+    DET.fromstring(html[html.index("<html") :])
+
+
+def test_a_filename_that_is_not_utf8_still_writes_a_parseable_report(
+    tmp_path: Path, stub: None
+) -> None:
+    """`os.fsdecode` turns a filename byte that is not valid UTF-8 into a lone
+    surrogate, which cannot be encoded back out as UTF-8 -- so writing the page
+    raised `UnicodeEncodeError`, a `ValueError` the `except OSError` guard does
+    not catch, and the CLI exited with a traceback. Linux accepts such a name and
+    is what CI runs; APFS rejects it, so locally this skips rather than lies (see
+    `test_a_filename_that_is_not_valid_utf8_can_still_be_written_out` in
+    `tests/report/test_html.py`, which covers the same fix without a
+    filesystem)."""
+    try:
+        source = touch(tmp_path / os.fsdecode(b"bad\xff.mus"))
+    except (OSError, UnicodeEncodeError):
+        pytest.skip("this filesystem refuses a name that is not valid UTF-8")
+    report = tmp_path / "out.html"
+    assert cli.main(["inspect", str(source), "--report", str(report)]) == cli.EXIT_OK
+    html = report.read_text(encoding="utf-8")
+    DET.fromstring(html[html.index("<html") :])
 
 
 def test_inspect_write_failure_is_reported(

@@ -79,6 +79,33 @@ def test_a_cdata_terminator_in_document_text_does_not_break_xml() -> None:
     DET.fromstring(html[html.index("<html") :])
 
 
+def test_a_filename_that_is_not_valid_utf8_can_still_be_written_out() -> None:
+    """POSIX permits any byte but NUL and `/` in a filename, so `os.fsdecode`
+    hands back a lone surrogate for an invalid UTF-8 one. It reaches the title
+    and the heading as raw text -- `html.escape` does not touch it, and unlike
+    the JSON island it is not `ensure_ascii`-escaped either -- and a page holding
+    a lone surrogate cannot be encoded as UTF-8 at all."""
+    inspection = _inspection(file={"name": "bad\udcff.mus", "size": "1", "sha256": "ab"})
+    html = render_html(inspection)
+    html.encode("utf-8")  # UnicodeEncodeError before the surrogate was replaced
+    DET.fromstring(html[html.index("<html") :])
+    assert "\udcff" not in html
+
+
+def test_control_characters_on_the_page_keep_it_well_formed() -> None:
+    """XML 1.0 forbids a C0 control in character data even as a character
+    reference, and `html.escape` does not strip one. macOS accepts such a
+    filename, so this is not hypothetical -- and the three routes onto the page
+    that carry text from outside are all covered: the file name, a stage error,
+    and a note."""
+    inspection = _inspection(file={"name": "ctl\x01x.mus", "size": "1", "sha256": "ab"})
+    inspection.stages = [Stage("build score", "refused", error="bad byte \x02 here")]
+    inspection.notes = ["dropped \x1f something"]
+    html = render_html(inspection)
+    DET.fromstring(html[html.index("<html") :])
+    assert "\x01" not in html and "\x02" not in html and "\x1f" not in html
+
+
 def test_a_fully_degenerate_inspection_still_renders_well_formed_markup() -> None:
     """The ladder can stop at its very first rung: no stages ran at all, and
     every depth -- score, document, records, raw -- is at its empty default.

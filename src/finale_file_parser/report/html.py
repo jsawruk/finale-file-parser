@@ -9,11 +9,38 @@ from __future__ import annotations
 
 import html as html_escape
 import json
+import re
 from dataclasses import asdict
 
 from finale_file_parser.report.model import Inspection
 
 __all__ = ["render_html"]
+
+_NOT_XML_TEXT = re.compile(r"[^\x09\x0a\x0d\x20-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]")
+"""Every character XML 1.0 forbids in character data (its `Char` production).
+
+Two of them arrive from real filenames. POSIX permits any byte but NUL and `/`,
+so `os.fsdecode` turns an invalid UTF-8 byte into a lone surrogate -- which is
+not encodable as UTF-8 at all, so `Path.write_text` raises `UnicodeEncodeError`
+on the finished page. It also permits C0 control characters, which *are*
+encodable but are illegal in XML even as a character reference, so the page
+would be written and then refuse to parse. `html.escape` fixes neither: it only
+touches `&`, `<`, `>` and the quotes.
+"""
+
+
+def _text(value: str) -> str:
+    """One choke point for every string rendered as page text.
+
+    Sanitising here rather than in `model.py` keeps the model honest: an
+    `Inspection` should report the name the operating system actually gave the
+    file, undamaged, for anything that reads it as data. It is only the
+    *rendering* that cannot carry these characters, and only the raw-text path
+    at that -- the JSON island escapes them itself, since `json.dumps` defaults
+    to `ensure_ascii=True` and so emits `\\ud8ff`-style escapes rather than the
+    characters. So this is the boundary where the constraint is real.
+    """
+    return html_escape.escape(_NOT_XML_TEXT.sub("\ufffd", value))
 
 
 _STYLE = """
@@ -142,12 +169,12 @@ def _ladder(inspection: Inspection) -> str:
     rows = []
     for stage in inspection.stages:
         detail = " ".join(f"{k}={v}" for k, v in stage.detail.items())
-        text = html_escape.escape(stage.name)
+        text = _text(stage.name)
         if detail:
-            text += " <span>" + html_escape.escape(detail) + "</span>"
+            text += " <span>" + _text(detail) + "</span>"
         if stage.error:
-            text += " — " + html_escape.escape(stage.error)
-        rows.append(f'<li class="{html_escape.escape(stage.status)}">{text}</li>')
+            text += " — " + _text(stage.error)
+        rows.append(f'<li class="{_text(stage.status)}">{text}</li>')
     return '<ol class="ladder">' + "".join(rows) + "</ol>"
 
 
@@ -166,11 +193,11 @@ def render_html(inspection: Inspection) -> str:
     (comparisons, a character-class regex) would otherwise look like tags and
     entities and break the well-formedness this page is meant to keep.
     """
-    name = html_escape.escape(inspection.file.get("name", "document"))
-    meta = html_escape.escape(
+    name = _text(inspection.file.get("name", "document"))
+    meta = _text(
         f"{inspection.file.get('size', '?')} bytes · sha256 {inspection.file.get('sha256', '')}"
     )
-    notes = "".join(f"<p>{html_escape.escape(n)}</p>" for n in inspection.notes)
+    notes = "".join(f"<p>{_text(n)}</p>" for n in inspection.notes)
     payload = _embed(
         {
             "file": inspection.file,

@@ -189,7 +189,17 @@ def _inspect(args: argparse.Namespace, out: object) -> int:
             return EXIT_USAGE
         try:
             args.report.parent.mkdir(parents=True, exist_ok=True)
-            args.report.write_text(render_html(inspect_document(sources[0])), encoding="utf-8")
+            # `errors` is a second line of defence only: `render_html` already
+            # replaces every character UTF-8 or XML cannot carry (a filename is
+            # allowed to hold raw bytes, and `os.fsdecode` turns an invalid one
+            # into a lone surrogate). Without that, this would merely turn an
+            # unwritable page into an unparseable one -- so it is here to keep a
+            # future leak from reaching the user as a traceback, not as the fix.
+            args.report.write_text(
+                render_html(inspect_document(sources[0])),
+                encoding="utf-8",
+                errors="xmlcharrefreplace",
+            )
         except OSError as error:
             print(
                 f"{PROGRAM}: cannot write {args.report}: {_reason(error)}",
