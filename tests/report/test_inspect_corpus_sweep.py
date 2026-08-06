@@ -170,6 +170,30 @@ def _guarded[T](request: pytest.FixtureRequest, compute: Callable[[list[Inspecti
     this exists and what it closes; `compute`'s own name is fine to print
     (`_count_built`, and so on) -- it is `compute`'s *argument*, the full
     inspection list, that must never be a crash frame's parameter.
+
+    **This alone is not the whole no-leak guarantee.** It depends on two things
+    holding together: `_guarded` catching the raise path here, *and* every
+    `compute` this file passes in returning only a plain `int`, `bool`, or
+    tuple of those -- never a corpus-derived `str`. A reviewer proved that a
+    `compute` returning a corpus-derived string leaks through pytest's assert
+    rewriting under every flag, `_guarded` or no `_guarded`: pytest reports an
+    `assert actual == expected` failure by printing both operands, so a string
+    pulled from the corpus would appear in the failure text regardless of which
+    frame raised it. No call site in this file violates that today (`_count_built`,
+    `_count_crashed`, `_all_have_ladders` and `_render_check` all return an
+    `int`, `bool`, or a tuple of those), but nothing enforces it mechanically --
+    a future helper must not assume `_guarded` alone makes a corpus-derived
+    return value safe to assert on.
+
+    **A second, accepted tradeoff:** if a helper ever raises a genuine internal
+    `AssertionError` (a bug in the helper itself, not a corpus finding),
+    `_guarded` reports only its exception type (`AssertionError`) in the
+    re-raised message, not its original text -- the same blanket `except
+    Exception` that keeps corpus content out of the message also discards
+    whatever that message said. Recovering it would mean special-casing
+    `AssertionError` to read as safe, which is exactly the kind of exception a
+    corpus-derived `assert` inside a helper would raise. Losing the message is
+    the price of not having to make that judgment call here.
     """
     try:
         return compute(request.getfixturevalue("inspections"))
