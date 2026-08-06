@@ -510,6 +510,22 @@ One document fails to build: its `.mus` frame chain references an entry its pool
 is the same document whose `.musx` carries three `frameSpec` records its `.mus` does not, so the two
 containers disagree about its frames rather than the adapter mis-reading them.
 
+**A record's tag is spelled three different ways, by family and era, and the diagnostic report
+(`finale-parser inspect --report`) shows the raw spelling rather than a normalised one.** A
+2011-era `.mus`'s `others`/`details` pools tag each record numerically (`mus_others.TAG_FRAME_SPEC =
+146`, `mus_details.TAG_GFHOLD = 1044`, and so on). A 2001-2005 (DCL) `.mus` tags each 16-byte row
+with ETF's two-character code instead (`enigma.mus_rows.MusRowRecord.tag`; `MS` = `measSpec`, `IS` =
+`staffSpec`, `FR` = `frameSpec`, `GF` = `gfhold` — see `_rows_others`/`_rows_details` in
+`mus_document.py`). A `.musx`'s `Record.tag` is the symbolic EnigmaXML element name (`measSpec`,
+`gfhold`, `frameSpec`, ...). `read_mus_document` normalises the handful of record types it
+translates onto the `.musx` spelling (the table above), but the report's "records" depth
+(`report.model._mus_records`) deliberately bypasses that translation and reads the raw `others`/
+`details` pools directly — see that function's own docstring for why: a tag `mus_document` does not
+yet translate is exactly what a diagnostic needs to still show. So the same musical concept — a
+frame's entry span, a measure's key and beats, a group-fill hold — appears in a report under `146`,
+under `FR`/`MS`/`GF`, or under `frameSpec`/`measSpec`/`gfhold`, depending only on which family and
+era produced the file being inspected.
+
 ### Known format facts — the reserved staff 32767
 
 Every corpus document declares a staff numbered **32767** (0x7FFF, the sentinel the format also uses
