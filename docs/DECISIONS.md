@@ -110,6 +110,11 @@ just a deliverable.
 Consequence: the library must stay independently usable and must not take a GUI dependency. See the
 open question on GUI framework and repo layout.
 
+**Update, 2026-08-04:** (a), the hex viewer, shipped — not as part of a desktop application, as an
+HTML report instead. See the 2026-08-04 entry below for why, and `docs/ARCHITECTURE.md`'s overview
+for the current shape. (b), notation rendering, remains as scoped here: unbuilt, and the open
+question below still applies to it.
+
 ## 2026-07-20 — DECIDED: third-party reference documents are vendored into `docs/` under fair use
 
 Four out-of-print reference documents are committed to `docs/` (the ETF specification, the 1996
@@ -141,10 +146,12 @@ permissive license suits a format-interoperability library that other tools need
 
 <!-- Add architectural forks here as they arise, each with a recommended default and "owner to
      confirm". Move to a DECIDED entry above once resolved. -->
-- **OPEN — GUI framework and repo layout for the desktop frontend.** The frontend is DECIDED (see
-  above); how to build and package it is not. Recommended default: keep the parser a standalone
-  importable package and add the app as a separate package in the same repo, so the library never
-  gains a GUI dependency. Framework unchosen. Owner to confirm.
+- **OPEN — GUI framework and repo layout for notation rendering.** Narrowed by the 2026-08-04 entry
+  below: the hex-viewer half of the frontend shipped as a self-contained HTML report and took no GUI
+  dependency, so this question now applies only to notation rendering, which remains unbuilt and
+  unscheduled. Recommended default: keep the parser a standalone importable package and add any
+  future notation-rendering app as a separate package in the same repo, so the library never gains a
+  GUI dependency. Framework unchosen. Owner to confirm.
 - **OPEN — does each detected version need distinct record-parsing logic?** Version detection
   itself is DECIDED (see above) and covers both `.mus` and `.musx`. What remains unknown is whether
   the record layouts inside a given version differ enough to require separate parsing paths per
@@ -475,3 +482,29 @@ pools rather than 137.
 **Worth noting about the pin that caught it.** `EXPECTED_DURATION_FAILURES` was set to 2 with the
 docstring "pinned here so that fixing it shows up as this number falling to 0". It did exactly that.
 A known gap recorded as a number, rather than as a comment, is what makes closing it visible.
+
+## 2026-08-04 — DECIDED: the hex-viewer half of the desktop frontend ships as an HTML report, not a GUI
+
+The 2026-07-20 entry above scoped a **desktop application** with a hex viewer and a notation
+renderer. The hex viewer half is now built, and it is not a desktop application: `finale-parser
+inspect --report` writes one self-contained HTML file (`src/finale_file_parser/report/`) showing the
+stage ladder, the score and document summaries, every decoded record, and the raw bytes. Full design:
+`docs/superpowers/specs/2026-08-04-diagnostic-frontend-design.md`.
+
+**Why an HTML report over a GUI, now that the choice is real rather than deferred:**
+
+- **No new dependency.** The library depends on `defusedxml` and nothing else; a GUI toolkit or web
+  framework would be a dependency taken on for one read-only viewer.
+- **Works offline.** No server, no port, nothing to run beside opening a file.
+- **Archivable beside the converted output.** One file, the same way `score.musicxml` is one file —
+  it can sit next to a conversion in the same archive rather than needing an application installed to
+  reopen it.
+- **Crosses a legal boundary a `.mus`/`.musx` file cannot.** A user who cannot legally send this
+  project their score — it may be copyrighted, or under a license that forbids redistribution — can
+  still send the report: it is generated *from* the file, not the file itself, and is useful for
+  diagnosing a parser failure without transmitting the protected work.
+
+Consequence: the 2026-07-20 entry's "must not take a GUI dependency" constraint is satisfied by
+construction, not by discipline — there is no GUI toolkit anywhere in the dependency graph. The
+open question on GUI framework and repo layout (see "Open questions" above) is **not** resolved by
+this; it narrows to apply only to notation rendering, the half that remains unbuilt.
