@@ -1,0 +1,72 @@
+# Third-party notices
+
+`finale-file-parser` is MIT licensed (see `LICENSE`). It vendors no third-party
+code as a dependency at runtime — its only install dependency is `defusedxml`.
+Two modules were written *from* third-party work, and this file carries the
+notices that work asks to be carried.
+
+`docs/REFERENCES.md` records every source consulted, including ones that
+imposed no obligation. This file is narrower: it is the set of notices that
+travel with a redistribution.
+
+## `enigma/blast.py` — PKWARE DCL decompression
+
+An independent Python port of Mark Adler's `blast.c` from zlib's
+`contrib/blast`. The format knowledge — the bit-length tables, the inverted
+canonical code assignment, the length and distance encodings — is his. The
+implementation, its allocation caps, and its error handling are this project's,
+and it is not a line-for-line translation.
+
+zlib's licence permits use and modification provided the origin is not
+misrepresented and altered versions are marked as such. This port is marked as
+altered here, in `docs/REFERENCES.md`, and in the module's own docstring.
+
+    Copyright (C) 2003, 2012, 2013 Mark Adler
+
+    This software is provided 'as-is', without any express or implied
+    warranty.  In no event will the author be held liable for any damages
+    arising from the use of this software.
+
+    Permission is granted to anyone to use this software for any purpose,
+    including commercial applications, and to alter it and redistribute it
+    freely, subject to the following restrictions:
+
+    1. The origin of this software must not be misrepresented; you must not
+       claim that you wrote the original software. If you use this software
+       in a product, an acknowledgment in the product documentation would be
+       appreciated but is not required.
+    2. Altered source versions must be plainly marked as such, and must not be
+       misrepresented as being the original software.
+    3. This notice may not be removed or altered from any source distribution.
+
+    Mark Adler    madler@alumni.caltech.edu
+
+## `enigma/crypt.py` — `score.dat` cipher parameters
+
+The cipher's parameters — the fixed LCG seed, the `(upper + upper // 255)`
+output function, and the 128 KiB keystream reset — were taken as facts from
+[denigma](https://github.com/chrisroode/denigma), which is MIT licensed and
+whose own source credits [Deguerre](https://github.com/Deguerre) for working
+out the cipher. No denigma code was copied; the implementation here is this
+project's.
+
+Facts about a format are not themselves copyrightable, and no denigma code was
+copied, so MIT's "include the copyright notice in all copies" condition is not
+triggered here. This entry is therefore attribution, not a licence obligation,
+and denigma's notice is deliberately **not** reproduced below: doing so would
+mean transcribing a copyright line for a project whose exact holder and year we
+have not verified, and a notices file is the wrong place to guess. Anyone
+tracing the lineage should read the licence at the source repository.
+
+## Documents vendored in `docs/`
+
+Four out-of-print reference documents are committed to `docs/`: the ETF
+specification, the 1996 Enigma Entry Pool document, the Cahill thesis, and the
+LilyPond ETF notes. They are **not** covered by this project's MIT licence —
+they are third-party works reproduced for research and scholarship, each cited
+in `docs/REFERENCES.md` with author, original URL, and archive URL. See the
+2026-07-24 entry in `docs/DECISIONS.md` for the owner's determination and the
+commitment to comply promptly with any takedown request.
+
+They are documentation, not part of the distributed package: no sdist or wheel
+built from this project contains them.

@@ -6,6 +6,15 @@ Finale was discontinued in 2024 and its format is proprietary and undocumented. 
 those files and converts them to MusicXML, so scores that only exist as `.mus` or `.musx` can be
 migrated, analysed or archived.
 
+## Installing
+
+```bash
+uv tool install finale-file-parser     # just the `finale-parser` command
+pip install finale-file-parser         # or as a library, into your own environment
+```
+
+Python 3.12 or newer. The only runtime dependency is `defusedxml`.
+
 ## Converting scores
 
 ```bash
@@ -29,7 +38,18 @@ A `.mus` is read by reverse engineering, so a converted score can be missing thi
 had — part names come out positional, for instance. What is and is not carried is recorded in
 `UNTRANSLATED` in `src/finale_file_parser/enigma/mus_document.py`.
 
-## Requirements
+## How well does it read a file?
+
+Of the 639 documents in the maintainer's test corpus, 631 build a score: 401 of 401 `.musx`, 99 of
+99 Finale 2011 `.mus`, and 131 of 139 Finale 2001–2005 `.mus`. The eight are the files rather than
+the reader — six are blank scores the parser refuses deliberately, one is a mirror, one an
+incomplete export.
+
+That corpus is licensed material and is not in this repository, so those sweeps **do not run in
+CI** — they are skipped on any checkout without a corpus. CI verifies lint, formatting,
+`mypy --strict`, and every test that does not need one.
+
+## Requirements for development
 
 - [uv](https://docs.astral.sh/uv/) (Python environment + package manager)
 - Python 3.12+ (uv can install this for you)
@@ -49,3 +69,19 @@ push and pull request.
 
 Contributor and AI-assistant conventions for this repo live in `CLAUDE.md`; design notes and
 decisions live in `docs/`.
+
+`make check` is what CI runs, but a CI checkout has no corpus, so the corpus sweeps skip there. A
+green CI run verifies less than a green local run on a machine that has one.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
+
+The format knowledge this project rests on came from elsewhere, and two modules were written from
+third-party work: the PKWARE DCL decompressor is a port of Mark Adler's `blast.c`, and the
+`score.dat` cipher parameters were taken from denigma. [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)
+carries those notices; `docs/REFERENCES.md` records every source consulted.
+
+The reference documents vendored in `docs/` are third-party works reproduced for research and
+scholarship, and are **not** covered by this project's MIT license. They are documentation only —
+no published package contains them.

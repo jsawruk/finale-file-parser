@@ -1,14 +1,34 @@
 [build-system]
-requires = ["setuptools>=68"]
+# >=77 for PEP 639: the SPDX `license` string and `license-files` below.
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "finale-file-parser"
-version = "0.0.1"
+version = "0.1.0"
 description = "A parser for Finale music notation files (.mus/.musx)."
 readme = "README.md"
 requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "jsawruk" }]
+keywords = ["finale", "music", "notation", "musicxml", "enigma", "musx"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Sound/Audio :: Conversion",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
 dependencies = ["defusedxml>=0.7.1"]
+
+[project.urls]
+Homepage = "https://github.com/jsawruk/finale-file-parser"
+Repository = "https://github.com/jsawruk/finale-file-parser"
+Issues = "https://github.com/jsawruk/finale-file-parser/issues"
 
 [project.scripts]
 # The command is shorter than the distribution, which is ordinary --
@@ -27,6 +47,11 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+# Ships the PEP 561 marker, without which an installing project's mypy ignores
+# this package's annotations entirely -- the whole codebase is `mypy --strict`.
+finale_file_parser = ["py.typed"]
 
 [tool.ruff]
 line-length = 100
