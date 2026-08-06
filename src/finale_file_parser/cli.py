@@ -36,6 +36,8 @@ from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.errors import FinaleFileError
 from finale_file_parser.export.musicxml import to_musicxml
 from finale_file_parser.ir import Score
+from finale_file_parser.report import inspect_document
+from finale_file_parser.report.html import render_html
 from finale_file_parser.version.detect import detect_version
 
 __all__ = ["main"]
@@ -50,7 +52,7 @@ EXIT_OK = 0
 EXIT_FAILURES = 1
 """Some input could not be converted. The rest still were."""
 EXIT_USAGE = 2
-"""The command itself was wrong -- no such path, output would be clobbered."""
+"""The command itself was wrong -- no such path."""
 
 
 def source_paths(root: Path) -> list[Path]:
@@ -104,6 +106,17 @@ def _reason(error: Exception) -> str:
     return text.replace(os.sep, "/").split("/")[-1] if text.startswith("/") else text
 
 
+def _clobber_reason(path: Path, force: bool) -> str | None:
+    """Why `path` must not be written, or None if it may be.
+
+    Shared so the two commands cannot drift: `convert` and `inspect --report`
+    refuse for the same reason and must say so in the same words.
+    """
+    if path.exists() and not force:
+        return f"{path.name} exists; pass --force to overwrite"
+    return None
+
+
 def _convert(args: argparse.Namespace, out: object) -> int:
     root: Path = args.input
     sources = source_paths(root)
@@ -115,8 +128,9 @@ def _convert(args: argparse.Namespace, out: object) -> int:
     failures: list[tuple[Path, str]] = []
     for source in sources:
         target = output_path(source, root, args.output)
-        if target.exists() and not args.force:
-            failures.append((source, f"{target.name} exists; pass --force to overwrite"))
+        reason = _clobber_reason(target, args.force)
+        if reason:
+            failures.append((source, reason))
             continue
         try:
             score = build_score(load_document(source))
@@ -124,8 +138,12 @@ def _convert(args: argparse.Namespace, out: object) -> int:
         except FinaleFileError as error:
             failures.append((source, _reason(error)))
             continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(data)
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+        except OSError as error:
+            failures.append((source, _reason(error)))
+            continue
         converted += 1
         if args.verbose:
             print(f"{source} -> {target}", file=out)  # type: ignore[call-overload]
@@ -160,6 +178,36 @@ def _inspect(args: argparse.Namespace, out: object) -> int:
     if not sources:
         print(f"{PROGRAM}: no .mus or .musx files under {args.input}", file=sys.stderr)
         return EXIT_USAGE
+
+    if args.report is not None:
+        if len(sources) != 1:
+            print(f"{PROGRAM}: --report takes one file, not a directory", file=sys.stderr)
+            return EXIT_USAGE
+        reason = _clobber_reason(args.report, args.force)
+        if reason:
+            print(f"{PROGRAM}: {reason}", file=sys.stderr)
+            return EXIT_USAGE
+        try:
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            # `errors` is a second line of defence only: `render_html` already
+            # replaces every character UTF-8 or XML cannot carry (a filename is
+            # allowed to hold raw bytes, and `os.fsdecode` turns an invalid one
+            # into a lone surrogate). Without that, this would merely turn an
+            # unwritable page into an unparseable one -- so it is here to keep a
+            # future leak from reaching the user as a traceback, not as the fix.
+            args.report.write_text(
+                render_html(inspect_document(sources[0])),
+                encoding="utf-8",
+                errors="xmlcharrefreplace",
+            )
+        except OSError as error:
+            print(
+                f"{PROGRAM}: cannot write {args.report}: {_reason(error)}",
+                file=sys.stderr,
+            )
+            return EXIT_USAGE
+        print(f"{sources[0]} -> {args.report}", file=out)  # type: ignore[call-overload]
+        return EXIT_OK
 
     failures = 0
     for source in sources:
@@ -204,6 +252,13 @@ def _parser() -> argparse.ArgumentParser:
 
     inspect = sub.add_parser("inspect", help="report what a file is and what was read from it")
     inspect.add_argument("input", type=Path, help="a .mus/.musx file, or a directory of them")
+    inspect.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        help="write a self-contained HTML report instead of terminal output",
+    )
+    inspect.add_argument("--force", action="store_true", help="overwrite an existing report")
 
     return parser
 

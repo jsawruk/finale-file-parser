@@ -43,6 +43,15 @@ finale-parser inspect score.mus     # what the file is, and what was read from i
 `inspect` prints the detected version and the shape of the score — parts, measures, events,
 pitches.
 
+```bash
+finale-parser inspect score.mus --report score-report.html
+```
+
+Writes one self-contained HTML file showing what the parser saw: how far the pipeline got, the
+score it built, the records it read, and the raw bytes. It is most informative when the document
+does *not* convert — the report names the stage that stopped and why, which is what to send when
+reporting a file that will not parse.
+
 A `.mus` is read by reverse engineering, so a converted score can be missing things the original
 had — part names come out positional, for instance. What is and is not carried is recorded in
 `UNTRANSLATED` in `src/finale_file_parser/enigma/mus_document.py`.

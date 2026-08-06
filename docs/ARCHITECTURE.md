@@ -6,10 +6,16 @@ working on structure.
 ## Overview
 
 The system consists of a parser library that reads Finale `.mus` and `.musx` files and exports
-MusicXML, plus a frontend desktop application providing two functions:
+MusicXML, plus a diagnostic frontend built from two functions:
 
-- A hex viewer that decodes binary entries and shows the structure values
-- A rendering of the corresponding music notation
+- **A hex viewer that decodes binary entries and shows the structure values** — delivered as
+  `finale-parser inspect --report`, a self-contained HTML report (`src/finale_file_parser/report/`)
+  rather than a desktop application: the stage ladder, the score and document summaries, every
+  decoded record, and the raw bytes — each pool embedded whole and paged through 4 KB at a time —
+  in one file with no server and no GUI toolkit. See
+  `docs/DECISIONS.md`'s 2026-08-04 entry for why this shape was chosen over a GUI, and
+  `docs/superpowers/specs/2026-08-04-diagnostic-frontend-design.md` for the full design.
+- **A rendering of the corresponding music notation** — not built, and not scheduled.
 
 Because parsing supports multiple inputs, all data flows into a single intermediate representation
 (IR). The library stays independently usable and takes no GUI dependency.
@@ -509,6 +515,22 @@ check rather than on an offset sweep.
 One document fails to build: its `.mus` frame chain references an entry its pool does not hold. It
 is the same document whose `.musx` carries three `frameSpec` records its `.mus` does not, so the two
 containers disagree about its frames rather than the adapter mis-reading them.
+
+**A record's tag is spelled three different ways, by family and era, and the diagnostic report
+(`finale-parser inspect --report`) shows the raw spelling rather than a normalised one.** A
+2011-era `.mus`'s `others`/`details` pools tag each record numerically (`mus_others.TAG_FRAME_SPEC =
+146`, `mus_details.TAG_GFHOLD = 1044`, and so on). A 2001-2005 (DCL) `.mus` tags each 16-byte row
+with ETF's two-character code instead (`enigma.mus_rows.MusRowRecord.tag`; `MS` = `measSpec`, `IS` =
+`staffSpec`, `FR` = `frameSpec`, `GF` = `gfhold` — see `_rows_others`/`_rows_details` in
+`mus_document.py`). A `.musx`'s `Record.tag` is the symbolic EnigmaXML element name (`measSpec`,
+`gfhold`, `frameSpec`, ...). `read_mus_document` normalises the handful of record types it
+translates onto the `.musx` spelling (the table above), but the report's "records" depth
+(`report.model._mus_records`) deliberately bypasses that translation and reads the raw `others`/
+`details` pools directly — see that function's own docstring for why: a tag `mus_document` does not
+yet translate is exactly what a diagnostic needs to still show. So the same musical concept — a
+frame's entry span, a measure's key and beats, a group-fill hold — appears in a report under `146`,
+under `FR`/`MS`/`GF`, or under `frameSpec`/`measSpec`/`gfhold`, depending only on which family and
+era produced the file being inspected.
 
 ### Known format facts — the reserved staff 32767
 

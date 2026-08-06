@@ -197,8 +197,9 @@ The cheap-looking work has been the productive work. What remains:
    refused on purpose. One is a mirror (above). One has 36 `measSpec` records against `gfhold`
    references reaching measure 111 — an incomplete file, and its sibling is named `..._Temp`.
 
-4. **The desktop frontend** — hex viewer and notation rendering. Much larger than anything above, and
-   the CLI now serves the practical need.
+4. **Notation rendering.** The hex-viewer half of the desktop frontend shipped as `finale-parser
+   inspect --report`; rendering notation itself is much larger than anything above, and the CLI now
+   serves the practical need for the rest.
 
 **Blocked on the corpus, not on effort.** Text repeats: no `.mus`/`.musx` pair of the same music
 carries one. DCL staff layout order: that cohort has no paired `.musx` at all. Rather than searching
@@ -247,7 +248,11 @@ again, write down what a contributed file would have to contain.
       together. A longa is deliberately still refused: no corpus document carries one.
 - [x] MusicXML exporter over the IR — shipped and W3C schema-validated across all 398 `.musx`
       documents and 224 `.mus`. See `enigma/to_ir.py` and `export/musicxml.py`.
-- [ ] Desktop frontend: hex viewer with decoded structure values (DECIDED — framework still open).
+- [x] Desktop frontend: hex viewer with decoded structure values — shipped as `finale-parser
+      inspect --report`, a self-contained HTML report rather than a GUI: the stage ladder, the
+      score/document summaries, every record, and the raw bytes, base64-encoded and budget-capped.
+      Every pool is embedded whole and browsed a 4 KB page at a time, with the byte range and the
+      pool's total size on screen. See `src/finale_file_parser/report/`.
 - [ ] Desktop frontend: notation rendering.
 - [x] **CLI** — `finale-parser`, with `convert` and `inspect`. Takes a file or a
       directory; a batch reports and skips what will not build rather than aborting, and
