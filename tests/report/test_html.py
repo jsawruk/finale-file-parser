@@ -9,7 +9,7 @@ from defusedxml import ElementTree as DET
 
 from finale_file_parser.report.html import render_html
 from finale_file_parser.report.ladder import OK, Stage
-from finale_file_parser.report.model import Inspection
+from finale_file_parser.report.model import Inspection, encode_raw
 
 
 def _inspection(**kwargs: object) -> Inspection:
@@ -76,6 +76,26 @@ def test_a_cdata_terminator_in_document_text_does_not_break_xml() -> None:
         Stage("build score", "refused", error="broken at offset ]]>boom"),
     ]
     html = render_html(inspection)
+    DET.fromstring(html[html.index("<html") :])
+
+
+def test_the_bytes_pane_can_reach_every_byte_of_a_pool() -> None:
+    """The whole pool is embedded -- 269 KB of `others` in one corpus document
+    -- but the pane used to render its first 4096 bytes and say nothing about
+    the remaining 98%. The hex window is still one page; the page now moves, and
+    names where in the pool it is."""
+    pool = bytes(range(256)) * 40  # 10,240 bytes: more than two 4 KB pages
+    html = render_html(_inspection(raw={"others": encode_raw(pool)}))
+    script = html[html.index("//<![CDATA[") :]
+
+    assert "Math.min(bin.length, 4096)" not in script, "the silent 4 KB cut is back"
+    assert "PAGE_BYTES = 4096" in script
+    assert "'previous'" in script and "'next'" in script
+    assert "'bytes ' + group(start)" in script
+    assert "' of ' + group(bin.length)" in script
+    # Base64 carries none of `<`, `>` or `&`, so `_embed` leaves it untouched:
+    # the page holds the entire pool, not only the bytes first shown.
+    assert encode_raw(pool) in html
     DET.fromstring(html[html.index("<html") :])
 
 

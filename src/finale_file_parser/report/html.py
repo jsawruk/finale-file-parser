@@ -54,6 +54,8 @@ li.refused { border-color: #c81; }
 li.crashed { border-color: #c33; font-weight: bold; }
 li.skipped { border-color: #ddd; color: #999; }
 nav button { font: inherit; margin-right: 0.4rem; }
+.controls button, .controls input { font: inherit; margin-right: 0.4rem; }
+.range { color: #666; }
 section { display: none; }
 section.shown { display: block; }
 table { border-collapse: collapse; }
@@ -118,20 +120,108 @@ function renderRecords() {
   }
   el.innerHTML = '<pre>' + esc(JSON.stringify(data.records, null, 2)) + '</pre>';
 }
+// A pool is embedded whole, so the only limit here is how much hex is worth
+// putting on screen at once: one 4 KB page, with the rest a click away rather
+// than silently absent. The old loop stopped at 4096 bytes of a 269 KB pool
+// and said nothing about the other 98%.
+const PAGE_BYTES = 4096;
+
+// This script is a Python string literal, so a backslash here would have to
+// survive two layers of escaping. Nothing below uses one.
+const NEWLINE = String.fromCharCode(10);
+
+function group(n) {
+  let rest = String(n);
+  let out = '';
+  while (rest.length !== 0) {
+    const cut = Math.max(0, rest.length - 3);
+    out = rest.slice(cut) + (out === '' ? '' : ',') + out;
+    rest = rest.slice(0, cut);
+  }
+  return out;
+}
+function hexDump(bin, start, stop) {
+  const lines = [];
+  let line = '';
+  for (let i = start; i !== stop; i++) {
+    if (i % 16 === 0) { line = i.toString(16).padStart(8, '0') + '  '; }
+    line += bin.charCodeAt(i).toString(16).padStart(2, '0') + ' ';
+    if (i % 16 === 15) { lines.push(line); }
+  }
+  if (stop % 16 !== 0) { lines.push(line); }
+  return lines.join(NEWLINE);
+}
+function control(label, onClick) {
+  const button = document.createElement('button');
+  button.textContent = label;
+  button.addEventListener('click', onClick);
+  return button;
+}
+function bytePool(name, bin) {
+  // Built as DOM nodes rather than an innerHTML string: the pool name and the
+  // hex both go in as text, so there is no second escaper to get wrong, and no
+  // markup of this pane's own to keep well-formed.
+  const heading = document.createElement('h2');
+  heading.textContent = name;
+  const controls = document.createElement('p');
+  controls.className = 'controls';
+  const range = document.createElement('span');
+  range.className = 'range';
+  const dump = document.createElement('pre');
+  const lastPage = Math.max(0, Math.ceil(bin.length / PAGE_BYTES) - 1);
+  let page = 0;
+
+  function draw() {
+    const start = page * PAGE_BYTES;
+    const stop = Math.min(start + PAGE_BYTES, bin.length);
+    dump.textContent = hexDump(bin, start, stop);
+    // Always on screen: which slice this is, and how much there is in total.
+    range.textContent = (bin.length === 0)
+      ? 'empty pool'
+      : 'bytes ' + group(start) + '–' + group(stop - 1) + ' of ' + group(bin.length);
+    previous.disabled = (page === 0);
+    next.disabled = (page === lastPage);
+  }
+  function step(by) {
+    return function () {
+      page = Math.min(lastPage, Math.max(0, page + by));
+      draw();
+    };
+  }
+
+  const previous = control('previous', step(-1));
+  const next = control('next', step(1));
+  const wanted = document.createElement('input');
+  wanted.size = 8;
+  wanted.placeholder = 'offset';
+  const go = control('go', function () {
+    const offset = parseInt(wanted.value, 10);
+    if (!isNaN(offset)) {
+      page = Math.min(lastPage, Math.max(0, Math.floor(offset / PAGE_BYTES)));
+      draw();
+    }
+  });
+
+  controls.appendChild(previous);
+  controls.appendChild(next);
+  controls.appendChild(wanted);
+  controls.appendChild(go);
+  controls.appendChild(range);
+  const box = document.createElement('div');
+  box.appendChild(heading);
+  box.appendChild(controls);
+  box.appendChild(dump);
+  draw();
+  return box;
+}
 function renderBytes() {
   const el = document.getElementById('bytes');
+  el.textContent = '';
   const pools = Object.entries(data.raw || {});
-  if (!pools.length) { el.innerHTML = '<p>No raw bytes were embedded.</p>'; return; }
-  let out = '';
+  if (!pools.length) { el.textContent = 'No raw bytes were embedded.'; return; }
   for (const [name, b64] of pools) {
-    const bin = atob(b64);
-    let hex = '';
-    for (let i = 0; i < Math.min(bin.length, 4096); i++) {
-      hex += bin.charCodeAt(i).toString(16).padStart(2, '0') + (i % 16 === 15 ? '\\n' : ' ');
-    }
-    out += '<h2>' + esc(name) + ' (' + bin.length + ' bytes)</h2><pre>' + esc(hex) + '</pre>';
+    el.appendChild(bytePool(name, atob(b64)));
   }
-  el.innerHTML = out;
 }
 renderScore();
 renderJson('document', data.document);

@@ -380,7 +380,10 @@ def _musx_records(document: EnigmaDocument) -> dict[str, object]:
 
 def encode_raw(data: bytes) -> str:
     """Base64, not hex: 4/3 of the payload rather than 2x, and the renderer
-    converts to hex on demand for whichever region is in view."""
+    converts to hex on demand for whichever region is in view -- one 4 KB page,
+    which the reader moves through the pool with the report's own previous/next
+    controls. The whole pool is embedded either way; only the size of the hex on
+    screen at once is bounded."""
     return base64.b64encode(data).decode("ascii")
 
 
