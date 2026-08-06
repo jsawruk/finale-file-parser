@@ -7,21 +7,18 @@ project cut its suite from 34 minutes to about 5 by removing exactly that
 pattern, and reintroducing it here would undo a chunk of it.
 
 Report counts only -- never a corpus filename, title, or record value. **Not
-even in a failure message, under any pytest flag.** Two rules make that hold,
-and both were found necessary the hard way, by deliberately breaking an
-assertion and reading what pytest actually printed rather than reasoning about
-it in the abstract:
+even in a failure message, under any pytest flag, and not even if the code
+below has a bug.** Three rules make that hold, each found necessary the hard
+way, by deliberately breaking something and reading what pytest actually
+printed rather than reasoning about it in the abstract:
 
 * **Every aggregation is a module-level helper** (`_count_built`,
   `_count_crashed`, `_all_have_ladders`, `_render_check`) that takes
-  `list[Inspection]` and returns a plain `int`, `bool`, or tuple of those. A
-  test body calls one, binds the *result* to a name, and only then asserts on
-  that name. The helper has already returned by the time the assert runs, so
-  its own frame and its `for inspection in ...` loop variable are gone from the
-  traceback -- there is nothing left to print, with or without
-  `--showlocals`. Do not inline these loops back into a test function: a bare
-  `for inspection in inspections:` inside a test leaves `inspection` bound
-  after the loop ends, and a raising assert later in the same test prints it.
+  `list[Inspection]` and returns a plain `int`, `bool`, or tuple of those,
+  rather than a bare loop inlined into a test: a `for inspection in
+  inspections:` loop written directly in a test body leaves `inspection`
+  bound to the last document after the loop ends, and a later `assert` in that
+  same test prints it.
 
 * **No fixture takes another fixture as a parameter.** `inspections` computes
   its own paths in its body via `corpus_paths(...)` directly, rather than
@@ -30,14 +27,41 @@ it in the abstract:
   construction -- no flag required -- and a walk that could plausibly fail
   (unlike the pure computation here) must not carry a parameter worth printing.
 
+* **Every call to a helper goes through `_guarded`, never directly.** This is
+  the one that took three attempts to find. "The helper has already returned
+  before the assert runs" only protects the case where the helper *returns*
+  and a *later* assert fails -- it does nothing if the helper itself raises,
+  because then the helper's own frame, holding the entire `inspections` list
+  as its parameter, *is* the crash frame. `_pytest.nodes.Node._repr_failure_py`
+  calls `excinfo.getrepr(funcargs=True, ...)` with `funcargs` hard-coded
+  `True`, independent of `--showlocals` -- pytest prints the parameters of
+  that crash frame unconditionally. `_render_check` calls `render_html` on
+  exactly the corpus's most malformed documents, which is where a bug is most
+  likely to surface. `_guarded` moves the boundary: it calls
+  `compute(request.getfixturevalue("inspections"))` inside its own try/except,
+  so if `compute` raises, `_guarded` -- whose only parameters are a
+  `FixtureRequest` and a function object, both harmless reprs -- is the crash
+  frame instead, and `from None` drops the chained traceback that would
+  otherwise still carry the original one.
+
 `test_every_corpus_document_inspects_without_raising` also recomputes the
 document count from a fresh, independent `corpus_paths` call rather than
-comparing the `inspections` fixture against itself: the earlier version
-compared a list to the very count derived from building that list, which is
-true by construction and can never fail.
+comparing the `inspections` fixture against itself: comparing a list to the
+very count derived from building that list is true by construction and can
+never fail.
+
+None of this is provable on a developer's machine alone: `corpus/` is
+gitignored and CI does a plain checkout, so this whole file's
+`pytestmark` skips it in CI, and no deliberate-failure check run here ever
+runs there either. `test_sweep_helpers.py`, alongside this file, tests
+`_guarded` and the four helpers directly against synthetic data with no
+`skipif` -- so the guarantee above is something CI enforces on every push,
+not only something provable by hand on a corpus machine.
 """
 
 from __future__ import annotations
+
+from collections.abc import Callable
 
 import pytest
 from corpus_files import CORPUS, corpus_paths
@@ -140,12 +164,28 @@ def _render_check(inspections: list[Inspection]) -> tuple[bool, bool]:
     return False, False
 
 
+def _guarded[T](request: pytest.FixtureRequest, compute: Callable[[list[Inspection]], T]) -> T:
+    """Runs `compute` on every corpus inspection, with the crash frame moved
+    here if `compute` raises. See the module docstring's third rule for why
+    this exists and what it closes; `compute`'s own name is fine to print
+    (`_count_built`, and so on) -- it is `compute`'s *argument*, the full
+    inspection list, that must never be a crash frame's parameter.
+    """
+    try:
+        return compute(request.getfixturevalue("inspections"))
+    except Exception as error:  # noqa: BLE001 -- deliberately broad, see docstring
+        raise AssertionError(
+            f"{compute.__name__} raised {type(error).__name__} while summarising the "
+            "corpus; corpus content withheld"
+        ) from None
+
+
 def test_every_corpus_document_inspects_without_raising(request: pytest.FixtureRequest) -> None:
     """Report generation never fails -- including on the documents that do not
     build, which are the ones it exists for."""
     document_count = len(corpus_paths(".mus")) + len(corpus_paths(".musx"))
-    inspection_count = len(request.getfixturevalue("inspections"))
-    every_document_has_a_ladder = _all_have_ladders(request.getfixturevalue("inspections"))
+    inspection_count = _guarded(request, len)
+    every_document_has_a_ladder = _guarded(request, _all_have_ladders)
     assert inspection_count == document_count
     assert every_document_has_a_ladder, "a document produced no ladder at all"
 
@@ -153,13 +193,13 @@ def test_every_corpus_document_inspects_without_raising(request: pytest.FixtureR
 def test_the_report_agrees_with_the_sweeps_about_what_builds(
     request: pytest.FixtureRequest,
 ) -> None:
-    built = _count_built(request.getfixturevalue("inspections"))
+    built = _guarded(request, _count_built)
     assert built == DOCUMENTS_THAT_BUILD
 
 
 def test_no_corpus_document_crashes_a_reader(request: pytest.FixtureRequest) -> None:
     """See `CRASHES`."""
-    crashed = _count_crashed(request.getfixturevalue("inspections"))
+    crashed = _guarded(request, _count_crashed)
     assert crashed == CRASHES
 
 
@@ -167,8 +207,6 @@ def test_a_report_renders_for_a_document_that_does_not_build(
     request: pytest.FixtureRequest,
 ) -> None:
     """The tool is most informative when the file is most broken."""
-    found_a_failing_document, renders_as_html = _render_check(
-        request.getfixturevalue("inspections")
-    )
+    found_a_failing_document, renders_as_html = _guarded(request, _render_check)
     assert found_a_failing_document, "no failing corpus document found to render"
     assert renders_as_html, "a report for a non-building document did not render"
