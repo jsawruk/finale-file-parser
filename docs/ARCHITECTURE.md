@@ -11,7 +11,8 @@ MusicXML, plus a diagnostic frontend built from two functions:
 - **A hex viewer that decodes binary entries and shows the structure values** — delivered as
   `finale-parser inspect --report`, a self-contained HTML report (`src/finale_file_parser/report/`)
   rather than a desktop application: the stage ladder, the score and document summaries, every
-  decoded record, and the raw bytes, in one file with no server and no GUI toolkit. See
+  decoded record, and the raw bytes — each pool embedded whole and paged through 4 KB at a time —
+  in one file with no server and no GUI toolkit. See
   `docs/DECISIONS.md`'s 2026-08-04 entry for why this shape was chosen over a GUI, and
   `docs/superpowers/specs/2026-08-04-diagnostic-frontend-design.md` for the full design.
 - **A rendering of the corresponding music notation** — not built, and not scheduled.

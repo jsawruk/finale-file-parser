@@ -251,7 +251,8 @@ again, write down what a contributed file would have to contain.
 - [x] Desktop frontend: hex viewer with decoded structure values — shipped as `finale-parser
       inspect --report`, a self-contained HTML report rather than a GUI: the stage ladder, the
       score/document summaries, every record, and the raw bytes, base64-encoded and budget-capped.
-      See `src/finale_file_parser/report/`.
+      Every pool is embedded whole and browsed a 4 KB page at a time, with the byte range and the
+      pool's total size on screen. See `src/finale_file_parser/report/`.
 - [ ] Desktop frontend: notation rendering.
 - [x] **CLI** — `finale-parser`, with `convert` and `inspect`. Takes a file or a
       directory; a batch reports and skips what will not build rather than aborting, and
