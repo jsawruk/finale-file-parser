@@ -224,12 +224,18 @@ def _mus_raw(pools: tuple[MusPool, ...]) -> dict[str, object]:
     return {_pool_name(pool, index): encode_raw(pool.data) for index, pool in enumerate(pools)}
 
 
-def _record_entry(
-    key: str, fields: object, offset: int | None, length: int | None
-) -> dict[str, object]:
-    """One record's report shape: identity, walked fields, and where it sat in
-    the file when that is known."""
-    return {"key": key, "fields": fields, "offset": offset, "length": length}
+def _record_entry(key: str, fields: object, length: int | None) -> dict[str, object]:
+    """One record's report shape: identity, walked fields, and how many bytes it
+    occupied when that is known.
+
+    No byte offset. The design called for one, but no reader records where a
+    record began -- `MusOther` and friends carry their decoded payload, not
+    their position -- so every entry carried `"offset": null`, in every family,
+    for every document. Reporting a field that is structurally always empty
+    teaches a reader to distrust the rest, so it is gone until the readers can
+    answer the question honestly.
+    """
+    return {"key": key, "fields": fields, "length": length}
 
 
 def _mus_other_entry(record: MusOther) -> dict[str, object]:
@@ -245,7 +251,6 @@ def _mus_other_entry(record: MusOther) -> dict[str, object]:
     return _record_entry(
         key=f"{record.cmper}/{record.part}",
         fields=fields,
-        offset=None,
         length=len(record.payload) + len(record.extra),
     )
 
@@ -264,7 +269,6 @@ def _mus_detail_entry(record: MusDetailRecord) -> dict[str, object]:
     return _record_entry(
         key=f"{record.cmper1}/{record.cmper2}/{record.inci}",
         fields=fields,
-        offset=None,
         length=len(record.payload) + len(record.extra),
     )
 
@@ -282,7 +286,6 @@ def _mus_row_entry(record: MusRowRecord) -> dict[str, object]:
     return _record_entry(
         key=f"{record.cmper}/{record.cmper2}",
         fields=fields,
-        offset=None,
         length=len(record.payload),
     )
 
@@ -354,7 +357,6 @@ def _musx_entry(record: Record, index: int) -> dict[str, object]:
     return _record_entry(
         key=_musx_key(record, index),
         fields=walk_fields(record.fields, depth=0),
-        offset=None,
         length=None,
     )
 

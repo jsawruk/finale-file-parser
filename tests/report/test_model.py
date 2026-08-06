@@ -248,7 +248,9 @@ def test_a_real_mus_file_gets_raw_bytes_and_records() -> None:
         for tag, entries in by_tag.items():
             assert isinstance(tag, str)
             for entry in entries:
-                assert entry.keys() == {"key", "fields", "offset", "length"}
+                # No `offset`: no reader records where a record began, so the
+                # field the design asked for could only ever have been null.
+                assert entry.keys() == {"key", "fields", "length"}
                 assert isinstance(entry["key"], str)
 
     # Round-trips through JSON without error: no bytes, no dataclasses left over.

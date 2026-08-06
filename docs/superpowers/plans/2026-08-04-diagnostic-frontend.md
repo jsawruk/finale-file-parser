@@ -744,7 +744,8 @@ git commit -m "feat: build an Inspection by running the pipeline as a stage ladd
 **Interfaces:**
 - Consumes: `Inspection`, `MAX_JSON_BYTES`, `MAX_FIELD_DEPTH`
 - Produces: `Inspection.records` shaped `{pool: {tag: [record, ...]}}` where a record is
-  `{"key": str, "fields": dict[str, object], "offset": int | None, "length": int | None}`;
+  `{"key": str, "fields": dict[str, object], "length": int | None}` (an `"offset"` was planned too,
+  but no reader records where a record began, so it shipped without one — see the design doc);
   `Inspection.raw` shaped `{pool_name: base64_str}`; `Inspection.notes` naming anything dropped.
 
 - [ ] **Step 1: Write the failing test**

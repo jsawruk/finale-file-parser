@@ -90,10 +90,22 @@ Inspection
   score     parts -> measures -> (time, clef, key, events, pitches)
   document  record counts by tag; which tags were translated
   records   per tag: each record's key (cmper / cmper2 / inci / part), its
-            decoded fields exactly as the reader produced them, and its byte
-            offset and length within its pool
+            decoded fields exactly as the reader produced them, and its length
+            in bytes
   raw       pool bytes, base64
 ```
+
+**No per-record byte offset.** This section originally promised one — "its byte offset and length
+within its pool" — and the shipped code cannot supply it: no reader records where a record began.
+`MusOther`, `MusDetailRecord` and `MusRowRecord` each carry the decoded payload and nothing about its
+position, and an EnigmaXML `Record` has no file position at all. The field was therefore `null` for
+every record of every family, so it is not in the report shape.
+
+Delivering it is a **possible future enhancement, in the reader layer, not the report**: the `.mus`
+pool readers would have to capture each record's start offset within its decompressed pool and carry
+it on the record types. That is a change to the parser's public data model and was deliberately out
+of scope here — `model.py` reimplements nothing, so the report can only show what a reader already
+knows.
 
 ### The model reimplements nothing
 
