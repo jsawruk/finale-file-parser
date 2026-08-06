@@ -52,7 +52,7 @@ EXIT_OK = 0
 EXIT_FAILURES = 1
 """Some input could not be converted. The rest still were."""
 EXIT_USAGE = 2
-"""The command itself was wrong -- no such path, output would be clobbered."""
+"""The command itself was wrong -- no such path."""
 
 
 def source_paths(root: Path) -> list[Path]:
@@ -192,7 +192,7 @@ def _inspect(args: argparse.Namespace, out: object) -> int:
             args.report.write_text(render_html(inspect_document(sources[0])), encoding="utf-8")
         except OSError as error:
             print(
-                f"{PROGRAM}: cannot write {args.report.name}: {_reason(error)}",
+                f"{PROGRAM}: cannot write {args.report}: {_reason(error)}",
                 file=sys.stderr,
             )
             return EXIT_USAGE
