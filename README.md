@@ -8,21 +8,18 @@ migrated, analysed or archived.
 
 ## Installing
 
-From source, which works today regardless of what is on PyPI:
-
 ```bash
-uv tool install git+https://github.com/jsawruk/finale-file-parser     # the `finale-parser` command
-pip install git+https://github.com/jsawruk/finale-file-parser         # or as a library
-```
-
-Once a release is on PyPI, the shorter form works too:
-
-```bash
-uv tool install finale-file-parser
-pip install finale-file-parser
+uv tool install finale-file-parser     # just the `finale-parser` command
+pip install finale-file-parser         # or as a library, into your own environment
 ```
 
 Python 3.12 or newer. The only runtime dependency is `defusedxml`.
+
+To run a change that has landed on `main` but is not yet released:
+
+```bash
+uv tool install git+https://github.com/jsawruk/finale-file-parser
+```
 
 ## Converting scores
 
