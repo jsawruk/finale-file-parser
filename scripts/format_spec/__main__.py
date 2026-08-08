@@ -8,11 +8,12 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from finale_file_parser.enigma import crypt as CRYPT
 from finale_file_parser.enigma import mus_payload as PAY
 from finale_file_parser.version import mus as MUSHDR
 
 from . import catalog, content
-from .hexview import render_struct
+from .hexview import cite, render_footnotes, render_pie, render_struct
 from .style import CSS
 
 S = content.ALL_STRUCTS
@@ -25,19 +26,39 @@ def section(title: str, body: str) -> None:
 
 
 # ---------------------------------------------------------------- 1. scope
+CITE_ETF = cite(
+    "<em>Enigma Transportable File Specification</em>, Coda Music Technologies. "
+    "Identified by the Library of Congress as version 98c.0, for Finale 97 for Mac "
+    "and Windows: <code>loc.gov/preservation/digital/formats/fdd/fdd000633.shtml</code>. "
+    "Vendored as <code>docs/etfspec.pdf</code>."
+)
+CITE_EEPPD = cite(
+    "<em>Enigma Entry Pool: preliminary documentation</em>, Coda Music Technologies, "
+    "8 February 1996. Archived at <code>web.archive.org/web/19990203113959/"
+    "http://www.codamusic.com:80/down/finale/eeppd.txt</code>. Vendored as "
+    "<code>docs/eeppd.txt</code>."
+)
+CITE_COMMUNITY = cite(
+    "Principally <em>denigma</em> (MIT), <code>github.com/chrisroode/denigma</code>, "
+    "which credits Deguerre for the <code>score.dat</code> keystream; the "
+    "<em>EnigmaXML documentation</em> (MIT), "
+    "<code>github.com/Project-Attacca/enigmaxml-documentation</code>; and "
+    "<em>musxdom</em> (MIT), <code>github.com/rpatters1/musxdom</code>. The full "
+    "list, with what each contributed, is in <code>docs/REFERENCES.md</code>."
+)
+
 section(
     "Scope and provenance",
-    """
+    f"""
 <p class=lead>This document describes the binary layout of Finale's
 <code>.mus</code> and <code>.musx</code> files as reconstructed by the
 <code>finale-file-parser</code> project. Finale was discontinued in 2024 and its
-format was never published; everything here comes from reverse engineering
-against a curated corpus, from two vendored Coda documents, and from prior
-community research.</p>
+format was never published; everything here comes from analysing a curated
+corpus, from two Coda documents{CITE_ETF}{CITE_EEPPD} vendored into the
+repository, and from prior community research.{CITE_COMMUNITY}</p>
 
 <p>It is written for someone implementing a reader. Every structure is given as
-a C-style declaration, a field table, and a hex dump, in the manner of the
-Aseprite file specification.</p>
+a C-style declaration, a field table, and a hex dump.</p>
 
 <div class=prov><strong>Confidence.</strong> Each structure below is annotated
 with what it was verified against. Where this project's findings contradict
@@ -55,13 +76,14 @@ field under discussion instead of burying it in a real record.</p>
 Offsets, sizes and constants are imported from the reading code rather than
 retyped, so a layout here cannot silently drift from the implementation that
 reads it.</div>
+{render_footnotes()}
 """,
 )
 
 # ------------------------------------------------------- 2. versions
 section(
     "Which formats are supported",
-    """
+    f"""
 <p>Three containers, spanning roughly two decades of Finale releases.</p>
 
 <table>
@@ -80,14 +102,50 @@ section(
 </tbody></table>
 
 <h4>Corpus coverage</h4>
-<p>The figures the parser is measured against, over 639 documents:</p>
-<ul>
-<li><code>.musx</code> &mdash; 401 of 401 build a score</li>
-<li>2011-era <code>.mus</code> &mdash; 99 of 99</li>
-<li>DCL-era <code>.mus</code> &mdash; 131 of 139</li>
-</ul>
-<p>The eight that do not are the files rather than the reader: six are blank
-scores refused deliberately, one is a mirror, one an incomplete export.</p>
+<p>The figures the parser is measured against, over 639 documents. 631 build a
+score.</p>
+{
+        render_pie(
+            [
+                (".musx, 401 of 401", 401, "#4a7fb5"),
+                ("2011 .mus, 99 of 99", 99, "#5da36a"),
+                ("DCL .mus, 131 of 139", 131, "#c9954a"),
+                ("do not build", 8, "#b5534a"),
+            ]
+        )
+    }
+
+<h4>The eight that do not build</h4>
+<p>All eight are properties of the files, not defects in the reader. They divide
+into three kinds.</p>
+<dl>
+<dt>Six blank scores</dt>
+<dd>The document carries staves and measures &mdash; a page could be printed from
+it &mdash; but <strong>no music the frames reach</strong>. Either no
+<code>gfhold</code> names a frame, or the frames it names hold no entries. The
+reader refuses these rather than emitting an empty score, because a silent empty
+result is indistinguishable from a parse that went wrong. This is a deliberate
+refusal, and the eight are pinned as a number so that closing one shows up as
+that number falling.</dd>
+
+<dt>One mirror</dt>
+<dd>A <strong>mirror</strong> is one staff displaying another staff's music
+rather than storing its own &mdash; the second staff points at the first's entry
+span. Five DCL documents in the corpus contain mirrors; four read fine, because
+their mirrored spans are named once. The one that fails is the only document
+where <em>two</em> <code>gfhold</code> records name the same entry span, which
+would require a single entry to exist in two places at once. The intermediate
+representation gives an entry exactly one location, so supporting this is a
+design change rather than a decoding problem.</dd>
+
+<dt>One incomplete export</dt>
+<dd>The file declares 36 measures' worth of <code>measSpec</code> records while
+its <code>gfhold</code> records reference measures out to 111 &mdash; it points
+at three quarters of a score that is not in the file. Its sibling file in the
+same folder is named with a <code>_Temp</code> suffix, which suggests a save that
+was interrupted or a working file that was never finished. Nothing can be done
+with it: the referenced measures do not exist anywhere.</dd>
+</dl>
 
 <div class=warn><strong>Not covered.</strong> Finale versions between 2005 and
 2011, and before 2001, are absent from the corpus and therefore absent from
@@ -104,40 +162,97 @@ section(
 the machine that saved the file: <strong>big-endian on Mac, little-endian on
 Windows</strong>. This governs the pool records and every field inside them.</p>
 
-<p>It is <em>detected, not assumed</em>. The first pool record's <code>kind</code>
-is always {PAY.POOL_OTHERS}, a value that reads as {PAY.POOL_OTHERS} only one
-way round. Over the corpus: 102 little-endian, 37 big-endian, all 139 walking to
-the last byte exactly.</p>
+<p>It is <em>detected, not assumed</em>, and the first pool record makes that
+possible. Its <code>kind</code> field is always
+{PAY.POOL_OTHERS}, and {PAY.POOL_OTHERS} in a 16-bit field is
+<code>0f 00</code> read little-endian but <code>00 0f</code> read big-endian. So
+a reader tries one order, and if the first two bytes do not give
+{PAY.POOL_OTHERS} it tries the other: the wrong order yields 3,840, which is not
+a pool kind. One field, read two ways, decides the whole file.</p>
 
-<div class=note>The 2011 era is <strong>all little-endian</strong> even though
-those files are Mac-written &mdash; the Intel transition had happened. Do not
-infer byte order from platform for that era.</div>
+<p>The check that the choice was right is that the <strong>chain walks to the
+last byte exactly</strong>. Each pool record's <code>length</code> says how far
+the next one begins, so a reader adds lengths from <code>0x200</code> and lands
+on record after record. If the byte order were wrong the lengths would be wrong,
+and the walk would overshoot the end of the file or stop short of it. Landing
+precisely on the final byte, with no gap and no overrun, is strong evidence that
+every length was read correctly. All 139 DCL documents in the corpus do this:
+102 little-endian, 37 big-endian.</p>
+
+<div class=note>All files in the 2011 era are <strong>little-endian</strong>,
+since this is after Apple switched to Intel-based Macs.</div>
 
 <h3>Compression</h3>
 <dl>
 <dt>DCL era (2001&ndash;2005)</dt>
 <dd>A chain of PKWARE DCL (&ldquo;implode&rdquo;) records beginning at
-<code>0x200</code>. No Python standard-library module reads this; a decoder is
-required. Measured inflation: 3.25&times;&ndash;4.51&times;.</dd>
+<code>0x200</code>. No Python standard-library module reads this format. This
+project <strong>wrote its own decoder</strong>, an independent Python port of
+Mark Adler's <code>blast.c</code> from zlib's <code>contrib/blast</code>, whose
+correctness is pinned by that implementation's own published test vector.</dd>
 <dt>2011 era</dt>
-<dd>A chain of raw zlib streams, the first located by scanning for
-<code>78 9c</code>. Measured inflation: 5.87&times;&ndash;8.63&times;.</dd>
+<dd>A chain of raw zlib streams, the first located by scanning for the
+<code>78 9c</code> header. The standard library reads these.</dd>
 <dt><code>.musx</code></dt>
-<dd>A ZIP archive. The member <code>score.dat</code> is XOR-encrypted, and
-decrypts to zlib-compressed EnigmaXML.</dd>
+<dd>A ZIP archive. The member <code>score.dat</code> is XOR-obfuscated, and
+decodes to zlib-compressed EnigmaXML.</dd>
+</dl>
+<p>For scale rather than as a specification: a DCL payload decompresses to about
+3.3&ndash;4.5 times its stored size, and a 2011 payload to about
+5.9&ndash;8.6 times. Decoded payloads in the corpus run from 32&nbsp;KB to
+683&nbsp;KB.</p>
+
+<h3>Reading a file you did not write</h3>
+<p>Every input is hostile until parsed. A specification that describes only
+well-formed files leaves a reader open to three distinct attacks, which need
+three distinct defences &mdash; conflating them is how one gets missed.</p>
+
+<dl>
+<dt>Decompression bombs</dt>
+<dd>A small file can declare an enormous decompressed size, exhausting memory
+before anything is validated. Neither DCL nor zlib bounds its own output. This
+parser <strong>rejects any score whose decoded payload exceeds
+{PAY.MAX_MUS_PAYLOAD // (1024 * 1024)}&nbsp;MiB</strong>, counted across the
+whole pool chain rather than per stream, so a chain of individually modest pools
+cannot add up to an unbounded total. The largest real payload in the corpus is
+683&nbsp;KB, so the limit sits about 90 times above anything legitimate.</dd>
+
+<dt>XML entity attacks</dt>
+<dd>A <code>.musx</code> carries XML, and XML has billion-laughs entity
+expansion and external-entity (XXE) retrieval built into the standard. All XML
+in this project is parsed with <strong><code>defusedxml</code></strong>, which
+disables entity expansion and external references. This is the project's only
+runtime dependency, and it exists for this reason alone.</dd>
+
+<dt>Malformed offsets and lengths</dt>
+<dd>Every offset and length in this document is read <em>from the file</em> and
+so may be a lie. A record can declare a length running past the end of its pool,
+a frame can name entries that do not exist, and a walk can be steered into an
+infinite loop. Each such value is bounds-checked before use, and a file that
+fails a check raises a clear error naming what was wrong &mdash; never a crash,
+a hang, or a silent truncation.</dd>
 </dl>
 
-<div class=warn><strong>Decompression bombs.</strong> Any reader must cap total
-inflated output. This implementation refuses past
-{PAY.MAX_MUS_PAYLOAD // (1024 * 1024)}&nbsp;MiB across the whole chain, which
-leaves roughly 90&times; headroom over the largest real corpus payload
-(699,585 bytes).</dd></div>
+<h3>The <code>score.dat</code> obfuscation</h3>
+<p><code>score.dat</code> is XOR-ed with a keystream from a BSD
+<code>rand()</code> linear congruential generator, whose state advances as
+<code>state = state &times; {CRYPT.MULTIPLIER:#x} + {CRYPT.INCREMENT:#x}</code>
+(mod 2<sup>32</sup>), starting from the fixed seed
+<code>{CRYPT.INITIAL_STATE:#x}</code>. The generator is restarted from that same
+seed at every {CRYPT.RESET_EVERY // 1024}&nbsp;KiB boundary, so the keystream is
+one {CRYPT.RESET_EVERY // 1024}&nbsp;KiB block repeated end to end for the whole
+file.</p>
 
-<h3>The <code>score.dat</code> cipher</h3>
-<p><code>score.dat</code> is XOR-encrypted with a keystream from a BSD
-<code>rand()</code> linear congruential generator seeded with a fixed constant.
-The generator is <strong>reseeded at every 128&nbsp;KiB boundary</strong>, so
-the keystream is one constant block repeated end to end.</p>
+<div class=warn><strong>This is not a block cipher, and it is not encryption.</strong>
+There is no mode of operation in the usual sense &mdash; no ECB, CBC or CTR &mdash;
+because there is no block cipher and no key. It is a <em>stream cipher</em> whose
+keystream is generated independently of the data, which makes it structurally
+like OFB or CTR mode; but the seed is a constant compiled into the application,
+so the keystream is <strong>identical in every file ever written</strong>. That
+makes it obfuscation, not confidentiality: anyone with one plaintext and its
+ciphertext recovers the keystream, and the repetition every
+{CRYPT.RESET_EVERY // 1024}&nbsp;KiB is the classic many-time-pad weakness on top.
+Treat <code>score.dat</code> as plainly readable.</div>
 
 <div class=prov>These cipher parameters were not discovered by this project.
 They come from <a href="https://github.com/chrisroode/denigma">denigma</a>

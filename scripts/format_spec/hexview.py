@@ -8,6 +8,7 @@ disagree about where a field sits.
 from __future__ import annotations
 
 import html
+import math
 import re
 from dataclasses import dataclass
 from dataclasses import field as dc_field
@@ -141,3 +142,56 @@ def render_struct(struct: Struct, byte_order: str = "") -> str:
         f"tinted to match the table above.</p>"
         f"{render_hex(struct)}{notes}</div>"
     )
+
+
+def render_pie(slices: list[tuple[str, int, str]], size: int = 190) -> str:
+    """A pie chart as inline SVG, with a legend.
+
+    No charting dependency: this project takes none, and a pie is four lines of
+    trigonometry. `slices` is (label, value, colour).
+    """
+    total = sum(v for _, v, _ in slices)
+    if total <= 0:
+        return ""
+    r = size / 2
+    paths: list[str] = []
+    legend: list[str] = []
+    angle = -math.pi / 2  # start at twelve o'clock
+    for label, value, colour in slices:
+        sweep = 2 * math.pi * value / total
+        x1, y1 = r + r * math.cos(angle), r + r * math.sin(angle)
+        angle += sweep
+        x2, y2 = r + r * math.cos(angle), r + r * math.sin(angle)
+        large = 1 if sweep > math.pi else 0
+        paths.append(
+            f'<path d="M{r:.1f},{r:.1f} L{x1:.1f},{y1:.1f} '
+            f'A{r:.1f},{r:.1f} 0 {large},1 {x2:.1f},{y2:.1f} Z" '
+            f'fill="{colour}" stroke="#fff" stroke-width="1.5"/>'
+        )
+        pct = 100.0 * value / total
+        legend.append(
+            f'<li><span class=swatch style="background:{colour}"></span>'
+            f"{html.escape(html.unescape(label))} &mdash; "
+            f"<strong>{value:,}</strong> ({pct:.1f}%)</li>"
+        )
+    return (
+        f'<div class=chart><svg viewBox="0 0 {size} {size}" width="{size}" '
+        f'height="{size}" role="img">{"".join(paths)}</svg>'
+        f"<ul class=chartkey>{''.join(legend)}</ul></div>"
+    )
+
+
+FOOTNOTES: list[str] = []
+
+
+def cite(text: str) -> str:
+    """Register a footnote and return its superscript marker."""
+    FOOTNOTES.append(text)
+    return f"<sup class=fn>{len(FOOTNOTES)}</sup>"
+
+
+def render_footnotes() -> str:
+    if not FOOTNOTES:
+        return ""
+    items = "".join(f"<li>{n}</li>" for n in FOOTNOTES)
+    return f"<div class=notes><h4>References</h4><ol class=footnotes>{items}</ol></div>"

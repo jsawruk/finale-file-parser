@@ -89,3 +89,18 @@ dl { margin: 6pt 0; }
 dt { font-weight: 600; margin-top: 6pt; }
 dd { margin: 0 0 4pt 14pt; }
 """
+
+CSS += """
+/* --- footnotes, charts ------------------------------------------------- */
+sup.fn { font-size: 7pt; color: #14507a; padding-left: 1pt; }
+.notes { margin-top: 14pt; border-top: 0.5pt solid #ccc; padding-top: 6pt; }
+ol.footnotes { font-size: 8.5pt; color: #444; padding-left: 16pt; }
+ol.footnotes li { margin: 3pt 0; }
+
+.chart { display: flex; align-items: center; gap: 18pt; margin: 10pt 0 12pt;
+         break-inside: avoid; }
+.chart svg { flex: 0 0 auto; }
+ul.chartkey { list-style: none; padding: 0; margin: 0; font-size: 9.5pt; }
+ul.chartkey li { margin: 4pt 0; }
+ul.chartkey .swatch { margin-right: 5pt; }
+"""
