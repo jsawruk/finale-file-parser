@@ -104,7 +104,7 @@ def render_struct_table(struct: Struct) -> str:
             f"<tr><td class=sw>{swatch}</td><td class=off>{span}</td>"
             f"<td class=sz>{f.size}</td><td class=ty><code>{html.escape(f.type_)}</code></td>"
             f"<td class=nm><code>{html.escape(f.name)}</code></td>"
-            f"<td class=nt>{html.escape(f.note)}</td></tr>"
+            f"<td class=nt>{html.escape(html.unescape(f.note))}</td></tr>"
         )
     return (
         "<table class=struct><thead><tr><th></th><th>offset</th><th>size</th>"
@@ -121,8 +121,8 @@ def render_c_struct(struct: Struct, byte_order: str = "") -> str:
         decl = f"    {f.type_.ljust(width)}{f.name};"
         # The table carries the full meaning; keep the inline comment short so
         # the declaration never wraps in print.
-        note = f.note if len(f.note) <= 34 else f.note[:31].rstrip() + "..."
-        note = re.sub(r"&[a-z]+;|<[^>]+>", "", note)
+        note = re.sub(r"<[^>]+>", "", html.unescape(f.note))
+        note = note if len(note) <= 34 else note[:31].rstrip() + "..."
         lines.append(f"{decl.ljust(42)}// +0x{f.offset:<4x} {note}".rstrip())
     lines.append("};")
     head = f"// byte order: {byte_order}\n" if byte_order else ""
