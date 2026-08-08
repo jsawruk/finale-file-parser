@@ -1,4 +1,4 @@
-"""The record catalogue: one entry per decoded record type.
+"""The record catalog: one entry per decoded record type.
 
 Offsets are those the reader actually uses. Where a record's payload is only
 partly decoded, that is stated rather than padded out with guesses -- an
@@ -217,7 +217,7 @@ def inst_used() -> Struct:
     )
 
 
-CATALOGUE = [
+CATALOG = [
     ("measSpec", OTH.TAG_MEAS_SPEC, "MS", meas_spec),
     ("frameSpec", OTH.TAG_FRAME_SPEC, "FR", frame_spec),
     ("gfhold", 1044, "GF", gfhold),
@@ -238,9 +238,9 @@ PARTIAL = [
 ]
 
 
-def render_catalogue() -> str:
+def render_catalog() -> str:
     out: list[str] = []
-    for name, tag, etf, fn in CATALOGUE:
+    for name, tag, etf, fn in CATALOG:
         etf_txt = f", DCL <code>^{etf}</code>" if etf else ""
         out.append(f"<h3>{name} <span class=meta>&mdash; tag {tag}{etf_txt}</span></h3>")
         out.append(render_struct(fn(), "little-endian"))
@@ -248,7 +248,7 @@ def render_catalogue() -> str:
         f"<tr><td><code>{n}</code></td><td>{t}</td><td>{d}</td></tr>" for n, t, d in PARTIAL
     )
     out.append(
-        "<h3>Recognised but only partly decoded</h3>"
+        "<h3>Recognized but only partly decoded</h3>"
         "<p>These records are read and their keys resolved, but their payload layouts are "
         "not fully established. They are listed so an implementer knows they exist rather "
         "than meeting them as unexplained bytes.</p>"

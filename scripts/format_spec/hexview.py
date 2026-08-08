@@ -15,7 +15,7 @@ from dataclasses import field as dc_field
 
 BYTES_PER_ROW = 16
 
-# Colours cycle per field within a structure. Chosen to stay legible in print:
+# Colors cycle per field within a structure. Chosen to stay legible in print:
 # light enough for black text, distinct in greyscale.
 PALETTE = [
     "#ffd9d9",
@@ -96,7 +96,7 @@ def render_hex(struct: Struct) -> str:
 
 
 def render_struct_table(struct: Struct) -> str:
-    """The field table, colour-keyed to the hex dump above it."""
+    """The field table, color-keyed to the hex dump above it."""
     rows: list[str] = []
     for i, f in enumerate(struct.fields):
         swatch = f'<span class=swatch style="background:{PALETTE[i % len(PALETTE)]}"></span>'
@@ -148,7 +148,7 @@ def render_pie(slices: list[tuple[str, int, str]], size: int = 190) -> str:
     """A pie chart as inline SVG, with a legend.
 
     No charting dependency: this project takes none, and a pie is four lines of
-    trigonometry. `slices` is (label, value, colour).
+    trigonometry. `slices` is (label, value, color).
     """
     total = sum(v for _, v, _ in slices)
     if total <= 0:
@@ -157,7 +157,7 @@ def render_pie(slices: list[tuple[str, int, str]], size: int = 190) -> str:
     paths: list[str] = []
     legend: list[str] = []
     angle = -math.pi / 2  # start at twelve o'clock
-    for label, value, colour in slices:
+    for label, value, color in slices:
         sweep = 2 * math.pi * value / total
         x1, y1 = r + r * math.cos(angle), r + r * math.sin(angle)
         angle += sweep
@@ -166,11 +166,11 @@ def render_pie(slices: list[tuple[str, int, str]], size: int = 190) -> str:
         paths.append(
             f'<path d="M{r:.1f},{r:.1f} L{x1:.1f},{y1:.1f} '
             f'A{r:.1f},{r:.1f} 0 {large},1 {x2:.1f},{y2:.1f} Z" '
-            f'fill="{colour}" stroke="#fff" stroke-width="1.5"/>'
+            f'fill="{color}" stroke="#fff" stroke-width="1.5"/>'
         )
         pct = 100.0 * value / total
         legend.append(
-            f'<li><span class=swatch style="background:{colour}"></span>'
+            f'<li><span class=swatch style="background:{color}"></span>'
             f"{html.escape(html.unescape(label))} &mdash; "
             f"<strong>{value:,}</strong> ({pct:.1f}%)</li>"
         )

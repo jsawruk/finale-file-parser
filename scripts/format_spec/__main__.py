@@ -46,6 +46,11 @@ CITE_COMMUNITY = cite(
     "<em>musxdom</em> (MIT), <code>github.com/rpatters1/musxdom</code>. The full "
     "list, with what each contributed, is in <code>docs/REFERENCES.md</code>."
 )
+CITE_MIRROR = cite(
+    "<em>Enigma Entry Pool: preliminary documentation</em> (see note 2), which "
+    "records the term: &ldquo;Certain situations like mirrors and voice 2 create "
+    "complications.&rdquo;"
+)
 
 section(
     "Scope and provenance",
@@ -53,7 +58,7 @@ section(
 <p class=lead>This document describes the binary layout of Finale's
 <code>.mus</code> and <code>.musx</code> files as reconstructed by the
 <code>finale-file-parser</code> project. Finale was discontinued in 2024 and its
-format was never published; everything here comes from analysing a curated
+format was never published; everything here comes from analyzing a curated
 corpus, from two Coda documents{CITE_ETF}{CITE_EEPPD} vendored into the
 repository, and from prior community research.{CITE_COMMUNITY}</p>
 
@@ -76,7 +81,6 @@ field under discussion instead of burying it in a real record.</p>
 Offsets, sizes and constants are imported from the reading code rather than
 retyped, so a layout here cannot silently drift from the implementation that
 reads it.</div>
-{render_footnotes()}
 """,
 )
 
@@ -110,41 +114,48 @@ score.</p>
                 (".musx, 401 of 401", 401, "#4a7fb5"),
                 ("2011 .mus, 99 of 99", 99, "#5da36a"),
                 ("DCL .mus, 131 of 139", 131, "#c9954a"),
-                ("do not build", 8, "#b5534a"),
+                ("Other", 8, "#b5534a"),
             ]
         )
     }
 
-<h4>The eight that do not build</h4>
-<p>All eight are properties of the files, not defects in the reader. They divide
-into three kinds.</p>
+<h4>The other eight files</h4>
 <dl>
-<dt>Six blank scores</dt>
-<dd>The document carries staves and measures &mdash; a page could be printed from
-it &mdash; but <strong>no music the frames reach</strong>. Either no
-<code>gfhold</code> names a frame, or the frames it names hold no entries. The
-reader refuses these rather than emitting an empty score, because a silent empty
-result is indistinguishable from a parse that went wrong. This is a deliberate
-refusal, and the eight are pinned as a number so that closing one shows up as
-that number falling.</dd>
+<dt>Six empty scores</dt>
+<dd>These files appear to be empty. They carry staves and measures, but no
+notes. The reader refuses them rather than returning an empty score, because an
+empty result is indistinguishable from a parse that went wrong.</dd>
 
 <dt>One mirror</dt>
-<dd>A <strong>mirror</strong> is one staff displaying another staff's music
-rather than storing its own &mdash; the second staff points at the first's entry
-span. Five DCL documents in the corpus contain mirrors; four read fine, because
-their mirrored spans are named once. The one that fails is the only document
-where <em>two</em> <code>gfhold</code> records name the same entry span, which
-would require a single entry to exist in two places at once. The intermediate
-representation gives an entry exactly one location, so supporting this is a
-design change rather than a decoding problem.</dd>
+<dd><strong>Mirror</strong> is Coda's own term &mdash; their 1996
+documentation{CITE_MIRROR} warns that &ldquo;mirrors and voice 2 create
+complications&rdquo;, and Finale shipped a Mirror Tool for creating them.</p>
 
-<dt>One incomplete export</dt>
-<dd>The file declares 36 measures' worth of <code>measSpec</code> records while
-its <code>gfhold</code> records reference measures out to 111 &mdash; it points
-at three quarters of a score that is not in the file. Its sibling file in the
-same folder is named with a <code>_Temp</code> suffix, which suggests a save that
-was interrupted or a working file that was never finished. Nothing can be done
-with it: the referenced measures do not exist anywhere.</dd>
+<p>A mirror is a staff that <em>displays another staff's music instead of
+holding its own copy</em>. An engraver reaches for one when two parts play the
+same thing &mdash; a doubled line, a cue, a piano reduction of what the winds
+are doing. Rather than duplicating the notes, the second staff is pointed at the
+first, so editing the original changes both.</p>
+
+<p>Stored, this means exactly what it sounds like: there is one set of entries,
+and two <code>gfhold</code> records name the same entry span. Nothing marks
+either as the copy. To a reader walking the frame chain, the same entries simply
+turn up twice, in two different places in the score.</p>
+
+<p>Five DCL documents in the corpus contain mirrors; four read fine,
+because their mirrored spans are named once. The one that fails is the only
+document where <em>two</em> <code>gfhold</code> records name the same entry
+span, which would require a single entry to exist in two places at once. The
+intermediate representation gives an entry exactly one location, so supporting
+this is a design change rather than a decoding problem.</dd>
+
+<dt>One with a measure count mismatch</dt>
+<dd>A file has 36 measures declared in the <code>measSpec</code> records, but
+measures as high as 111 appear in the <code>gfhold</code> records. The measures
+being referenced are not in the file, so most of the score cannot be
+reconstructed. Its sibling in the same folder carries a <code>_Temp</code>
+suffix, which suggests a working file rather than a finished one, though what
+truncated it is not recorded anywhere in the format.</dd>
 </dl>
 
 <div class=warn><strong>Not covered.</strong> Finale versions between 2005 and
@@ -205,7 +216,7 @@ decodes to zlib-compressed EnigmaXML.</dd>
 <h3>Reading a file you did not write</h3>
 <p>Every input is hostile until parsed. A specification that describes only
 well-formed files leaves a reader open to three distinct attacks, which need
-three distinct defences &mdash; conflating them is how one gets missed.</p>
+three distinct defenses &mdash; conflating them is how one gets missed.</p>
 
 <dl>
 <dt>Decompression bombs</dt>
@@ -271,7 +282,7 @@ and two provenance stamps.</p>
 {render_struct(S["mus_file_header"](), "little-endian (this example)")}
 <p>The banner is the primary version evidence. A regular expression of the form
 <code>Finale\\(R\\)\\s+(\\d{{4}})</code> against the banner text yields the year.
-An unrecognised banner should leave the year unset with the raw text preserved,
+An unrecognized banner should leave the year unset with the raw text preserved,
 rather than failing &mdash; an unknown variant stays inspectable that way.</p>
 """,
 )
@@ -292,13 +303,13 @@ of compressed <em>pools</em>, laid end to end.</p>
 <tr><td>text</td><td>{PAY.POOL_TEXT}</td><td>human-readable strings</td></tr>
 </tbody></table>
 
-<h3>DCL era: a labelled chain</h3>
+<h3>DCL era: a labeled chain</h3>
 <p>Records run from <code>0x200</code> to the last byte of the file, with no
 gaps. The DCL era <strong>labels</strong> its pools; the zlib era does not.</p>
 {render_struct(S["dcl_pool_record"](), "little-endian")}
 {render_struct(S["dcl_pool_record_be"](), "big-endian")}
 
-<h3>2011 era: an unlabelled chain</h3>
+<h3>2011 era: an unlabeled chain</h3>
 <p>The first zlib stream is found by scanning for the <code>78 9c</code> header.
 Streams follow one another; the pools are identified by <em>order</em>, not by a
 label, which is why a reader must know the sequence rather than read it.</p>
@@ -497,12 +508,12 @@ container differs, the music does not.</p>
 """,
 )
 
-# ------------------------------------------------------- 9. catalogue
+# ------------------------------------------------------- 9. catalog
 section(
-    "Record catalogue",
+    "Record catalog",
     "<p>Every record type this project decodes, with the offsets its reader "
     "actually uses. Fields not listed are present in the payload but not yet "
-    "established; they are omitted rather than guessed at.</p>" + catalog.render_catalogue(),
+    "established; they are omitted rather than guessed at.</p>" + catalog.render_catalog(),
 )
 
 
@@ -522,7 +533,9 @@ def build() -> str:
         "<p class=meta>Reconstructed by the finale-file-parser project. "
         "All hex dumps are synthetic.</p>"
         f"<h2>Contents</h2><ol class=toc>{toc}</ol>"
-        f"{body}</body></html>"
+        f"{body}"
+        f'<section id="refs"><h2>References</h2>{render_footnotes()}</section>'
+        "</body></html>"
     )
 
 
