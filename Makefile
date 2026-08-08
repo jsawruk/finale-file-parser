@@ -18,6 +18,7 @@ help:
 	@echo "  fmt        auto-format with ruff"
 	@echo "  typecheck  mypy --strict"
 	@echo "  check      lint + format-check + typecheck + test  (the pre-push gate)"
+	@echo "  spec         regenerate docs/formats/finale-formats.{html,pdf}"
 	@echo "  clean      remove caches and build artifacts"
 
 install: hooks
@@ -58,6 +59,12 @@ check:
 	$(PY) ruff format --check $(CODE)
 	$(PY) mypy $(CODE)
 	$(PY) pytest $(PYTEST_ARGS)
+
+# The specification is generated from the parser: offsets and constants are
+# imported from the reading code, so the document cannot drift from it. The
+# PDF step needs Chrome and is skipped with a message when it is absent.
+spec:
+	PYTHONPATH=scripts $(PY) python -m format_spec
 
 clean:
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist *.egg-info
