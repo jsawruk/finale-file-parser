@@ -256,3 +256,120 @@ def render_catalogue() -> str:
         f"<tbody>{rows}</tbody></table>"
     )
     return "".join(out)
+
+
+# --------------------------------------------------------------------------
+# The tag census. Three tiers, kept apart deliberately: conflating a
+# payload-confirmed identification with a key-sequence guess is how a lead
+# becomes a "fact" in someone else's document.
+# --------------------------------------------------------------------------
+
+TIER_A: list[tuple[str, str, str, str, str]] = [
+    ("109", "", "clefOptions", "others", "Clef definition table, read as a strided array"),
+    ("121", "", "articDef", "others", "An articulation's definition; charMain is the glyph"),
+    ("146", "^FR", "frameSpec", "others", "Entry range for one layer of one measure"),
+    ("159", "", "instUsed", "others", "The staves the score lays out, in layout order"),
+    ("176", "^MS", "measSpec", "others", "Per measure: width, key, beats, divbeat, barline"),
+    ("203", "", "repeatBack", "others", "Backward repeat barline, keyed by measure"),
+    ("204", "", "repeatEndingStart", "others", "Ending bracket, keyed by measure"),
+    ("206", "", "repeatPassList", "others", "Which passes an ending is taken on"),
+    ("231", "^IS", "staffSpec", "others", "Per staff; transposition at +0x14"),
+    ("1009", "", "articAssign", "details", "The articulation on an entry; names an articDef"),
+    ("1044", "^GF", "gfhold", "details", "(staff, measure) to clef and up to four frames"),
+    ("1057", "", "staffGroup", "details", "Brace or bracket over a run of staves"),
+    ("1072", "", "tupletDef", "details", "Keyed by entry, not by (staff, measure)"),
+    ("1108", "", "lyrDataVerse", "details", "Verse lyrics"),
+    ("&mdash;", "^eE", "entry", "entries", "The notes; fixed 38-byte slots"),
+]
+
+TIER_B: list[tuple[str, str, str]] = [
+    ("124", "channelPlayData", "80"),
+    ("126", "chordSuffixPlay", "85"),
+    ("131", "drumLibName", "86"),
+    ("134", "durAllot", "91"),
+    ("136", "execShape", "85"),
+    ("140", "fretboardSymbol", "91"),
+    ("144", "fontName", "5"),
+    ("147", "lockMeas", "81"),
+    ("149", "fretInst", "90"),
+    ("163", "layerAtts", "85"),
+    ("165", "metaArtic", "80"),
+    ("168", "metaDynam", "81"),
+    ("169", "metaKeySig", "80"),
+    ("170", "metaRepeat", "81"),
+    ("171", "metaShape", "80"),
+    ("172", "metaStaffStyle", "80"),
+    ("173", "metaTimeSig", "81"),
+    ("235", "shapeExprDef", "10"),
+    ("242", "textExpressionEnclosure", "14"),
+    ("315", "volumeValue", "14"),
+]
+
+TIER_C_OTHERS = "213 and 215 (25,576 each), 140 (18,624), 214 (12,681), 125 (12,612), \
+148 (11,887), 126 (11,208), 183 (10,114), 192 and 241 (7,353 each), 217 (6,638)"
+TIER_C_DETAILS = "1043 (166,524), 1064 (8,162), 1063 (2,162), 1066 (1,483), \
+1034 (1,164), 1060 (1,156)"
+TIER_C_ETF = "IV (15,274), IK (15,024), SD (13,838), sL and sb (13,802 each), \
+FB (8,448), IX (7,415), DT (4,429), TX (4,068); and in details DF (74,730), \
+fb (63,324), DN (18,647)"
+
+
+def render_tag_tables() -> str:
+    a = "".join(
+        f"<tr><td class=off>{t}</td><td><code>{e}</code></td><td><code>{n}</code></td>"
+        f"<td>{p}</td><td>{d}</td></tr>"
+        for t, e, n, p, d in TIER_A
+    )
+    b = "".join(
+        f"<tr><td class=off>{t}</td><td><code>{n}</code></td><td class=sz>{c}</td></tr>"
+        for t, n, c in TIER_B
+    )
+    return f"""
+<h3>Known record tags</h3>
+<p>One vocabulary in three spellings: ETF's two-character tags, the 2011 era's
+numbers, and EnigmaXML's symbolic names. The three tiers below are kept apart on
+purpose &mdash; a payload-confirmed identification and a key-sequence guess are
+not the same claim.</p>
+
+<h4>Tier A &mdash; decoded and payload-confirmed</h4>
+<p>Parsed by this project, with fields verified against paired <code>.musx</code>
+documents.</p>
+<table><thead><tr><th>Tag</th><th>ETF</th><th>Name</th><th>Pool</th>
+<th>Description</th></tr></thead><tbody>{a}</tbody></table>
+
+<h4>Tier B &mdash; named by key-sequence matching only</h4>
+<p>Identified by matching each tag's <code>(cmper, part)</code> sequence against
+the <code>.musx</code> <code>others</code> pool. <strong>Treat these as leads,
+not facts</strong>: a tag whose record count collides with another's could be
+mismatched, and none has been confirmed by payload content. &ldquo;Docs&rdquo; is
+how many corpus documents agreed.</p>
+<table><thead><tr><th>Tag</th><th>Name</th><th>Docs</th></tr></thead>
+<tbody>{b}</tbody></table>
+<div class=warn><code>fontName</code> (5 documents) and <code>shapeExprDef</code>
+(10) rest on so few agreements that they are better read as guesses.</div>
+
+<h4>Tier C &mdash; observed but unidentified</h4>
+<p><strong>189 distinct tags appear in the 2011 <code>others</code> pool alone</strong>,
+of which the tiers above account for roughly thirty. The rest are read, keyed and
+carried, but their meaning is unknown. The most frequent, by record count across
+the corpus:</p>
+<dl>
+<dt>others</dt><dd>{TIER_C_OTHERS}</dd>
+<dt>details</dt><dd>{TIER_C_DETAILS}</dd>
+<dt>DCL (ETF)</dt><dd>{TIER_C_ETF}</dd>
+</dl>
+<div class=note><strong>Two hints from the counts.</strong> Several pairs share an
+exact record count &mdash; 213/215, 192/241, and <code>sL</code>/<code>sb</code>
+&mdash; which across a whole corpus usually means a definition-and-assignment
+couple like <code>articDef</code>/<code>articAssign</code>. And details tag 1043,
+at 166,524 records, is roughly sixteen times more common than
+<code>gfhold</code>, which suggests something per entry or per note rather than
+per measure.</div>
+
+<div class=prov><strong>What this means for scope.</strong> The tags decoded here
+are not the common ones; they are the ones on the path from file to notes.
+Everything above is largely layout, spacing, fonts, page format and text blocks.
+By tag count this specification covers under a fifth of the vocabulary, and by
+record count rather less &mdash; it is a specification for extracting the music,
+not a complete description of the file.</div>
+"""

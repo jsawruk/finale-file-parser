@@ -194,6 +194,71 @@ label, which is why a reader must know the sequence rather than read it.</p>
 section(
     "Records: framing and addressing",
     f"""
+<h3>What a record is</h3>
+<p>A record is <strong>a row in a table, not an object in a tree</strong>. Almost
+every wrong intuition about these formats comes from expecting a document tree,
+so it is worth stating plainly before any bytes.</p>
+
+<p>A record is three things:</p>
+<dl>
+<dt>A tag</dt><dd>What kind of thing this is &mdash; <code>measSpec</code>,
+<code>gfhold</code>. Think table name.</dd>
+<dt>One or more keys</dt><dd>What it is <em>about</em>. A <code>measSpec</code>
+keyed 7 is measure 7; a <code>gfhold</code> keyed (3, 7) is staff 3, measure 7.
+Think primary key.</dd>
+<dt>A payload</dt><dd>Bytes whose meaning depends entirely on the tag. Think
+columns. There is no self-description inside a payload: without the tag, the
+bytes mean nothing.</dd>
+</dl>
+
+<p>Three consequences matter to anyone writing a reader.</p>
+
+<p><strong>There are no pointers.</strong> Nothing holds a file offset. A
+<code>gfhold</code> does not point at a <code>frameSpec</code>; it contains the
+number 41, and somewhere there is a <code>frameSpec</code> whose key is 41.
+Resolution is a lookup by key equality &mdash; a join, not a dereference. Even the
+entry pool's <code>next</code> and <code>prev</code>, which look like a linked
+list, are entry <em>numbers</em>. The physical order of every record in a file
+could be shuffled without losing anything.</p>
+
+<p><strong>Records do not nest.</strong> Composition happens by reference. The
+music of a measure is not inside the measure's record; it is reached by a chain
+of key lookups.</p>
+
+<p><strong>A logical record is not always a physical one.</strong> In the 2011
+era they are one to one &mdash; each record carries its own length. In the DCL era
+a record is a fixed 16-byte row, and anything larger continues into further rows
+under the same tag and key. ETF calls each row an <em>incidence</em>. So a
+record is the concatenation of its rows, and fields are addressed by offset into
+that concatenation, not into any one row.</p>
+
+<h4>The hierarchy, and where containment actually happens</h4>
+<p>&ldquo;A pool contains records, and records contain entries&rdquo; is half
+right. Pools do contain records. But an entry <strong>is</strong> a record: it
+lives in its own pool, keyed by entry number, a peer of <code>measSpec</code>
+rather than a child of anything.</p>
+
+<p>What misleads is <code>frameSpec</code>, which looks like containment and is
+not. It holds <code>startEntry</code> and <code>endEntry</code> &mdash; two
+integers naming a range of keys. Delete the <code>frameSpec</code> and its
+entries are still there, orphaned but intact.</p>
+
+<pre class=cstruct>file
+&#9492;&#9472;&#9472; pools                    others &#183; details &#183; entries &#183; text
+    &#9492;&#9472;&#9472; records              a pool is a flat run of them
+        &#9492;&#9472;&#9472; (entries pool)
+            &#9492;&#9472;&#9472; entry        a record: one chord or rest at one point in time
+                &#9492;&#9472;&#9472; notes    6-byte note records &#8212; real containment</pre>
+
+<p><strong>Notes are the one genuine nesting in the format.</strong> An entry's
+payload holds its own <code>noteCount</code> and the note records themselves;
+they have no independent key and cannot be addressed from outside. Everything
+else is reference by key.</p>
+
+<div class=note>In one line: <strong>pools contain records; records reference
+each other by key; only entries contain anything, and what they contain is
+notes.</strong></div>
+
 <h3>2011 era: self-identifying records</h3>
 {render_struct(S["mus2011_record"](), "little-endian")}
 
@@ -239,7 +304,8 @@ walked as a linked list.</li>
 <div class=note>An entry reached by more than one frame is a corrupt document,
 not a shared voice. A reader should refuse it rather than emit the notes
 twice.</div>
-""",
+"""
+    + catalog.render_tag_tables(),
 )
 
 # ------------------------------------------------- 7. the entry pool
