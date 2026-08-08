@@ -70,9 +70,6 @@ def mus_file_header() -> Struct:
             "The banner field is fixed-size and is <em>not</em> zero-filled when Finale "
             "rewrites it, so a shorter banner can leave the tail of a previous, longer one "
             "behind. Everything from the first NUL onward must be discarded.",
-            "A stamp is all-or-nothing: an implausible date or an empty application tag "
-            "means the whole stamp is untrustworthy, because a reader cannot tell which "
-            "half of a partial stamp to believe.",
         ],
     )
 
@@ -86,7 +83,13 @@ def dcl_pool_record() -> Struct:
         fields=[
             Field(0, 2, "kind", "uint16", "15 others, 16 details, 17 entries, 18 text"),
             Field(2, 4, "length", "uint32", "whole record, this 10-byte header included"),
-            Field(6, 4, "checksum", "uint32", "omitted entirely when length == 6"),
+            Field(
+                6,
+                4,
+                "checksum",
+                "uint32",
+                "omitted entirely when the pool is empty (length == 6)",
+            ),
             Field(10, len(stream), "stream", "uint8[]", "PKWARE DCL data, length - 10 bytes"),
         ],
         data=data,
@@ -99,30 +102,6 @@ def dcl_pool_record() -> Struct:
             "A length of exactly 6 means the pool is <strong>empty</strong> &mdash; kind and "
             "length and nothing else, no checksum and no stream.",
         ],
-    )
-
-
-def dcl_pool_record_be() -> Struct:
-    """The same record, written by a Mac."""
-    stream = bytes.fromhex("00040ec5b39a2f")
-    data = (
-        be16(PAY.POOL_OTHERS)
-        + (10 + len(stream)).to_bytes(4, "big")
-        + (0x0044219C).to_bytes(4, "big")
-        + stream
-    )
-    return Struct(
-        name="DclPoolRecord",
-        fields=[
-            Field(0, 2, "kind", "uint16", "15 &mdash; only 15 one way round"),
-            Field(2, 4, "length", "uint32", ""),
-            Field(6, 4, "checksum", "uint32", ""),
-            Field(10, len(stream), "stream", "uint8[]", ""),
-        ],
-        data=data,
-        caption="The identical record written big-endian (Mac). Byte order is detected from "
-        "this first record rather than assumed: its kind is always 15, which reads "
-        "as 15 only one way round.",
     )
 
 
@@ -274,7 +253,6 @@ def note_record() -> Struct:
 ALL_STRUCTS = {
     "mus_file_header": mus_file_header,
     "dcl_pool_record": dcl_pool_record,
-    "dcl_pool_record_be": dcl_pool_record_be,
     "mus2011_record": mus2011_record,
     "dcl_others_row": dcl_others_row,
     "dcl_details_row": dcl_details_row,

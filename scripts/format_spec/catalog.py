@@ -243,7 +243,7 @@ def render_catalog() -> str:
     for name, tag, etf, fn in CATALOG:
         etf_txt = f", DCL <code>^{etf}</code>" if etf else ""
         out.append(f"<h3>{name} <span class=meta>&mdash; tag {tag}{etf_txt}</span></h3>")
-        out.append(render_struct(fn(), "little-endian"))
+        out.append(render_struct(fn()))
     rows = "".join(
         f"<tr><td><code>{n}</code></td><td>{t}</td><td>{d}</td></tr>" for n, t, d in PARTIAL
     )

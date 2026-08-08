@@ -51,6 +51,14 @@ CITE_MIRROR = cite(
     "records the term: &ldquo;Certain situations like mirrors and voice 2 create "
     "complications.&rdquo;"
 )
+CITE_BILLION = cite(
+    "&ldquo;Billion laughs attack&rdquo;, Wikipedia: "
+    "<code>en.wikipedia.org/wiki/Billion_laughs_attack</code>."
+)
+CITE_XXE = cite(
+    "&ldquo;XML external entity attack&rdquo;, Wikipedia: "
+    "<code>en.wikipedia.org/wiki/XML_external_entity_attack</code>."
+)
 
 section(
     "Scope and provenance",
@@ -153,9 +161,7 @@ this is a design change rather than a decoding problem.</dd>
 <dd>A file has 36 measures declared in the <code>measSpec</code> records, but
 measures as high as 111 appear in the <code>gfhold</code> records. The measures
 being referenced are not in the file, so most of the score cannot be
-reconstructed. Its sibling in the same folder carries a <code>_Temp</code>
-suffix, which suggests a working file rather than a finished one, though what
-truncated it is not recorded anywhere in the format.</dd>
+reconstructed.</dd>
 </dl>
 
 <div class=warn><strong>Not covered.</strong> Finale versions between 2005 and
@@ -168,7 +174,7 @@ this document. Nothing here should be assumed to hold for them.</div>
 section(
     "Byte order, compression, and encryption",
     f"""
-<h3>Byte order is the writing machine's</h3>
+<h3>Byte order is determined by the underlying architecture</h3>
 <p>For DCL-era <code>.mus</code> files, integers are written in the byte order of
 the machine that saved the file: <strong>big-endian on Mac, little-endian on
 Windows</strong>. This governs the pool records and every field inside them.</p>
@@ -176,7 +182,7 @@ Windows</strong>. This governs the pool records and every field inside them.</p>
 <p>It is <em>detected, not assumed</em>, and the first pool record makes that
 possible. Its <code>kind</code> field is always
 {PAY.POOL_OTHERS}, and {PAY.POOL_OTHERS} in a 16-bit field is
-<code>0f 00</code> read little-endian but <code>00 0f</code> read big-endian. So
+<code>0f 00</code> in little-endian and <code>00 0f</code> in big-endian. So
 a reader tries one order, and if the first two bytes do not give
 {PAY.POOL_OTHERS} it tries the other: the wrong order yields 3,840, which is not
 a pool kind. One field, read two ways, decides the whole file.</p>
@@ -208,15 +214,15 @@ correctness is pinned by that implementation's own published test vector.</dd>
 <dd>A ZIP archive. The member <code>score.dat</code> is XOR-obfuscated, and
 decodes to zlib-compressed EnigmaXML.</dd>
 </dl>
-<p>For scale rather than as a specification: a DCL payload decompresses to about
+<p>A DCL payload decompresses to about
 3.3&ndash;4.5 times its stored size, and a 2011 payload to about
 5.9&ndash;8.6 times. Decoded payloads in the corpus run from 32&nbsp;KB to
 683&nbsp;KB.</p>
 
-<h3>Reading a file you did not write</h3>
+<h3>Reading a file</h3>
 <p>Every input is hostile until parsed. A specification that describes only
 well-formed files leaves a reader open to three distinct attacks, which need
-three distinct defenses &mdash; conflating them is how one gets missed.</p>
+three distinct defenses.</p>
 
 <dl>
 <dt>Decompression bombs</dt>
@@ -229,15 +235,21 @@ cannot add up to an unbounded total. The largest real payload in the corpus is
 683&nbsp;KB, so the limit sits about 90 times above anything legitimate.</dd>
 
 <dt>XML entity attacks</dt>
-<dd>A <code>.musx</code> carries XML, and XML has billion-laughs entity
-expansion and external-entity (XXE) retrieval built into the standard. All XML
-in this project is parsed with <strong><code>defusedxml</code></strong>, which
-disables entity expansion and external references. This is the project's only
-runtime dependency, and it exists for this reason alone.</dd>
+<dd>A <code>.musx</code> carries XML, and the XML standard's entity mechanism
+leaves parsers susceptible to two well-known attacks. A <em>billion laughs</em>
+attack{CITE_BILLION} defines nested entities that expand exponentially, so a few
+kilobytes of markup inflate to gigabytes in memory. An <em>XML external
+entity</em> (XXE) attack{CITE_XXE} declares an entity pointing at a local file or
+a network address, and a parser that resolves it reads that file or makes that
+request on the attacker's behalf. Neither was intended by the standard; both
+follow from a feature it does include. All XML in this project is parsed with
+<strong><code>defusedxml</code></strong>, which disables entity expansion and
+external references. This is the project's only runtime dependency, and it
+exists for this reason alone.</dd>
 
 <dt>Malformed offsets and lengths</dt>
-<dd>Every offset and length in this document is read <em>from the file</em> and
-so may be a lie. A record can declare a length running past the end of its pool,
+<dd>Every offset and length in this document is read <em>from the file</em>,
+and may be incorrect. A record can declare a length running past the end of its pool,
 a frame can name entries that do not exist, and a walk can be steered into an
 infinite loop. Each such value is bounds-checked before use, and a file that
 fails a check raises a clear error naming what was wrong &mdash; never a crash,
@@ -254,16 +266,7 @@ seed at every {CRYPT.RESET_EVERY // 1024}&nbsp;KiB boundary, so the keystream is
 one {CRYPT.RESET_EVERY // 1024}&nbsp;KiB block repeated end to end for the whole
 file.</p>
 
-<div class=warn><strong>This is not a block cipher, and it is not encryption.</strong>
-There is no mode of operation in the usual sense &mdash; no ECB, CBC or CTR &mdash;
-because there is no block cipher and no key. It is a <em>stream cipher</em> whose
-keystream is generated independently of the data, which makes it structurally
-like OFB or CTR mode; but the seed is a constant compiled into the application,
-so the keystream is <strong>identical in every file ever written</strong>. That
-makes it obfuscation, not confidentiality: anyone with one plaintext and its
-ciphertext recovers the keystream, and the repetition every
-{CRYPT.RESET_EVERY // 1024}&nbsp;KiB is the classic many-time-pad weakness on top.
-Treat <code>score.dat</code> as plainly readable.</div>
+
 
 <div class=prov>These cipher parameters were not discovered by this project.
 They come from <a href="https://github.com/chrisroode/denigma">denigma</a>
@@ -277,9 +280,9 @@ section(
     "The <code>.mus</code> file header",
     f"""
 <p>Both <code>.mus</code> eras share a header. Its first
-<code>0x{MUSHDR.MUS_METADATA_SIZE:X}</code> bytes carry the version banner
-and two provenance stamps.</p>
-{render_struct(S["mus_file_header"](), "little-endian (this example)")}
+{MUSHDR.MUS_METADATA_SIZE} (<code>0x{MUSHDR.MUS_METADATA_SIZE:X}</code>) bytes
+carry the version banner and two provenance stamps.</p>
+{render_struct(S["mus_file_header"]())}
 <p>The banner is the primary version evidence. A regular expression of the form
 <code>Finale\\(R\\)\\s+(\\d{{4}})</code> against the banner text yields the year.
 An unrecognized banner should leave the year unset with the raw text preserved,
@@ -291,13 +294,14 @@ rather than failing &mdash; an unknown variant stays inspectable that way.</p>
 section(
     "Container: how the payload is found",
     f"""
-<p>A <code>.mus</code> payload is <strong>not one blob</strong>. It is a handful
-of compressed <em>pools</em>, laid end to end.</p>
+<p>A <code>.mus</code> payload is a handful of compressed <em>pools</em>, laid
+end to end.</p>
 
 <table>
 <thead><tr><th>Pool</th><th>kind</th><th>Holds</th></tr></thead>
 <tbody>
-<tr><td>others</td><td>{PAY.POOL_OTHERS}</td><td>most record types, keyed by one cmper</td></tr>
+<tr><td>others</td><td>{PAY.POOL_OTHERS}</td>
+<td>most record types, keyed by one cmper (a record's key; see &sect;6)</td></tr>
 <tr><td>details</td><td>{PAY.POOL_DETAILS}</td><td>records keyed by a pair of cmpers</td></tr>
 <tr><td>entries</td><td>{PAY.POOL_ENTRIES}</td><td>the notes themselves</td></tr>
 <tr><td>text</td><td>{PAY.POOL_TEXT}</td><td>human-readable strings</td></tr>
@@ -305,14 +309,31 @@ of compressed <em>pools</em>, laid end to end.</p>
 
 <h3>DCL era: a labeled chain</h3>
 <p>Records run from <code>0x200</code> to the last byte of the file, with no
-gaps. The DCL era <strong>labels</strong> its pools; the zlib era does not.</p>
-{render_struct(S["dcl_pool_record"](), "little-endian")}
-{render_struct(S["dcl_pool_record_be"](), "big-endian")}
+gaps. The DCL era <strong>labels</strong> its pools: every pool record opens
+with a two-byte <code>kind</code> field naming which pool follows &mdash;
+{PAY.POOL_OTHERS} others, {PAY.POOL_DETAILS} details, {PAY.POOL_ENTRIES}
+entries, {PAY.POOL_TEXT} text. A reader does not have to work out what it is
+looking at; the container says so.</p>
+{render_struct(S["dcl_pool_record"]())}
 
 <h3>2011 era: an unlabeled chain</h3>
-<p>The first zlib stream is found by scanning for the <code>78 9c</code> header.
-Streams follow one another; the pools are identified by <em>order</em>, not by a
-label, which is why a reader must know the sequence rather than read it.</p>
+<p>The first zlib stream is found by scanning for the <code>78 9c</code> header,
+and the rest follow one after another. There is no <code>kind</code> field, so
+nothing in the container says which pool a given stream holds.</p>
+
+<p>A reader therefore identifies each pool <strong>by recognizing its
+shape</strong> rather than by counting positions. Each stream is tried against
+the structure a pool is expected to have, and the one that parses is that pool:
+a stream is the <code>others</code> pool if it walks cleanly as a run of
+self-identifying records and yields a plausible number of them, and the
+<code>entries</code> pool if it divides exactly into 38-byte slots with
+consistent entry numbers. A stream that satisfies neither is left alone.</p>
+
+<div class=note>Recognition is used rather than position because position is an
+assumption a file can violate and shape is not. The streams do appear in a
+consistent order across the corpus, but nothing in the format requires it, and a
+reader relying on order would fail <em>silently</em> on the first file that broke
+the pattern &mdash; producing a wrong score rather than an error.</div>
 """,
 )
 
@@ -386,14 +407,14 @@ each other by key; only entries contain anything, and what they contain is
 notes.</strong></div>
 
 <h3>2011 era: self-identifying records</h3>
-{render_struct(S["mus2011_record"](), "little-endian")}
+{render_struct(S["mus2011_record"]())}
 
 <h3>DCL era: fixed ETF rows</h3>
 <p>The same information, encoded completely differently. Where a 2011 record
 carries its own length, a DCL row is always 16 bytes and a long record simply
 continues into the next row.</p>
-{render_struct(S["dcl_others_row"](), "writing platform's")}
-{render_struct(S["dcl_details_row"](), "writing platform's")}
+{render_struct(S["dcl_others_row"]())}
+{render_struct(S["dcl_details_row"]())}
 
 <h3>How items point to each other</h3>
 <p>There is no pointer arithmetic anywhere in these formats. Addressing is by
@@ -440,9 +461,9 @@ section(
     f"""
 <p>The notes. This is the one structure both <code>.mus</code> eras share
 byte-for-byte, differing only in integer byte order.</p>
-{render_struct(S["entry_first_slot"](), "little-endian")}
+{render_struct(S["entry_first_slot"]())}
 <h3>The note record</h3>
-{render_struct(S["note_record"](), "little-endian")}
+{render_struct(S["note_record"]())}
 <h4>Durations</h4>
 <p>Durations are in <strong>EDU</strong>, where 1024 is a quarter note and 4096
 a whole note. Dotted values are the plain value plus half again, so 1536 is a

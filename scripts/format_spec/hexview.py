@@ -114,7 +114,7 @@ def render_struct_table(struct: Struct) -> str:
     )
 
 
-def render_c_struct(struct: Struct, byte_order: str = "") -> str:
+def render_c_struct(struct: Struct) -> str:
     """A C-style declaration, in the manner of the Aseprite spec."""
     width = max((len(f.type_) for f in struct.fields), default=8) + 2
     lines = [f"struct {struct.name} {{"]
@@ -126,17 +126,16 @@ def render_c_struct(struct: Struct, byte_order: str = "") -> str:
         note = note if len(note) <= 34 else note[:31].rstrip() + "..."
         lines.append(f"{decl.ljust(42)}// +0x{f.offset:<4x} {note}".rstrip())
     lines.append("};")
-    head = f"// byte order: {byte_order}\n" if byte_order else ""
-    return f"<pre class=cstruct>{html.escape(head + chr(10).join(lines))}</pre>"
+    return f"<pre class=cstruct>{html.escape(chr(10).join(lines))}</pre>"
 
 
-def render_struct(struct: Struct, byte_order: str = "") -> str:
+def render_struct(struct: Struct) -> str:
     """Heading, prose, C declaration, field table, and the tinted hex dump."""
     notes = "".join(f"<p class=note>{n}</p>" for n in struct.notes)
     caption = f"<p class=caption>{struct.caption}</p>" if struct.caption else ""
     return (
         f"<div class=structblock>{caption}"
-        f"{render_c_struct(struct, byte_order)}"
+        f"{render_c_struct(struct)}"
         f"{render_struct_table(struct)}"
         f"<p class=hexcap>Example bytes ({len(struct.data)} shown), "
         f"tinted to match the table above.</p>"
