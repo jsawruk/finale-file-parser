@@ -305,15 +305,43 @@ TIER_B: list[tuple[str, str, str]] = [
     ("315", "volumeValue", "14"),
 ]
 
-TIER_C_OTHERS = "213 and 215 (25,576 each), 140 (18,624), 214 (12,681), 125 (12,612), \
-148 (11,887), 126 (11,208), 183 (10,114), 192 and 241 (7,353 each), 217 (6,638)"
-TIER_C_DETAILS = "1043 (166,524), 1064 (8,162), 1063 (2,162), 1066 (1,483), \
-1034 (1,164), 1060 (1,156)"
-TIER_C_ETF = "<code>BC</code> (3,809), \
-<code>DA</code> (2,963), <code>fg</code> (2,884), <code>OC</code> (2,170), \
-<code>ls</code> (1,809), and the <code>&amp;a</code>/<code>&amp;d</code>/\
-<code>&amp;f</code> family; in details <code>fb</code> (63,324) \
-and <code>DN</code> (18,647)"
+UNKNOWN: list[tuple[str, str, str, str]] = [
+    ("213", "2011", "others", "25,576"),
+    ("215", "2011", "others", "25,576"),
+    ("140", "2011", "others", "18,624"),
+    ("214", "2011", "others", "12,681"),
+    ("125", "2011", "others", "12,612"),
+    ("148", "2011", "others", "11,887"),
+    ("126", "2011", "others", "11,208"),
+    ("183", "2011", "others", "10,114"),
+    ("192", "2011", "others", "7,353"),
+    ("241", "2011", "others", "7,353"),
+    ("217", "2011", "others", "6,638"),
+    ("1043", "2011", "details", "166,524"),
+    ("1064", "2011", "details", "8,162"),
+    ("1063", "2011", "details", "2,162"),
+    ("1066", "2011", "details", "1,483"),
+    ("1034", "2011", "details", "1,164"),
+    ("1060", "2011", "details", "1,156"),
+    ("^fb", "DCL", "details", "63,324"),
+    ("^DN", "DCL", "details", "18,647"),
+    ("^BC", "DCL", "others", "3,809"),
+    ("^DA", "DCL", "others", "2,963"),
+    ("^fg", "DCL", "others", "2,884"),
+    ("^OC", "DCL", "others", "2,170"),
+    ("^ls", "DCL", "others", "1,809"),
+]
+
+
+def render_unknown() -> str:
+    rows = "".join(
+        f"<tr><td><code>{tag}</code></td><td>{era}</td><td>{pool}</td><td class=sz>{n}</td></tr>"
+        for tag, era, pool, n in UNKNOWN
+    )
+    return (
+        "<table><thead><tr><th>Tag</th><th>Era</th><th>Pool</th>"
+        f"<th>Records</th></tr></thead><tbody>{rows}</tbody></table>"
+    )
 
 
 def render_tag_tables() -> str:
@@ -342,11 +370,32 @@ documents.</p>
 {render_etf_tags()}
 
 <h4>Tier B &mdash; numeric tags named by key-sequence matching only</h4>
-<p>Identified by matching each tag's <code>(cmper, part)</code> sequence against
-the <code>.musx</code> <code>others</code> pool. <strong>Treat these as leads,
-not facts</strong>: a tag whose record count collides with another's could be
-mismatched, and none has been confirmed by payload content. &ldquo;Docs&rdquo; is
-how many corpus documents agreed.</p>
+<p>These names come from a different method, and it is worth being precise
+about what it does and does not establish.</p>
+
+<p>A <code>.musx</code> and a 2011 <code>.mus</code> of the same music contain
+the same records. Reading the <code>.musx</code>, whose records are named,
+gives the sequence of <code>(cmper, part)</code> keys belonging to each name.
+Reading the <code>.mus</code> gives the same sequences against numeric tags.
+Where a numeric tag's key sequence matches a name's exactly, across many
+documents, the two are almost certainly the same record type. The
+&ldquo;Docs&rdquo; column is how many paired documents agreed.</p>
+
+<p><strong>What limits it is that a key sequence is not unique.</strong> Many
+record types are keyed one per measure, or one per staff, and any two of those
+produce identical sequences in a document. The match then says only &ldquo;this
+tag has the same shape as that name&rdquo;, and two tags of the same shape can
+be swapped without the evidence noticing. No conflicts were observed &mdash; no
+tag matched two names, and no name matched two tags &mdash; but that is what
+would be expected either way, since a swap between two same-shaped tags is
+invisible to a test that only compares shapes.</p>
+
+<p>So eighty documents agreeing that tag 124 has
+<code>channelPlayData</code>'s key sequence is strong evidence that tag 124 is
+<em>some</em> record keyed the way <code>channelPlayData</code> is keyed. It is
+not evidence about the meaning of its bytes, which is what confirming a record
+type requires. That is why Tier A, whose payload fields were read and checked
+against a paired document, is a different kind of claim.</p>
 <table><thead><tr><th>Tag</th><th>Name</th><th>Docs</th></tr></thead>
 <tbody>{b}</tbody></table>
 <div class=warn><code>fontName</code> (5 documents) and <code>shapeExprDef</code>
@@ -357,11 +406,7 @@ how many corpus documents agreed.</p>
 of which the tiers above account for roughly thirty. The rest are read, keyed and
 carried, but their meaning is unknown. The most frequent, by record count across
 the corpus:</p>
-<dl>
-<dt>others</dt><dd>{TIER_C_OTHERS}</dd>
-<dt>details</dt><dd>{TIER_C_DETAILS}</dd>
-<dt>DCL (ETF)</dt><dd>{TIER_C_ETF}</dd>
-</dl>
+{render_unknown()}
 <div class=note><strong>Two hints from the counts.</strong> Several pairs share an
 exact record count &mdash; 213/215, 192/241, and <code>sL</code>/<code>sb</code>
 &mdash; which across a whole corpus usually means a definition-and-assignment
@@ -370,12 +415,22 @@ at 166,524 records, is roughly sixteen times more common than
 <code>gfhold</code>, which suggests something per entry or per note rather than
 per measure.</div>
 
-<div class=prov><strong>What this means for scope.</strong> The tags decoded here
-are not the common ones; they are the ones on the path from file to notes.
-Everything above is largely layout, spacing, fonts, page format and text blocks.
-By tag count this specification covers under a fifth of the vocabulary, and by
-record count rather less &mdash; it is a specification for extracting the music,
-not a complete description of the file.</div>
+<div class=prov><strong>What this means for scope.</strong> The tags decoded
+here are the ones on the path from a file to its notes, which is where the work
+started; they are not the most common ones. By tag count this document covers
+under a fifth of the vocabulary, and by record count rather less.
+
+<p>What the remaining tags hold is not known. Some can be guessed at from the
+Tier B names beside them &mdash; <code>fontName</code>, <code>lockMeas</code>,
+<code>metaTimeSig</code> &mdash; but a guess from a name is what the tier above
+already warns against, and the unnamed ones offer not even that. They are not
+&ldquo;just layout&rdquo;: that would be an assumption, and the two largest
+unknowns turned out to be a percussion map and a fretboard library, neither of
+which is layout.</p>
+
+<p>This is a description of the file as far as it has been established, and it
+is meant to become a complete one. What is missing is marked as missing rather
+than dismissed.</p></div>
 """
 
 
@@ -456,9 +511,13 @@ def render_etf_tags() -> str:
     return f"""
 <h4>ETF tags named by their vendor</h4>
 <p>The 2001&ndash;2005 era uses ETF's two-character tags, and Coda documented
-many of them. These are a <strong>stronger claim than the numeric tags
-below</strong>: the vendor named them, rather than this project inferring a name
-by matching key sequences. The source column says which document.</p>
+many of them. The source column says which document named each one.</p>
+
+<div class=note><strong>Case is significant.</strong> <code>^AC</code> is Tempo
+and <code>^ac</code> is performance data; <code>^CH</code> is a chord and
+<code>^hC</code> a learned one; <code>^FB</code> is the fretboard library while
+<code>^fb</code> is an unrelated record with a different partner. A reader that
+upper-cases a tag before comparing it will conflate unrelated records.</div>
 
 <h4>others</h4>
 <table><thead><tr><th>Tag</th><th>Name</th><th>Key (cmper)</th>
@@ -488,29 +547,31 @@ pitch classes from middle C, with sixteen incidences each. Twelve roots times
 sixteen shapes is 192. <code>FB</code> and <code>GT</code> appear in exactly the
 same 44 of 139 documents and in no others, and nothing else shares that set.</p>
 
-<p>The library is written only when the feature is used: 44 of 139 DCL documents
+<p>The fretboard library is written only when the feature is used: 44 of 139
+DCL documents
 carry it, against 149 of 150 <code>.musx</code> documents, later versions
 shipping the defaults regardless.</p></div>
 
-<div class=note><strong><code>^DF</code> is a percussion map</strong>, on three
-independent signals. Its keys are a map id (1&ndash;26) and a value spanning
-exactly 0&ndash;127, a MIDI note range; the id tops out at 21 or 25 whatever the
-document's staff count, so it selects one of a fixed library of maps rather than
-describing a staff. The payload's first field <em>repeats its own key</em> in
-9,396 of 10,434 non-empty records. And while General MIDI percussion occupies
-notes 35&ndash;81, which is 37% of the range, 79% of non-empty entries fall
-inside it &mdash; the first in any document sitting at note 35, General MIDI's
-first defined percussion note, with everything below it empty.
+<div class=note><strong><code>^DF</code> is a percussion map.</strong> It is
+keyed by a map id (1&ndash;26) and a MIDI
+note (0&ndash;127), and gives that note's appearance on a percussion staff. It
+is the most common record in a DCL document, which a table of roughly
+twenty-five maps by 128 notes accounts for.
 
-<p>It is the most common record in a DCL document, which a table of roughly
-twenty-five maps by 128 notes accounts for. The reading of the remaining payload
-fields &mdash; presumably notehead and staff position &mdash; is not established
-here.</p></div>
+<p>Three measurements support the reading. The id tops out at 21 or 25 whatever
+a document's staff count, so it selects from a fixed library rather than
+describing a staff. The payload's first field repeats its own key in 9,396 of
+10,434 non-empty records. And 79% of non-empty entries fall in notes
+35&ndash;81, the General Midi percussion range, which is only 37% of the key
+space. The first in any document sits at note 35, General Midi's first defined
+percussion note, with everything below it empty.</p>
 
-<div class=warn><strong>Not every DCL tag is two printable characters.</strong> A reader
-that assumes the tag field always holds printable ASCII will mishandle a family
-that every document carries. Alongside the character tags, the details pool
-holds thirty <strong>numeric</strong> tags in three regular runs &mdash;
+<p>The remaining payload fields, presumably notehead and staff position, are not
+decoded here.</p></div>
+
+<div class=warn><strong>Not every DCL tag is two printable characters.</strong>
+Alongside the character tags, the details pool holds thirty
+<strong>numeric</strong> tags in three regular runs &mdash;
 <code>0x8001</code>&ndash;<code>0x800a</code>,
 <code>0x9001</code>&ndash;<code>0x900a</code> and
 <code>0xa001</code>&ndash;<code>0xa00a</code> &mdash; each appearing about once
@@ -518,10 +579,7 @@ per document in all 139 DCL documents, and in both byte orders. Their meaning is
 not established here; what matters for an implementer is that the field is a
 u16, and only sometimes a pair of letters.</div>
 
-<div class=note><strong>Case is significant.</strong> <code>^AC</code> is Tempo
-and <code>^ac</code> is performance data; <code>^CH</code> is a chord and
-<code>^hC</code> a learned one. A reader that upper-cases a tag before comparing
-it will conflate unrelated records.</div>
+
 
 <div class=warn><strong>A documented variant this project has never seen.</strong>
 The LilyPond notes describe a second form of <code>^GF</code> occupying a single
@@ -532,10 +590,57 @@ clef. Measured across all 139 DCL corpus documents: every one of the 14,191
 single-row form does not occur here. It is recorded as a known gap rather than a
 defect.</div>
 
-<div class=note><strong>Pairs travel together.</strong> Several of these are two
-halves of one thing, which is why their record counts match almost exactly
-across the corpus: <code>SL</code> and <code>SB</code> are a shape's
-instructions and its data; <code>IV</code> and <code>IK</code> are a chord
-suffix and its playback; <code>Sx</code> and <code>Ex</code> are a slur's
-others-half and details-half.</div>
+
 """
+
+
+NOTE_FLAGS: list[tuple[str, str]] = [
+    ("0x80000000", "legality; set on every real note"),
+    ("0x40000000", "tie start"),
+    ("0x20000000", "tie end"),
+    ("0x10000000", "cross-staff: the note is drawn on another staff"),
+    ("0x08000000", "upstem second"),
+    ("0x04000000", "downstem second"),
+    ("0x02000000", "on the upper stem, where stems are split"),
+    ("0x01000000", "show an accidental; recomputed while editing unless frozen"),
+    ("0x00800000", "parenthesize that accidental"),
+    ("0x001F0000", "mask: the note's id, 1&ndash;12, within its entry"),
+    ("0x00000002", "freeze the accidental bit in place"),
+]
+
+DURATIONS: list[tuple[int, str, int]] = [
+    (8192, "breve", 47),
+    (6144, "dotted whole", 17),
+    (4096, "whole", 1043),
+    (3584, "double-dotted half", 3),
+    (3072, "dotted half", 977),
+    (2048, "half", 5266),
+    (1792, "double-dotted quarter", 14),
+    (1536, "dotted quarter", 2318),
+    (1024, "quarter", 34960),
+    (768, "dotted eighth", 2121),
+    (512, "eighth", 38046),
+    (384, "dotted 16th", 89),
+    (256, "16th", 22651),
+    (192, "dotted 32nd", 6),
+    (128, "32nd", 874),
+    (64, "64th", 34),
+]
+
+
+def render_note_flags() -> str:
+    rows = "".join(f"<tr><td><code>{h}</code></td><td>{d}</td></tr>" for h, d in NOTE_FLAGS)
+    return (
+        f"<table><thead><tr><th>Bit</th><th>Meaning</th></tr></thead><tbody>{rows}</tbody></table>"
+    )
+
+
+def render_durations() -> str:
+    rows = "".join(
+        f"<tr><td class=off>{e:,}</td><td>{n}</td><td class=sz>{c:,}</td></tr>"
+        for e, n, c in DURATIONS
+    )
+    return (
+        "<table><thead><tr><th>EDU</th><th>Note value</th><th>Count</th></tr>"
+        f"</thead><tbody>{rows}</tbody></table>"
+    )

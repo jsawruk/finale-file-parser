@@ -165,29 +165,16 @@ def dcl_others_row() -> Struct:
         data=data,
         caption="A 2001&ndash;2005 others row: fixed 16 bytes, ETF's two-character tag.",
         notes=[
-            "<strong>The tag is a u16, not two characters.</strong> Coda stores the two "
-            "letters as one 16-bit integer, so the machine's byte order applies to them as "
-            "it would to any number. Worked through with real bytes, for the measure spec "
-            "tag <code>^MS</code>:<br><br>"
-            "<code>big-endian file&nbsp;&nbsp;&nbsp;&nbsp;bytes 4d 53&nbsp;&nbsp;&rarr;&nbsp;"
-            "as text &lsquo;MS&rsquo;&nbsp;&nbsp;&rarr;&nbsp;as u16 0x4d53</code><br>"
-            "<code>little-endian file&nbsp;bytes 53 4d&nbsp;&nbsp;&rarr;&nbsp;"
-            "as text &lsquo;SM&rsquo;&nbsp;&nbsp;&rarr;&nbsp;as u16 0x4d53</code><br><br>"
-            "Both hold the same tag, 0x4d53, whose high byte 0x4d is &lsquo;M&rsquo; and "
-            "low byte 0x53 is &lsquo;S&rsquo;. Only the order the two bytes sit in differs. "
-            "A reader that takes the pair as text gets &lsquo;SM&rsquo; from the "
-            "little-endian file and finds no such tag; one that reads a u16 and splits it "
-            "into high and low bytes gets &lsquo;MS&rsquo; from both.",
             "A record too big for one row <strong>runs on into further rows</strong> under "
             "the same tag and key. ETF calls each row an <em>incidence</em>, and a record's "
             "payload is its rows' data concatenated in file order. A reader knows where a "
             "record ends because rows are grouped and sorted by tag and key: the run stops "
-            "at the first row whose tag or key differs, so a reader needs no count. The "
-            "expected number is a property of each structure rather than anything the file "
-            "states &mdash; Coda's specification gives it per record type, saying a staff "
-            "spec is stored over three incidences and a page spec over two &mdash; and the "
-            "final row is zero-padded to fill it. Since the file never records that number, "
-            "concatenating until the key changes is the reliable rule.",
+            "at the first row whose tag or key differs. The expected number of rows is a "
+            "property of each structure rather than anything the file states. Coda's "
+            "specification gives it per record type, saying a staff spec is stored over "
+            "three incidences and a page spec over two. The final row is zero-padded to "
+            "fill it. Since the file never records that number, concatenating until the "
+            "key changes is the reliable rule.",
         ],
     )
 
@@ -203,8 +190,10 @@ def dcl_details_row() -> Struct:
             Field(6, 10, "data", "uint8[10]", "five 16-bit values (ETF calls them twobytes)"),
         ],
         data=data,
-        caption="A details row. Two keys rather than one &mdash; details are addressed by a "
-        "pair, which is how a record hangs off a (staff, measure) intersection.",
+        caption="A details row. Details are addressed by a pair of keys rather than one. "
+        "What the pair means depends on the tag: a frame hold is keyed by (staff, measure), "
+        "a group spec by (instrument list, group id), a learned chord by (root, alternate "
+        "bass), and an entry detail by the two halves of a 32-bit entry number.",
     )
 
 
@@ -240,30 +229,27 @@ def entry_first_slot() -> Struct:
             Field(32, 6, "note[1]", "NoteRec", "the first slot holds two"),
         ],
         data=bytes(buf),
-        caption=f"The first slot of one entry, in the entries pool. The pool is a flat "
-        f"array of fixed {ENT._SLOT}-byte <em>slots</em>; an entry occupies one slot if it "
-        f"has two notes or fewer, and further slots for the rest. Every slot repeats the "
-        f"entry number it belongs to, so a reader never has to track position.",
+        caption=f"The entry pool is a flat array of fixed {ENT._SLOT}-byte <em>slots</em>. "
+        f"Every slot repeats the entry number it belongs to, so a reader never has to track "
+        f"position.",
         notes=[
-            f"A <strong>slot</strong> is one fixed {ENT._SLOT}-byte cell of the pool. An "
-            f"entry's first slot carries the entry's own fields plus its first two notes; "
-            f"if it has more, they continue in further slots holding "
-            f"{ENT._CONT_SLOT_NOTES} notes each from offset {ENT._SLOT_HEADER}, under the "
-            f"same entry number with an increasing slot index. An entry may carry up to "
+            f"<strong>An entry is the musical object; a slot is the storage cell.</strong> "
+            f"Every slot is {ENT._SLOT} bytes, and an entry uses as many as its notes "
+            f"require. They hold different numbers of notes because the first spends bytes "
+            f"on the entry itself:<br><br>"
+            f"&nbsp;&nbsp;first slot &mdash; {ENT._SLOT_HEADER} bytes of slot header, "
+            f"{ENT._FIRST_NOTE_OFFSET - ENT._SLOT_HEADER} bytes of entry fields, then room "
+            f"for {ENT._FIRST_SLOT_NOTES} notes<br>"
+            f"&nbsp;&nbsp;later slots &mdash; {ENT._SLOT_HEADER} bytes of slot header, then "
+            f"room for {ENT._CONT_SLOT_NOTES} notes<br><br>"
+            f"So a three-note chord occupies two slots: two notes in the first and one in "
+            f"the second, with the rest of the second slot unused. An entry may carry up to "
             f"{ENT._MAX_NOTES} notes.",
             "<strong>The two entry flags a reader must respect.</strong> "
             "<code>SETBIT</code> (0x80000000) is set on every legitimate entry, so a slot "
             "without it is not one. <code>NOTEBIT</code> (0x40000000) distinguishes a note "
             "from a rest: when it is clear the entry sounds nothing, and a rest normally "
             "carries no note records at all.",
-            "<strong>Both eras share this layout</strong>, field for field and offset for "
-            "offset. They differ only in <em>byte order</em>: the same fields, with their "
-            "bytes in the opposite order on a Mac-written 2001-2005 file. That the layout "
-            "really is shared is the corpus's verdict rather than an assumption. Across 136 "
-            "DCL-era documents the slots <em>tile the pool exactly</em> &mdash; reading "
-            f"{ENT._SLOT}-byte cells from the start consumes the pool with no remainder and "
-            "no overrun, which a wrong slot size would not do &mdash; and every entry has "
-            "SETBIT set.",
         ],
     )
 
@@ -275,39 +261,11 @@ def note_record() -> Struct:
         name="NoteRec",
         fields=[
             Field(0, 2, "tcd", "uint16", "Tone Center Displacement: pitch and alteration"),
-            Field(2, 4, "flags", "uint32", "ties, accidental display, note id; see below"),
+            Field(2, 4, "flags", "uint32", "note properties; see the table below"),
         ],
         data=data,
-        caption="A note record: six bytes carrying one note's pitch and its tie and "
-        "accidental state.",
-        notes=[
-            "<strong>The alteration is sign-and-magnitude, not two's complement.</strong> "
-            "Coda's documentation calls it &ldquo;a signed quantity ... -8 to +7&rdquo;, "
-            "which reads as two's complement. The corpus disagrees, and the corpus wins. "
-            "The low nibble is a sign bit above a three-bit magnitude:<br><br>"
-            "<code>bit&nbsp;&nbsp;&nbsp;3&nbsp;&nbsp;&nbsp;2&nbsp;&nbsp;&nbsp;1"
-            "&nbsp;&nbsp;&nbsp;0</code><br>"
-            "<code>&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;s&nbsp;][&nbsp;m&nbsp;&nbsp;&nbsp;m"
-            "&nbsp;&nbsp;&nbsp;m&nbsp;]</code><br>"
-            "<code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sign&nbsp;&nbsp;magnitude 0-7</code>"
-            "<br><br>"
-            "The two readings agree on naturals and sharps and diverge on every flat. "
-            "Observed in the corpus: <code>0x0</code> is 0 and <code>0x1</code> is +1, "
-            "which both readings give; but <code>0x9</code> = <code>1001</code> is "
-            "<strong>&minus;1</strong>, sign set with magnitude 1. Read as two's "
-            "complement the same nibble would be &minus;7, spelling a note six steps away "
-            "from the one Finale displays.",
-            "<strong>The flags carry more than ties.</strong> The 32-bit field also holds "
-            "accidental display and the note's identity within its entry. From Coda's "
-            "specification: <code>0x80000000</code> legality, always set; "
-            "<code>0x40000000</code> tie start; <code>0x20000000</code> tie end; "
-            "<code>0x10000000</code> cross-staff; <code>0x02000000</code> upper stem of a "
-            "split stem; <code>0x01000000</code> show an accidental, which Finale "
-            "recomputes while editing unless frozen; <code>0x00800000</code> parenthesize "
-            "that accidental; <code>0x001F0000</code> a mask holding the note's id, 1 to "
-            "12, by which entry details such as articulations and performance data address "
-            "one note of a chord; <code>0x00000002</code> freeze the accidental bit.",
-        ],
+        caption="A note record: six bytes carrying a note's pitch and its properties.",
+        notes=[],
     )
 
 

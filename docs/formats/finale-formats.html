@@ -443,8 +443,8 @@ continues into the next row.</p>
     uint16     cmper;                     // +0x0    the (n) in an ETF ^XX(n)
     uint16     tag;                       // +0x2    two characters stored as a u16
     uint8[12]  data;                      // +0x4    six 16-bit values, or three 32-...
-};</pre><table class=struct><thead><tr><th></th><th>offset</th><th>size</th><th>type</th><th>field</th><th>meaning</th></tr></thead><tbody><tr><td class=sw><span class=swatch style="background:#ffd9d9"></span></td><td class=off>0x00&#8211;0x01</td><td class=sz>2</td><td class=ty><code>uint16</code></td><td class=nm><code>cmper</code></td><td class=nt>the (n) in an ETF ^XX(n)</td></tr><tr><td class=sw><span class=swatch style="background:#d9ecff"></span></td><td class=off>0x02&#8211;0x03</td><td class=sz>2</td><td class=ty><code>uint16</code></td><td class=nm><code>tag</code></td><td class=nt>two characters stored as a u16</td></tr><tr><td class=sw><span class=swatch style="background:#dcffd9"></span></td><td class=off>0x04&#8211;0x0f</td><td class=sz>12</td><td class=ty><code>uint8[12]</code></td><td class=nm><code>data</code></td><td class=nt>six 16-bit values, or three 32-bit (ETF: twobytes and fourbytes)</td></tr></tbody></table><p class=hexcap>Example bytes (16 shown), tinted to match the table above.</p><div class=hexdump><div class=hexrow><span class=off>0000</span><span class=hex><span class=b style="background:#ffd9d9" title="cmper">01</span> <span class=b style="background:#ffd9d9" title="cmper">00</span> <span class=b style="background:#d9ecff" title="tag">53</span> <span class=b style="background:#d9ecff" title="tag">4d</span> <span class=b style="background:#dcffd9" title="data">60</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">58</span> <span class=b style="background:#dcffd9" title="data">02</span> <span class=b style="background:#dcffd9" title="data">04</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">01</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">00</span></span><span class=asc><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#d9ecff">S</span><span class=b style="background:#d9ecff">M</span><span class=b style="background:#dcffd9">`</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">X</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span></span></div></div><p class=note><strong>The tag is a u16, not two characters.</strong> Coda stores the two letters as one 16-bit integer, so the machine's byte order applies to them as it would to any number. Worked through with real bytes, for the measure spec tag <code>^MS</code>:<br><br><code>big-endian file&nbsp;&nbsp;&nbsp;&nbsp;bytes 4d 53&nbsp;&nbsp;&rarr;&nbsp;as text &lsquo;MS&rsquo;&nbsp;&nbsp;&rarr;&nbsp;as u16 0x4d53</code><br><code>little-endian file&nbsp;bytes 53 4d&nbsp;&nbsp;&rarr;&nbsp;as text &lsquo;SM&rsquo;&nbsp;&nbsp;&rarr;&nbsp;as u16 0x4d53</code><br><br>Both hold the same tag, 0x4d53, whose high byte 0x4d is &lsquo;M&rsquo; and low byte 0x53 is &lsquo;S&rsquo;. Only the order the two bytes sit in differs. A reader that takes the pair as text gets &lsquo;SM&rsquo; from the little-endian file and finds no such tag; one that reads a u16 and splits it into high and low bytes gets &lsquo;MS&rsquo; from both.</p><p class=note>A record too big for one row <strong>runs on into further rows</strong> under the same tag and key. ETF calls each row an <em>incidence</em>, and a record's payload is its rows' data concatenated in file order. A reader knows where a record ends because rows are grouped and sorted by tag and key: the run stops at the first row whose tag or key differs, so a reader needs no count. The expected number is a property of each structure rather than anything the file states &mdash; Coda's specification gives it per record type, saying a staff spec is stored over three incidences and a page spec over two &mdash; and the final row is zero-padded to fill it. Since the file never records that number, concatenating until the key changes is the reliable rule.</p></div>
-<div class=structblock><p class=caption>A details row. Two keys rather than one &mdash; details are addressed by a pair, which is how a record hangs off a (staff, measure) intersection.</p><pre class=cstruct>struct DclDetailsRow {
+};</pre><table class=struct><thead><tr><th></th><th>offset</th><th>size</th><th>type</th><th>field</th><th>meaning</th></tr></thead><tbody><tr><td class=sw><span class=swatch style="background:#ffd9d9"></span></td><td class=off>0x00&#8211;0x01</td><td class=sz>2</td><td class=ty><code>uint16</code></td><td class=nm><code>cmper</code></td><td class=nt>the (n) in an ETF ^XX(n)</td></tr><tr><td class=sw><span class=swatch style="background:#d9ecff"></span></td><td class=off>0x02&#8211;0x03</td><td class=sz>2</td><td class=ty><code>uint16</code></td><td class=nm><code>tag</code></td><td class=nt>two characters stored as a u16</td></tr><tr><td class=sw><span class=swatch style="background:#dcffd9"></span></td><td class=off>0x04&#8211;0x0f</td><td class=sz>12</td><td class=ty><code>uint8[12]</code></td><td class=nm><code>data</code></td><td class=nt>six 16-bit values, or three 32-bit (ETF: twobytes and fourbytes)</td></tr></tbody></table><p class=hexcap>Example bytes (16 shown), tinted to match the table above.</p><div class=hexdump><div class=hexrow><span class=off>0000</span><span class=hex><span class=b style="background:#ffd9d9" title="cmper">01</span> <span class=b style="background:#ffd9d9" title="cmper">00</span> <span class=b style="background:#d9ecff" title="tag">53</span> <span class=b style="background:#d9ecff" title="tag">4d</span> <span class=b style="background:#dcffd9" title="data">60</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">58</span> <span class=b style="background:#dcffd9" title="data">02</span> <span class=b style="background:#dcffd9" title="data">04</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">01</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">00</span></span><span class=asc><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#d9ecff">S</span><span class=b style="background:#d9ecff">M</span><span class=b style="background:#dcffd9">`</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">X</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span></span></div></div><p class=note>A record too big for one row <strong>runs on into further rows</strong> under the same tag and key. ETF calls each row an <em>incidence</em>, and a record's payload is its rows' data concatenated in file order. A reader knows where a record ends because rows are grouped and sorted by tag and key: the run stops at the first row whose tag or key differs. The expected number of rows is a property of each structure rather than anything the file states. Coda's specification gives it per record type, saying a staff spec is stored over three incidences and a page spec over two. The final row is zero-padded to fill it. Since the file never records that number, concatenating until the key changes is the reliable rule.</p></div>
+<div class=structblock><p class=caption>A details row. Details are addressed by a pair of keys rather than one. What the pair means depends on the tag: a frame hold is keyed by (staff, measure), a group spec by (instrument list, group id), a learned chord by (root, alternate bass), and an entry detail by the two halves of a 32-bit entry number.</p><pre class=cstruct>struct DclDetailsRow {
     uint16     cmper1;                    // +0x0    first key
     uint16     cmper2;                    // +0x2    second key
     uint16     tag;                       // +0x4    two characters as a u16
@@ -497,13 +497,35 @@ walked as a linked list.</li>
                 emit(entry, staff, measure, layer)</pre>
 
 <p>Four key lookups and no arithmetic on file positions. The entry range is
-inclusive at both ends, and the same run can also be walked through each entry's
-<code>next</code> field, which is how the format itself threads a layer
-together.</p>
+inclusive at both ends.</p>
 
-<div class=note>An entry reached by more than one frame is a corrupt document,
-not a shared voice &mdash; except where it is a mirror (&sect;2). A reader should
-refuse rather than emit the notes twice.</div>
+<h4>Two ways to reach the same notes</h4>
+<p>A layer's entries are also chained: every entry carries <code>prev</code> and
+<code>next</code>, each holding another entry's number, so the entries of a
+layer form a doubly linked list running across the whole staff. Coda's
+documentation describes the pool this way, as entries &ldquo;streamed together
+in a doubly linked list that roughly corresponds to a voice on a staff&rdquo;.
+The frame gives the same run's two endpoints.</p>
+
+<p>Either route reaches the same notes, and the reader above uses the frame
+because it is the one that answers the question being asked. Walking the chain
+tells you what follows a given entry; it does not tell you which measure or
+staff you are in, since the chain runs straight through barlines. The
+<code>gfhold</code> is what supplies that, so a reader wanting music
+<em>by position</em> starts from the frame. A reader wanting to follow a voice
+forward &mdash; to resolve a tie, say &mdash; follows the chain instead.</p>
+
+<div class=note><strong>An entry reached by more than one frame.</strong> Two
+frames naming the same entry span is how a <em>mirror</em> is stored
+(&sect;2) &mdash; one staff displaying another's music. Nothing in the record
+marks it as such: the two <code>gfhold</code> records are ordinary, and the only
+sign is that their frames resolve to the same entries.
+
+<p>A reader that gives each entry a single location cannot represent that, and
+must choose. Emitting the notes twice puts them in both places, which is what
+the file means but breaks any model where an entry has one home; refusing is
+safe but rejects a document Finale considers valid. This implementation refuses,
+and the eight non-building corpus documents include one such file.</p></div>
 
 <h3>Known record tags</h3>
 <p>One vocabulary in three spellings: ETF's two-character tags, the 2011 era's
@@ -520,9 +542,13 @@ documents.</p>
 
 <h4>ETF tags named by their vendor</h4>
 <p>The 2001&ndash;2005 era uses ETF's two-character tags, and Coda documented
-many of them. These are a <strong>stronger claim than the numeric tags
-below</strong>: the vendor named them, rather than this project inferring a name
-by matching key sequences. The source column says which document.</p>
+many of them. The source column says which document named each one.</p>
+
+<div class=note><strong>Case is significant.</strong> <code>^AC</code> is Tempo
+and <code>^ac</code> is performance data; <code>^CH</code> is a chord and
+<code>^hC</code> a learned one; <code>^FB</code> is the fretboard library while
+<code>^fb</code> is an unrelated record with a different partner. A reader that
+upper-cases a tag before comparing it will conflate unrelated records.</div>
 
 <h4>others</h4>
 <table><thead><tr><th>Tag</th><th>Name</th><th>Key (cmper)</th>
@@ -552,29 +578,31 @@ pitch classes from middle C, with sixteen incidences each. Twelve roots times
 sixteen shapes is 192. <code>FB</code> and <code>GT</code> appear in exactly the
 same 44 of 139 documents and in no others, and nothing else shares that set.</p>
 
-<p>The library is written only when the feature is used: 44 of 139 DCL documents
+<p>The fretboard library is written only when the feature is used: 44 of 139
+DCL documents
 carry it, against 149 of 150 <code>.musx</code> documents, later versions
 shipping the defaults regardless.</p></div>
 
-<div class=note><strong><code>^DF</code> is a percussion map</strong>, on three
-independent signals. Its keys are a map id (1&ndash;26) and a value spanning
-exactly 0&ndash;127, a MIDI note range; the id tops out at 21 or 25 whatever the
-document's staff count, so it selects one of a fixed library of maps rather than
-describing a staff. The payload's first field <em>repeats its own key</em> in
-9,396 of 10,434 non-empty records. And while General MIDI percussion occupies
-notes 35&ndash;81, which is 37% of the range, 79% of non-empty entries fall
-inside it &mdash; the first in any document sitting at note 35, General MIDI's
-first defined percussion note, with everything below it empty.
+<div class=note><strong><code>^DF</code> is a percussion map.</strong> It is
+keyed by a map id (1&ndash;26) and a MIDI
+note (0&ndash;127), and gives that note's appearance on a percussion staff. It
+is the most common record in a DCL document, which a table of roughly
+twenty-five maps by 128 notes accounts for.
 
-<p>It is the most common record in a DCL document, which a table of roughly
-twenty-five maps by 128 notes accounts for. The reading of the remaining payload
-fields &mdash; presumably notehead and staff position &mdash; is not established
-here.</p></div>
+<p>Three measurements support the reading. The id tops out at 21 or 25 whatever
+a document's staff count, so it selects from a fixed library rather than
+describing a staff. The payload's first field repeats its own key in 9,396 of
+10,434 non-empty records. And 79% of non-empty entries fall in notes
+35&ndash;81, the General Midi percussion range, which is only 37% of the key
+space. The first in any document sits at note 35, General Midi's first defined
+percussion note, with everything below it empty.</p>
 
-<div class=warn><strong>Not every DCL tag is two printable characters.</strong> A reader
-that assumes the tag field always holds printable ASCII will mishandle a family
-that every document carries. Alongside the character tags, the details pool
-holds thirty <strong>numeric</strong> tags in three regular runs &mdash;
+<p>The remaining payload fields, presumably notehead and staff position, are not
+decoded here.</p></div>
+
+<div class=warn><strong>Not every DCL tag is two printable characters.</strong>
+Alongside the character tags, the details pool holds thirty
+<strong>numeric</strong> tags in three regular runs &mdash;
 <code>0x8001</code>&ndash;<code>0x800a</code>,
 <code>0x9001</code>&ndash;<code>0x900a</code> and
 <code>0xa001</code>&ndash;<code>0xa00a</code> &mdash; each appearing about once
@@ -582,10 +610,7 @@ per document in all 139 DCL documents, and in both byte orders. Their meaning is
 not established here; what matters for an implementer is that the field is a
 u16, and only sometimes a pair of letters.</div>
 
-<div class=note><strong>Case is significant.</strong> <code>^AC</code> is Tempo
-and <code>^ac</code> is performance data; <code>^CH</code> is a chord and
-<code>^hC</code> a learned one. A reader that upper-cases a tag before comparing
-it will conflate unrelated records.</div>
+
 
 <div class=warn><strong>A documented variant this project has never seen.</strong>
 The LilyPond notes describe a second form of <code>^GF</code> occupying a single
@@ -596,20 +621,36 @@ clef. Measured across all 139 DCL corpus documents: every one of the 14,191
 single-row form does not occur here. It is recorded as a known gap rather than a
 defect.</div>
 
-<div class=note><strong>Pairs travel together.</strong> Several of these are two
-halves of one thing, which is why their record counts match almost exactly
-across the corpus: <code>SL</code> and <code>SB</code> are a shape's
-instructions and its data; <code>IV</code> and <code>IK</code> are a chord
-suffix and its playback; <code>Sx</code> and <code>Ex</code> are a slur's
-others-half and details-half.</div>
+
 
 
 <h4>Tier B &mdash; numeric tags named by key-sequence matching only</h4>
-<p>Identified by matching each tag's <code>(cmper, part)</code> sequence against
-the <code>.musx</code> <code>others</code> pool. <strong>Treat these as leads,
-not facts</strong>: a tag whose record count collides with another's could be
-mismatched, and none has been confirmed by payload content. &ldquo;Docs&rdquo; is
-how many corpus documents agreed.</p>
+<p>These names come from a different method, and it is worth being precise
+about what it does and does not establish.</p>
+
+<p>A <code>.musx</code> and a 2011 <code>.mus</code> of the same music contain
+the same records. Reading the <code>.musx</code>, whose records are named,
+gives the sequence of <code>(cmper, part)</code> keys belonging to each name.
+Reading the <code>.mus</code> gives the same sequences against numeric tags.
+Where a numeric tag's key sequence matches a name's exactly, across many
+documents, the two are almost certainly the same record type. The
+&ldquo;Docs&rdquo; column is how many paired documents agreed.</p>
+
+<p><strong>What limits it is that a key sequence is not unique.</strong> Many
+record types are keyed one per measure, or one per staff, and any two of those
+produce identical sequences in a document. The match then says only &ldquo;this
+tag has the same shape as that name&rdquo;, and two tags of the same shape can
+be swapped without the evidence noticing. No conflicts were observed &mdash; no
+tag matched two names, and no name matched two tags &mdash; but that is what
+would be expected either way, since a swap between two same-shaped tags is
+invisible to a test that only compares shapes.</p>
+
+<p>So eighty documents agreeing that tag 124 has
+<code>channelPlayData</code>'s key sequence is strong evidence that tag 124 is
+<em>some</em> record keyed the way <code>channelPlayData</code> is keyed. It is
+not evidence about the meaning of its bytes, which is what confirming a record
+type requires. That is why Tier A, whose payload fields were read and checked
+against a paired document, is a different kind of claim.</p>
 <table><thead><tr><th>Tag</th><th>Name</th><th>Docs</th></tr></thead>
 <tbody><tr><td class=off>124</td><td><code>channelPlayData</code></td><td class=sz>80</td></tr><tr><td class=off>126</td><td><code>chordSuffixPlay</code></td><td class=sz>85</td></tr><tr><td class=off>131</td><td><code>drumLibName</code></td><td class=sz>86</td></tr><tr><td class=off>134</td><td><code>durAllot</code></td><td class=sz>91</td></tr><tr><td class=off>136</td><td><code>execShape</code></td><td class=sz>85</td></tr><tr><td class=off>140</td><td><code>fretboardSymbol</code></td><td class=sz>91</td></tr><tr><td class=off>144</td><td><code>fontName</code></td><td class=sz>5</td></tr><tr><td class=off>147</td><td><code>lockMeas</code></td><td class=sz>81</td></tr><tr><td class=off>149</td><td><code>fretInst</code></td><td class=sz>90</td></tr><tr><td class=off>163</td><td><code>layerAtts</code></td><td class=sz>85</td></tr><tr><td class=off>165</td><td><code>metaArtic</code></td><td class=sz>80</td></tr><tr><td class=off>168</td><td><code>metaDynam</code></td><td class=sz>81</td></tr><tr><td class=off>169</td><td><code>metaKeySig</code></td><td class=sz>80</td></tr><tr><td class=off>170</td><td><code>metaRepeat</code></td><td class=sz>81</td></tr><tr><td class=off>171</td><td><code>metaShape</code></td><td class=sz>80</td></tr><tr><td class=off>172</td><td><code>metaStaffStyle</code></td><td class=sz>80</td></tr><tr><td class=off>173</td><td><code>metaTimeSig</code></td><td class=sz>81</td></tr><tr><td class=off>235</td><td><code>shapeExprDef</code></td><td class=sz>10</td></tr><tr><td class=off>242</td><td><code>textExpressionEnclosure</code></td><td class=sz>14</td></tr><tr><td class=off>315</td><td><code>volumeValue</code></td><td class=sz>14</td></tr></tbody></table>
 <div class=warn><code>fontName</code> (5 documents) and <code>shapeExprDef</code>
@@ -620,11 +661,7 @@ how many corpus documents agreed.</p>
 of which the tiers above account for roughly thirty. The rest are read, keyed and
 carried, but their meaning is unknown. The most frequent, by record count across
 the corpus:</p>
-<dl>
-<dt>others</dt><dd>213 and 215 (25,576 each), 140 (18,624), 214 (12,681), 125 (12,612), 148 (11,887), 126 (11,208), 183 (10,114), 192 and 241 (7,353 each), 217 (6,638)</dd>
-<dt>details</dt><dd>1043 (166,524), 1064 (8,162), 1063 (2,162), 1066 (1,483), 1034 (1,164), 1060 (1,156)</dd>
-<dt>DCL (ETF)</dt><dd><code>BC</code> (3,809), <code>DA</code> (2,963), <code>fg</code> (2,884), <code>OC</code> (2,170), <code>ls</code> (1,809), and the <code>&amp;a</code>/<code>&amp;d</code>/<code>&amp;f</code> family; in details <code>fb</code> (63,324) and <code>DN</code> (18,647)</dd>
-</dl>
+<table><thead><tr><th>Tag</th><th>Era</th><th>Pool</th><th>Records</th></tr></thead><tbody><tr><td><code>213</code></td><td>2011</td><td>others</td><td class=sz>25,576</td></tr><tr><td><code>215</code></td><td>2011</td><td>others</td><td class=sz>25,576</td></tr><tr><td><code>140</code></td><td>2011</td><td>others</td><td class=sz>18,624</td></tr><tr><td><code>214</code></td><td>2011</td><td>others</td><td class=sz>12,681</td></tr><tr><td><code>125</code></td><td>2011</td><td>others</td><td class=sz>12,612</td></tr><tr><td><code>148</code></td><td>2011</td><td>others</td><td class=sz>11,887</td></tr><tr><td><code>126</code></td><td>2011</td><td>others</td><td class=sz>11,208</td></tr><tr><td><code>183</code></td><td>2011</td><td>others</td><td class=sz>10,114</td></tr><tr><td><code>192</code></td><td>2011</td><td>others</td><td class=sz>7,353</td></tr><tr><td><code>241</code></td><td>2011</td><td>others</td><td class=sz>7,353</td></tr><tr><td><code>217</code></td><td>2011</td><td>others</td><td class=sz>6,638</td></tr><tr><td><code>1043</code></td><td>2011</td><td>details</td><td class=sz>166,524</td></tr><tr><td><code>1064</code></td><td>2011</td><td>details</td><td class=sz>8,162</td></tr><tr><td><code>1063</code></td><td>2011</td><td>details</td><td class=sz>2,162</td></tr><tr><td><code>1066</code></td><td>2011</td><td>details</td><td class=sz>1,483</td></tr><tr><td><code>1034</code></td><td>2011</td><td>details</td><td class=sz>1,164</td></tr><tr><td><code>1060</code></td><td>2011</td><td>details</td><td class=sz>1,156</td></tr><tr><td><code>^fb</code></td><td>DCL</td><td>details</td><td class=sz>63,324</td></tr><tr><td><code>^DN</code></td><td>DCL</td><td>details</td><td class=sz>18,647</td></tr><tr><td><code>^BC</code></td><td>DCL</td><td>others</td><td class=sz>3,809</td></tr><tr><td><code>^DA</code></td><td>DCL</td><td>others</td><td class=sz>2,963</td></tr><tr><td><code>^fg</code></td><td>DCL</td><td>others</td><td class=sz>2,884</td></tr><tr><td><code>^OC</code></td><td>DCL</td><td>others</td><td class=sz>2,170</td></tr><tr><td><code>^ls</code></td><td>DCL</td><td>others</td><td class=sz>1,809</td></tr></tbody></table>
 <div class=note><strong>Two hints from the counts.</strong> Several pairs share an
 exact record count &mdash; 213/215, 192/241, and <code>sL</code>/<code>sb</code>
 &mdash; which across a whole corpus usually means a definition-and-assignment
@@ -633,12 +670,22 @@ at 166,524 records, is roughly sixteen times more common than
 <code>gfhold</code>, which suggests something per entry or per note rather than
 per measure.</div>
 
-<div class=prov><strong>What this means for scope.</strong> The tags decoded here
-are not the common ones; they are the ones on the path from file to notes.
-Everything above is largely layout, spacing, fonts, page format and text blocks.
-By tag count this specification covers under a fifth of the vocabulary, and by
-record count rather less &mdash; it is a specification for extracting the music,
-not a complete description of the file.</div>
+<div class=prov><strong>What this means for scope.</strong> The tags decoded
+here are the ones on the path from a file to its notes, which is where the work
+started; they are not the most common ones. By tag count this document covers
+under a fifth of the vocabulary, and by record count rather less.
+
+<p>What the remaining tags hold is not known. Some can be guessed at from the
+Tier B names beside them &mdash; <code>fontName</code>, <code>lockMeas</code>,
+<code>metaTimeSig</code> &mdash; but a guess from a name is what the tier above
+already warns against, and the unnamed ones offer not even that. They are not
+&ldquo;just layout&rdquo;: that would be an assumption, and the two largest
+unknowns turned out to be a percussion map and a fretboard library, neither of
+which is layout.</p>
+
+<p>This is a description of the file as far as it has been established, and it
+is meant to become a complete one. What is missing is marked as missing rather
+than dismissed.</p></div>
 </section><section id="s7"><h2>7. The entry pool</h2>
 <p>The entry pool contains the actual musical notes &mdash; both pitch and
 duration. It is the one structure the two <code>.mus</code> eras share field for
@@ -654,11 +701,9 @@ note is 4096, a dotted quarter 1536.<sup class=fn>7</sup></dd>
 elsewhere in this document are in EVPU.<sup class=fn>7</sup></dd>
 <dt>Entry</dt>
 <dd>In Coda's terminology an entry is <strong>a note, a chord, or a
-rest</strong> &mdash; everything sounding, or deliberately not sounding, at one
-point in one layer. A chord is one entry with several notes, not several
-entries.</dd>
+rest</strong>. A chord is one entry with several notes, not several entries.</dd>
 </dl>
-<div class=structblock><p class=caption>The first slot of one entry, in the entries pool. The pool is a flat array of fixed 38-byte <em>slots</em>; an entry occupies one slot if it has two notes or fewer, and further slots for the rest. Every slot repeats the entry number it belongs to, so a reader never has to track position.</p><pre class=cstruct>struct EntrySlotFirst {
+<div class=structblock><p class=caption>The entry pool is a flat array of fixed 38-byte <em>slots</em>. Every slot repeats the entry number it belongs to, so a reader never has to track position.</p><pre class=cstruct>struct EntrySlotFirst {
     uint32   entnum;                      // +0x0    this entry&#x27;s number, its key
     uint16   slot;                        // +0x4    0 for this entry&#x27;s first slot,...
     uint32   prev;                        // +0x6    previous entry number, 0 if none
@@ -670,38 +715,69 @@ entries.</dd>
     uint16   noteCount;                   // +0x18   notes in this entry, across all...
     NoteRec  note[0];                     // +0x1a   pitch word + flags; see below
     NoteRec  note[1];                     // +0x20   the first slot holds two
-};</pre><table class=struct><thead><tr><th></th><th>offset</th><th>size</th><th>type</th><th>field</th><th>meaning</th></tr></thead><tbody><tr><td class=sw><span class=swatch style="background:#ffd9d9"></span></td><td class=off>0x00&#8211;0x03</td><td class=sz>4</td><td class=ty><code>uint32</code></td><td class=nm><code>entnum</code></td><td class=nt>this entry&#x27;s number, its key</td></tr><tr><td class=sw><span class=swatch style="background:#d9ecff"></span></td><td class=off>0x04&#8211;0x05</td><td class=sz>2</td><td class=ty><code>uint16</code></td><td class=nm><code>slot</code></td><td class=nt>0 for this entry&#x27;s first slot, then 1, 2, ...</td></tr><tr><td class=sw><span class=swatch style="background:#dcffd9"></span></td><td class=off>0x06&#8211;0x09</td><td class=sz>4</td><td class=ty><code>uint32</code></td><td class=nm><code>prev</code></td><td class=nt>previous entry number, 0 if none</td></tr><tr><td class=sw><span class=swatch style="background:#fff3cc"></span></td><td class=off>0x0a&#8211;0x0d</td><td class=sz>4</td><td class=ty><code>uint32</code></td><td class=nm><code>next</code></td><td class=nt>next entry number, 0 if none</td></tr><tr><td class=sw><span class=swatch style="background:#e8d9ff"></span></td><td class=off>0x0e&#8211;0x0f</td><td class=sz>2</td><td class=ty><code>uint16</code></td><td class=nm><code>dura</code></td><td class=nt>written duration in EDU; 1024 = quarter note</td></tr><tr><td class=sw><span class=swatch style="background:#d9fbff"></span></td><td class=off>0x10&#8211;0x11</td><td class=sz>2</td><td class=ty><code>int16</code></td><td class=nm><code>pos</code></td><td class=nt>manual positioning in EVPU, signed</td></tr><tr><td class=sw><span class=swatch style="background:#ffe0f0"></span></td><td class=off>0x12&#8211;0x15</td><td class=sz>4</td><td class=ty><code>uint32</code></td><td class=nm><code>flags</code></td><td class=nt>SETBIT: a real entry; NOTEBIT: note, not rest</td></tr><tr><td class=sw><span class=swatch style="background:#eaeaea"></span></td><td class=off>0x16&#8211;0x17</td><td class=sz>2</td><td class=ty><code>uint16</code></td><td class=nm><code>extflags</code></td><td class=nt>extended flags</td></tr><tr><td class=sw><span class=swatch style="background:#ffd9d9"></span></td><td class=off>0x18&#8211;0x19</td><td class=sz>2</td><td class=ty><code>uint16</code></td><td class=nm><code>noteCount</code></td><td class=nt>notes in this entry, across all its slots</td></tr><tr><td class=sw><span class=swatch style="background:#d9ecff"></span></td><td class=off>0x1a&#8211;0x1f</td><td class=sz>6</td><td class=ty><code>NoteRec</code></td><td class=nm><code>note[0]</code></td><td class=nt>pitch word + flags; see below</td></tr><tr><td class=sw><span class=swatch style="background:#dcffd9"></span></td><td class=off>0x20&#8211;0x25</td><td class=sz>6</td><td class=ty><code>NoteRec</code></td><td class=nm><code>note[1]</code></td><td class=nt>the first slot holds two</td></tr></tbody></table><p class=hexcap>Example bytes (38 shown), tinted to match the table above.</p><div class=hexdump><div class=hexrow><span class=off>0000</span><span class=hex><span class=b style="background:#ffd9d9" title="entnum">65</span> <span class=b style="background:#ffd9d9" title="entnum">00</span> <span class=b style="background:#ffd9d9" title="entnum">00</span> <span class=b style="background:#ffd9d9" title="entnum">00</span> <span class=b style="background:#d9ecff" title="slot">00</span> <span class=b style="background:#d9ecff" title="slot">00</span> <span class=b style="background:#dcffd9" title="prev">64</span> <span class=b style="background:#dcffd9" title="prev">00</span> <span class=b style="background:#dcffd9" title="prev">00</span> <span class=b style="background:#dcffd9" title="prev">00</span> <span class=b style="background:#fff3cc" title="next">66</span> <span class=b style="background:#fff3cc" title="next">00</span> <span class=b style="background:#fff3cc" title="next">00</span> <span class=b style="background:#fff3cc" title="next">00</span> <span class=b style="background:#e8d9ff" title="dura">00</span> <span class=b style="background:#e8d9ff" title="dura">04</span></span><span class=asc><span class=b style="background:#ffd9d9">e</span><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#dcffd9">d</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#fff3cc">f</span><span class=b style="background:#fff3cc">.</span><span class=b style="background:#fff3cc">.</span><span class=b style="background:#fff3cc">.</span><span class=b style="background:#e8d9ff">.</span><span class=b style="background:#e8d9ff">.</span></span></div><div class=hexrow><span class=off>0010</span><span class=hex><span class=b style="background:#d9fbff" title="pos">00</span> <span class=b style="background:#d9fbff" title="pos">00</span> <span class=b style="background:#ffe0f0" title="flags">00</span> <span class=b style="background:#ffe0f0" title="flags">00</span> <span class=b style="background:#ffe0f0" title="flags">00</span> <span class=b style="background:#ffe0f0" title="flags">c0</span> <span class=b style="background:#eaeaea" title="extflags">00</span> <span class=b style="background:#eaeaea" title="extflags">00</span> <span class=b style="background:#ffd9d9" title="noteCount">02</span> <span class=b style="background:#ffd9d9" title="noteCount">00</span> <span class=b style="background:#d9ecff" title="note[0]">c0</span> <span class=b style="background:#d9ecff" title="note[0]">03</span> <span class=b style="background:#d9ecff" title="note[0]">00</span> <span class=b style="background:#d9ecff" title="note[0]">00</span> <span class=b style="background:#d9ecff" title="note[0]">00</span> <span class=b style="background:#d9ecff" title="note[0]">00</span></span><span class=asc><span class=b style="background:#d9fbff">.</span><span class=b style="background:#d9fbff">.</span><span class=b style="background:#ffe0f0">.</span><span class=b style="background:#ffe0f0">.</span><span class=b style="background:#ffe0f0">.</span><span class=b style="background:#ffe0f0">.</span><span class=b style="background:#eaeaea">.</span><span class=b style="background:#eaeaea">.</span><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#d9ecff">.</span></span></div><div class=hexrow><span class=off>0020</span><span class=hex><span class=b style="background:#dcffd9" title="note[1]">01</span> <span class=b style="background:#dcffd9" title="note[1]">04</span> <span class=b style="background:#dcffd9" title="note[1]">00</span> <span class=b style="background:#dcffd9" title="note[1]">00</span> <span class=b style="background:#dcffd9" title="note[1]">00</span> <span class=b style="background:#dcffd9" title="note[1]">00</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span></span><span class=asc><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span></span></div></div><p class=note>A <strong>slot</strong> is one fixed 38-byte cell of the pool. An entry's first slot carries the entry's own fields plus its first two notes; if it has more, they continue in further slots holding 5 notes each from offset 6, under the same entry number with an increasing slot index. An entry may carry up to 12 notes.</p><p class=note><strong>The two entry flags a reader must respect.</strong> <code>SETBIT</code> (0x80000000) is set on every legitimate entry, so a slot without it is not one. <code>NOTEBIT</code> (0x40000000) distinguishes a note from a rest: when it is clear the entry sounds nothing, and a rest normally carries no note records at all.</p><p class=note><strong>Both eras share this layout</strong>, field for field and offset for offset. They differ only in <em>byte order</em>: the same fields, with their bytes in the opposite order on a Mac-written 2001-2005 file. That the layout really is shared is the corpus's verdict rather than an assumption. Across 136 DCL-era documents the slots <em>tile the pool exactly</em> &mdash; reading 38-byte cells from the start consumes the pool with no remainder and no overrun, which a wrong slot size would not do &mdash; and every entry has SETBIT set.</p></div>
+};</pre><table class=struct><thead><tr><th></th><th>offset</th><th>size</th><th>type</th><th>field</th><th>meaning</th></tr></thead><tbody><tr><td class=sw><span class=swatch style="background:#ffd9d9"></span></td><td class=off>0x00&#8211;0x03</td><td class=sz>4</td><td class=ty><code>uint32</code></td><td class=nm><code>entnum</code></td><td class=nt>this entry&#x27;s number, its key</td></tr><tr><td class=sw><span class=swatch style="background:#d9ecff"></span></td><td class=off>0x04&#8211;0x05</td><td class=sz>2</td><td class=ty><code>uint16</code></td><td class=nm><code>slot</code></td><td class=nt>0 for this entry&#x27;s first slot, then 1, 2, ...</td></tr><tr><td class=sw><span class=swatch style="background:#dcffd9"></span></td><td class=off>0x06&#8211;0x09</td><td class=sz>4</td><td class=ty><code>uint32</code></td><td class=nm><code>prev</code></td><td class=nt>previous entry number, 0 if none</td></tr><tr><td class=sw><span class=swatch style="background:#fff3cc"></span></td><td class=off>0x0a&#8211;0x0d</td><td class=sz>4</td><td class=ty><code>uint32</code></td><td class=nm><code>next</code></td><td class=nt>next entry number, 0 if none</td></tr><tr><td class=sw><span class=swatch style="background:#e8d9ff"></span></td><td class=off>0x0e&#8211;0x0f</td><td class=sz>2</td><td class=ty><code>uint16</code></td><td class=nm><code>dura</code></td><td class=nt>written duration in EDU; 1024 = quarter note</td></tr><tr><td class=sw><span class=swatch style="background:#d9fbff"></span></td><td class=off>0x10&#8211;0x11</td><td class=sz>2</td><td class=ty><code>int16</code></td><td class=nm><code>pos</code></td><td class=nt>manual positioning in EVPU, signed</td></tr><tr><td class=sw><span class=swatch style="background:#ffe0f0"></span></td><td class=off>0x12&#8211;0x15</td><td class=sz>4</td><td class=ty><code>uint32</code></td><td class=nm><code>flags</code></td><td class=nt>SETBIT: a real entry; NOTEBIT: note, not rest</td></tr><tr><td class=sw><span class=swatch style="background:#eaeaea"></span></td><td class=off>0x16&#8211;0x17</td><td class=sz>2</td><td class=ty><code>uint16</code></td><td class=nm><code>extflags</code></td><td class=nt>extended flags</td></tr><tr><td class=sw><span class=swatch style="background:#ffd9d9"></span></td><td class=off>0x18&#8211;0x19</td><td class=sz>2</td><td class=ty><code>uint16</code></td><td class=nm><code>noteCount</code></td><td class=nt>notes in this entry, across all its slots</td></tr><tr><td class=sw><span class=swatch style="background:#d9ecff"></span></td><td class=off>0x1a&#8211;0x1f</td><td class=sz>6</td><td class=ty><code>NoteRec</code></td><td class=nm><code>note[0]</code></td><td class=nt>pitch word + flags; see below</td></tr><tr><td class=sw><span class=swatch style="background:#dcffd9"></span></td><td class=off>0x20&#8211;0x25</td><td class=sz>6</td><td class=ty><code>NoteRec</code></td><td class=nm><code>note[1]</code></td><td class=nt>the first slot holds two</td></tr></tbody></table><p class=hexcap>Example bytes (38 shown), tinted to match the table above.</p><div class=hexdump><div class=hexrow><span class=off>0000</span><span class=hex><span class=b style="background:#ffd9d9" title="entnum">65</span> <span class=b style="background:#ffd9d9" title="entnum">00</span> <span class=b style="background:#ffd9d9" title="entnum">00</span> <span class=b style="background:#ffd9d9" title="entnum">00</span> <span class=b style="background:#d9ecff" title="slot">00</span> <span class=b style="background:#d9ecff" title="slot">00</span> <span class=b style="background:#dcffd9" title="prev">64</span> <span class=b style="background:#dcffd9" title="prev">00</span> <span class=b style="background:#dcffd9" title="prev">00</span> <span class=b style="background:#dcffd9" title="prev">00</span> <span class=b style="background:#fff3cc" title="next">66</span> <span class=b style="background:#fff3cc" title="next">00</span> <span class=b style="background:#fff3cc" title="next">00</span> <span class=b style="background:#fff3cc" title="next">00</span> <span class=b style="background:#e8d9ff" title="dura">00</span> <span class=b style="background:#e8d9ff" title="dura">04</span></span><span class=asc><span class=b style="background:#ffd9d9">e</span><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#dcffd9">d</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#fff3cc">f</span><span class=b style="background:#fff3cc">.</span><span class=b style="background:#fff3cc">.</span><span class=b style="background:#fff3cc">.</span><span class=b style="background:#e8d9ff">.</span><span class=b style="background:#e8d9ff">.</span></span></div><div class=hexrow><span class=off>0010</span><span class=hex><span class=b style="background:#d9fbff" title="pos">00</span> <span class=b style="background:#d9fbff" title="pos">00</span> <span class=b style="background:#ffe0f0" title="flags">00</span> <span class=b style="background:#ffe0f0" title="flags">00</span> <span class=b style="background:#ffe0f0" title="flags">00</span> <span class=b style="background:#ffe0f0" title="flags">c0</span> <span class=b style="background:#eaeaea" title="extflags">00</span> <span class=b style="background:#eaeaea" title="extflags">00</span> <span class=b style="background:#ffd9d9" title="noteCount">02</span> <span class=b style="background:#ffd9d9" title="noteCount">00</span> <span class=b style="background:#d9ecff" title="note[0]">c0</span> <span class=b style="background:#d9ecff" title="note[0]">03</span> <span class=b style="background:#d9ecff" title="note[0]">00</span> <span class=b style="background:#d9ecff" title="note[0]">00</span> <span class=b style="background:#d9ecff" title="note[0]">00</span> <span class=b style="background:#d9ecff" title="note[0]">00</span></span><span class=asc><span class=b style="background:#d9fbff">.</span><span class=b style="background:#d9fbff">.</span><span class=b style="background:#ffe0f0">.</span><span class=b style="background:#ffe0f0">.</span><span class=b style="background:#ffe0f0">.</span><span class=b style="background:#ffe0f0">.</span><span class=b style="background:#eaeaea">.</span><span class=b style="background:#eaeaea">.</span><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#d9ecff">.</span></span></div><div class=hexrow><span class=off>0020</span><span class=hex><span class=b style="background:#dcffd9" title="note[1]">01</span> <span class=b style="background:#dcffd9" title="note[1]">04</span> <span class=b style="background:#dcffd9" title="note[1]">00</span> <span class=b style="background:#dcffd9" title="note[1]">00</span> <span class=b style="background:#dcffd9" title="note[1]">00</span> <span class=b style="background:#dcffd9" title="note[1]">00</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span></span><span class=asc><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span></span></div></div><p class=note><strong>An entry is the musical object; a slot is the storage cell.</strong> Every slot is 38 bytes, and an entry uses as many as its notes require. They hold different numbers of notes because the first spends bytes on the entry itself:<br><br>&nbsp;&nbsp;first slot &mdash; 6 bytes of slot header, 20 bytes of entry fields, then room for 2 notes<br>&nbsp;&nbsp;later slots &mdash; 6 bytes of slot header, then room for 5 notes<br><br>So a three-note chord occupies two slots: two notes in the first and one in the second, with the rest of the second slot unused. An entry may carry up to 12 notes.</p><p class=note><strong>The two entry flags a reader must respect.</strong> <code>SETBIT</code> (0x80000000) is set on every legitimate entry, so a slot without it is not one. <code>NOTEBIT</code> (0x40000000) distinguishes a note from a rest: when it is clear the entry sounds nothing, and a rest normally carries no note records at all.</p></div>
 <h3>The note record</h3>
 <h4>TCD &mdash; Tone Center Displacement</h4>
 <p>The first two bytes of a note record are a single 16-bit field Coda calls the
-<strong>TCD</strong>, and it carries two things at once: which pitch, and how it
-is altered against the key.</p>
+<strong>TCD</strong>. It carries two things at once: which pitch, and how that
+pitch is altered against the key.</p>
 
-<pre class=cstruct>bit  15 14 13 12 11 10  9  8  7  6  5  4 | 3  2  1  0
-    [        harmonic value (12 bits)      |sign  magnitude ]
-              signed, 0 = tonic             alteration</pre>
+<pre class=cstruct>bit   15 14 13 12 11 10  9  8  7  6  5  4   3   2  1  0
+     +--------------------------------------+---+--------+
+     |        harmonic value (12 bits)      | s | m m m  |
+     +--------------------------------------+---+--------+
+        diatonic step, signed, 0 = tonic      ^   alteration
+                                              sign</pre>
 
-<p>The <strong>harmonic value</strong> is a diatonic step count relative to the
-current key, not a chromatic pitch: 0 is the tonic in the octave from middle C,
-1 the step above it, &minus;1 the step below, 7 an octave up. Because it is
-relative, transposing a passage by changing its key signature moves every note
+<h4>The harmonic value</h4>
+<p>The harmonic value is a diatonic step relative to the current key. 0 is the
+tonic; &minus;1 is a step below, while 7 is an octave up.</p>
+<p>In C major, 0 is middle C, 1 is the D above it, &minus;1 the B below, and 7
+the C an octave up. In G major the same numbers mean G, A, F&#9839; and the G an
+octave up &mdash; the value counts <em>steps of the key</em>, not semitones.
+This is why transposing a passage by changing its key signature moves every note
 with it and rewrites nothing.</p>
 
-<p>The <strong>alteration</strong> is how far the note is bent from that
-diatonic step &mdash; 0 natural to the key, +1 a semitone up, &minus;1 down.
-Note that this is relative to the key, not to the printed accidental: in G
-major, an F natural has an alteration of &minus;1, because it sits a semitone
-below the key's F sharp.</p>
-<div class=structblock><p class=caption>A note record: six bytes carrying one note's pitch and its tie and accidental state.</p><pre class=cstruct>struct NoteRec {
+<h4>The alteration</h4>
+<p>The alteration is how far the note departs from that diatonic step: 0 means
+the note the key gives, +1 a semitone above it, &minus;1 a semitone below.</p>
+<p>It is measured against the key, not against the printed accidental. In G
+major the seventh step is F&#9839;, so <strong>F&#9839; has an alteration of
+0</strong> &mdash; it is what the key already provides. An F natural in that key
+is <strong>&minus;1</strong>, a semitone below what the key gives, even though
+the natural is the sign the engraver prints.</p>
+
+<div class=warn><strong>The alteration is sign-and-magnitude, not two's
+complement.</strong> Bit 3 is a sign, and bits 2&ndash;0 a magnitude from 0 to 7.
+Coda's documentation calls it &ldquo;a signed quantity ... -8 to +7&rdquo;,
+which reads as two's complement; the corpus disagrees, and the corpus wins.
+
+<p>The two readings agree on naturals and sharps and diverge on every flat.
+<code>0x1</code> is +1 either way, but <code>0x9</code> = binary
+<code>1001</code> is <strong>&minus;1</strong> &mdash; sign set, magnitude 1.
+Read as two's complement the same nibble is &minus;7, which spells a note six
+steps away from the one Finale displays.</p></div>
+
+<div class=structblock><p class=caption>A note record: six bytes carrying a note's pitch and its properties.</p><pre class=cstruct>struct NoteRec {
     uint16  tcd;                          // +0x0    Tone Center Displacement: pitch...
-    uint32  flags;                        // +0x2    ties, accidental display, note...
-};</pre><table class=struct><thead><tr><th></th><th>offset</th><th>size</th><th>type</th><th>field</th><th>meaning</th></tr></thead><tbody><tr><td class=sw><span class=swatch style="background:#ffd9d9"></span></td><td class=off>0x00&#8211;0x01</td><td class=sz>2</td><td class=ty><code>uint16</code></td><td class=nm><code>tcd</code></td><td class=nt>Tone Center Displacement: pitch and alteration</td></tr><tr><td class=sw><span class=swatch style="background:#d9ecff"></span></td><td class=off>0x02&#8211;0x05</td><td class=sz>4</td><td class=ty><code>uint32</code></td><td class=nm><code>flags</code></td><td class=nt>ties, accidental display, note id; see below</td></tr></tbody></table><p class=hexcap>Example bytes (6 shown), tinted to match the table above.</p><div class=hexdump><div class=hexrow><span class=off>0000</span><span class=hex><span class=b style="background:#ffd9d9" title="tcd">09</span> <span class=b style="background:#ffd9d9" title="tcd">04</span> <span class=b style="background:#d9ecff" title="flags">00</span> <span class=b style="background:#d9ecff" title="flags">00</span> <span class=b style="background:#d9ecff" title="flags">00</span> <span class=b style="background:#d9ecff" title="flags">40</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span></span><span class=asc><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#d9ecff">@</span></span></div></div><p class=note><strong>The alteration is sign-and-magnitude, not two's complement.</strong> Coda's documentation calls it &ldquo;a signed quantity ... -8 to +7&rdquo;, which reads as two's complement. The corpus disagrees, and the corpus wins. The low nibble is a sign bit above a three-bit magnitude:<br><br><code>bit&nbsp;&nbsp;&nbsp;3&nbsp;&nbsp;&nbsp;2&nbsp;&nbsp;&nbsp;1&nbsp;&nbsp;&nbsp;0</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;s&nbsp;][&nbsp;m&nbsp;&nbsp;&nbsp;m&nbsp;&nbsp;&nbsp;m&nbsp;]</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sign&nbsp;&nbsp;magnitude 0-7</code><br><br>The two readings agree on naturals and sharps and diverge on every flat. Observed in the corpus: <code>0x0</code> is 0 and <code>0x1</code> is +1, which both readings give; but <code>0x9</code> = <code>1001</code> is <strong>&minus;1</strong>, sign set with magnitude 1. Read as two's complement the same nibble would be &minus;7, spelling a note six steps away from the one Finale displays.</p><p class=note><strong>The flags carry more than ties.</strong> The 32-bit field also holds accidental display and the note's identity within its entry. From Coda's specification: <code>0x80000000</code> legality, always set; <code>0x40000000</code> tie start; <code>0x20000000</code> tie end; <code>0x10000000</code> cross-staff; <code>0x02000000</code> upper stem of a split stem; <code>0x01000000</code> show an accidental, which Finale recomputes while editing unless frozen; <code>0x00800000</code> parenthesize that accidental; <code>0x001F0000</code> a mask holding the note's id, 1 to 12, by which entry details such as articulations and performance data address one note of a chord; <code>0x00000002</code> freeze the accidental bit.</p></div>
+    uint32  flags;                        // +0x2    note properties; see the table...
+};</pre><table class=struct><thead><tr><th></th><th>offset</th><th>size</th><th>type</th><th>field</th><th>meaning</th></tr></thead><tbody><tr><td class=sw><span class=swatch style="background:#ffd9d9"></span></td><td class=off>0x00&#8211;0x01</td><td class=sz>2</td><td class=ty><code>uint16</code></td><td class=nm><code>tcd</code></td><td class=nt>Tone Center Displacement: pitch and alteration</td></tr><tr><td class=sw><span class=swatch style="background:#d9ecff"></span></td><td class=off>0x02&#8211;0x05</td><td class=sz>4</td><td class=ty><code>uint32</code></td><td class=nm><code>flags</code></td><td class=nt>note properties; see the table below</td></tr></tbody></table><p class=hexcap>Example bytes (6 shown), tinted to match the table above.</p><div class=hexdump><div class=hexrow><span class=off>0000</span><span class=hex><span class=b style="background:#ffd9d9" title="tcd">09</span> <span class=b style="background:#ffd9d9" title="tcd">04</span> <span class=b style="background:#d9ecff" title="flags">00</span> <span class=b style="background:#d9ecff" title="flags">00</span> <span class=b style="background:#d9ecff" title="flags">00</span> <span class=b style="background:#d9ecff" title="flags">40</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span> <span class=b>&#160;&#160;</span></span><span class=asc><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#d9ecff">.</span><span class=b style="background:#d9ecff">@</span></span></div></div></div>
+
+<h4>The note flags</h4>
+<p>The 32-bit field holds a note's properties. The id mask is the one an
+implementer meets soonest: entry details such as articulations and performance
+data address <em>one note of a chord</em> by that id.</p>
+<table><thead><tr><th>Bit</th><th>Meaning</th></tr></thead><tbody><tr><td><code>0x80000000</code></td><td>legality; set on every real note</td></tr><tr><td><code>0x40000000</code></td><td>tie start</td></tr><tr><td><code>0x20000000</code></td><td>tie end</td></tr><tr><td><code>0x10000000</code></td><td>cross-staff: the note is drawn on another staff</td></tr><tr><td><code>0x08000000</code></td><td>upstem second</td></tr><tr><td><code>0x04000000</code></td><td>downstem second</td></tr><tr><td><code>0x02000000</code></td><td>on the upper stem, where stems are split</td></tr><tr><td><code>0x01000000</code></td><td>show an accidental; recomputed while editing unless frozen</td></tr><tr><td><code>0x00800000</code></td><td>parenthesize that accidental</td></tr><tr><td><code>0x001F0000</code></td><td>mask: the note's id, 1&ndash;12, within its entry</td></tr><tr><td><code>0x00000002</code></td><td>freeze the accidental bit in place</td></tr></tbody></table>
+
 <h4>Durations</h4>
 <p>Durations are measured in <strong>EDU</strong>, where 1024 is a quarter note
-and 4096 a whole note. Dotted values are the plain value plus half again, so 1536 is a
-dotted quarter. Across 136 DCL-era corpus documents, 71,801 durations took just
-16 distinct values &mdash; every one a note value with 0&ndash;2 dots, which is
-itself evidence the field was read correctly.</p>
+and 4096 a whole note. A dot adds half again, so a dotted quarter is 1536 and a
+double-dotted quarter 1792.</p>
+
+<p>Every duration observed across the 238 corpus <code>.mus</code> documents
+&mdash; 108,466 of them &mdash; takes one of sixteen values:</p>
+
+<table><thead><tr><th>EDU</th><th>Note value</th><th>Count</th></tr></thead><tbody><tr><td class=off>8,192</td><td>breve</td><td class=sz>47</td></tr><tr><td class=off>6,144</td><td>dotted whole</td><td class=sz>17</td></tr><tr><td class=off>4,096</td><td>whole</td><td class=sz>1,043</td></tr><tr><td class=off>3,584</td><td>double-dotted half</td><td class=sz>3</td></tr><tr><td class=off>3,072</td><td>dotted half</td><td class=sz>977</td></tr><tr><td class=off>2,048</td><td>half</td><td class=sz>5,266</td></tr><tr><td class=off>1,792</td><td>double-dotted quarter</td><td class=sz>14</td></tr><tr><td class=off>1,536</td><td>dotted quarter</td><td class=sz>2,318</td></tr><tr><td class=off>1,024</td><td>quarter</td><td class=sz>34,960</td></tr><tr><td class=off>768</td><td>dotted eighth</td><td class=sz>2,121</td></tr><tr><td class=off>512</td><td>eighth</td><td class=sz>38,046</td></tr><tr><td class=off>384</td><td>dotted 16th</td><td class=sz>89</td></tr><tr><td class=off>256</td><td>16th</td><td class=sz>22,651</td></tr><tr><td class=off>192</td><td>dotted 32nd</td><td class=sz>6</td></tr><tr><td class=off>128</td><td>32nd</td><td class=sz>874</td></tr><tr><td class=off>64</td><td>64th</td><td class=sz>34</td></tr></tbody></table>
 </section><section id="s8"><h2>8. The <code>.musx</code> container</h2>
 <p>A <code>.musx</code> is a ZIP archive. Unlike the two <code>.mus</code> eras
 it needs no bespoke container walking &mdash; a standard ZIP reader opens it &mdash;

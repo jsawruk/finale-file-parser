@@ -13,6 +13,7 @@ from finale_file_parser.enigma import mus_payload as PAY
 from finale_file_parser.version import mus as MUSHDR
 
 from . import catalog, content
+from .catalog import render_durations, render_note_flags
 from .hexview import cite, render_footnotes, render_pie, render_struct
 from .style import CSS
 
@@ -483,13 +484,35 @@ walked as a linked list.</li>
                 emit(entry, staff, measure, layer)</pre>
 
 <p>Four key lookups and no arithmetic on file positions. The entry range is
-inclusive at both ends, and the same run can also be walked through each entry's
-<code>next</code> field, which is how the format itself threads a layer
-together.</p>
+inclusive at both ends.</p>
 
-<div class=note>An entry reached by more than one frame is a corrupt document,
-not a shared voice &mdash; except where it is a mirror (&sect;2). A reader should
-refuse rather than emit the notes twice.</div>
+<h4>Two ways to reach the same notes</h4>
+<p>A layer's entries are also chained: every entry carries <code>prev</code> and
+<code>next</code>, each holding another entry's number, so the entries of a
+layer form a doubly linked list running across the whole staff. Coda's
+documentation describes the pool this way, as entries &ldquo;streamed together
+in a doubly linked list that roughly corresponds to a voice on a staff&rdquo;.
+The frame gives the same run's two endpoints.</p>
+
+<p>Either route reaches the same notes, and the reader above uses the frame
+because it is the one that answers the question being asked. Walking the chain
+tells you what follows a given entry; it does not tell you which measure or
+staff you are in, since the chain runs straight through barlines. The
+<code>gfhold</code> is what supplies that, so a reader wanting music
+<em>by position</em> starts from the frame. A reader wanting to follow a voice
+forward &mdash; to resolve a tie, say &mdash; follows the chain instead.</p>
+
+<div class=note><strong>An entry reached by more than one frame.</strong> Two
+frames naming the same entry span is how a <em>mirror</em> is stored
+(&sect;2) &mdash; one staff displaying another's music. Nothing in the record
+marks it as such: the two <code>gfhold</code> records are ordinary, and the only
+sign is that their frames resolve to the same entries.
+
+<p>A reader that gives each entry a single location cannot represent that, and
+must choose. Emitting the notes twice puts them in both places, which is what
+the file means but breaks any model where an entry has one home; refusing is
+safe but rejects a document Finale considers valid. This implementation refuses,
+and the eight non-building corpus documents include one such file.</p></div>
 """
     + catalog.render_tag_tables(),
 )
@@ -512,39 +535,68 @@ note is 4096, a dotted quarter 1536.{CITE_UNITS}</dd>
 elsewhere in this document are in EVPU.{CITE_UNITS}</dd>
 <dt>Entry</dt>
 <dd>In Coda's terminology an entry is <strong>a note, a chord, or a
-rest</strong> &mdash; everything sounding, or deliberately not sounding, at one
-point in one layer. A chord is one entry with several notes, not several
-entries.</dd>
+rest</strong>. A chord is one entry with several notes, not several entries.</dd>
 </dl>
 {render_struct(S["entry_first_slot"]())}
 <h3>The note record</h3>
 <h4>TCD &mdash; Tone Center Displacement</h4>
 <p>The first two bytes of a note record are a single 16-bit field Coda calls the
-<strong>TCD</strong>, and it carries two things at once: which pitch, and how it
-is altered against the key.</p>
+<strong>TCD</strong>. It carries two things at once: which pitch, and how that
+pitch is altered against the key.</p>
 
-<pre class=cstruct>bit  15 14 13 12 11 10  9  8  7  6  5  4 | 3  2  1  0
-    [        harmonic value (12 bits)      |sign  magnitude ]
-              signed, 0 = tonic             alteration</pre>
+<pre class=cstruct>bit   15 14 13 12 11 10  9  8  7  6  5  4   3   2  1  0
+     +--------------------------------------+---+--------+
+     |        harmonic value (12 bits)      | s | m m m  |
+     +--------------------------------------+---+--------+
+        diatonic step, signed, 0 = tonic      ^   alteration
+                                              sign</pre>
 
-<p>The <strong>harmonic value</strong> is a diatonic step count relative to the
-current key, not a chromatic pitch: 0 is the tonic in the octave from middle C,
-1 the step above it, &minus;1 the step below, 7 an octave up. Because it is
-relative, transposing a passage by changing its key signature moves every note
+<h4>The harmonic value</h4>
+<p>The harmonic value is a diatonic step relative to the current key. 0 is the
+tonic; &minus;1 is a step below, while 7 is an octave up.</p>
+<p>In C major, 0 is middle C, 1 is the D above it, &minus;1 the B below, and 7
+the C an octave up. In G major the same numbers mean G, A, F&#9839; and the G an
+octave up &mdash; the value counts <em>steps of the key</em>, not semitones.
+This is why transposing a passage by changing its key signature moves every note
 with it and rewrites nothing.</p>
 
-<p>The <strong>alteration</strong> is how far the note is bent from that
-diatonic step &mdash; 0 natural to the key, +1 a semitone up, &minus;1 down.
-Note that this is relative to the key, not to the printed accidental: in G
-major, an F natural has an alteration of &minus;1, because it sits a semitone
-below the key's F sharp.</p>
+<h4>The alteration</h4>
+<p>The alteration is how far the note departs from that diatonic step: 0 means
+the note the key gives, +1 a semitone above it, &minus;1 a semitone below.</p>
+<p>It is measured against the key, not against the printed accidental. In G
+major the seventh step is F&#9839;, so <strong>F&#9839; has an alteration of
+0</strong> &mdash; it is what the key already provides. An F natural in that key
+is <strong>&minus;1</strong>, a semitone below what the key gives, even though
+the natural is the sign the engraver prints.</p>
+
+<div class=warn><strong>The alteration is sign-and-magnitude, not two's
+complement.</strong> Bit 3 is a sign, and bits 2&ndash;0 a magnitude from 0 to 7.
+Coda's documentation calls it &ldquo;a signed quantity ... -8 to +7&rdquo;,
+which reads as two's complement; the corpus disagrees, and the corpus wins.
+
+<p>The two readings agree on naturals and sharps and diverge on every flat.
+<code>0x1</code> is +1 either way, but <code>0x9</code> = binary
+<code>1001</code> is <strong>&minus;1</strong> &mdash; sign set, magnitude 1.
+Read as two's complement the same nibble is &minus;7, which spells a note six
+steps away from the one Finale displays.</p></div>
+
 {render_struct(S["note_record"]())}
+
+<h4>The note flags</h4>
+<p>The 32-bit field holds a note's properties. The id mask is the one an
+implementer meets soonest: entry details such as articulations and performance
+data address <em>one note of a chord</em> by that id.</p>
+{render_note_flags()}
+
 <h4>Durations</h4>
 <p>Durations are measured in <strong>EDU</strong>, where 1024 is a quarter note
-and 4096 a whole note. Dotted values are the plain value plus half again, so 1536 is a
-dotted quarter. Across 136 DCL-era corpus documents, 71,801 durations took just
-16 distinct values &mdash; every one a note value with 0&ndash;2 dots, which is
-itself evidence the field was read correctly.</p>
+and 4096 a whole note. A dot adds half again, so a dotted quarter is 1536 and a
+double-dotted quarter 1792.</p>
+
+<p>Every duration observed across the 238 corpus <code>.mus</code> documents
+&mdash; 108,466 of them &mdash; takes one of sixteen values:</p>
+
+{render_durations()}
 """,
 )
 
