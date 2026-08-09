@@ -93,8 +93,8 @@ def dcl_pool_record() -> Struct:
             Field(10, len(stream), "stream", "uint8[]", "PKWARE DCL data, length - 10 bytes"),
         ],
         data=data,
-        caption="A DCL-era pool record, little-endian (Windows-written). Records lie end to "
-        "end from 0x200 to the last byte of the file, with no gaps.",
+        caption="A DCL-era pool record. Records lie end to end from 0x200 to the "
+        "last byte of the file, with no gaps.",
         notes=[
             "<strong>length counts its own header.</strong> The chain is walked by adding "
             "length to the current position. This is also why a fixed 0x20A works as "
@@ -133,12 +133,10 @@ def mus2011_record() -> Struct:
             "These records are <strong>self-identifying</strong>: each carries its own key, "
             "so nothing outside the record is needed to address it &mdash; no directory, no "
             "key array, no positional convention.",
-            "Records of one tag sit together in a section; sections may be separated by "
-            "two-byte zero padding, which a walk must skip.",
-            "Why this took so long to find: earlier attempts anchored on a payload field "
-            "located by searching for a value already known from a paired .musx, then read "
-            "<em>forward</em>. The key sits ten bytes <em>behind</em> that anchor, so it was "
-            "never in view.",
+            "Records of one tag sit together in a section, and sections may be separated "
+            "by two-byte zero padding, which a walk must skip. The padding is a consequence "
+            "of how a record is stored rather than a delimiter: a record is written into "
+            "whole rows, and its last row is filled out with zeroes.",
         ],
     )
 
@@ -158,11 +156,14 @@ def dcl_others_row() -> Struct:
         notes=[
             "<strong>The tag is a u16, not two bytes.</strong> On a little-endian file its "
             "characters come out reversed: <code>^MS</code> is written <code>SM</code>, "
-            "<code>^&amp;a</code> is written <code>a&amp;</code>. Reading the pair verbatim "
-            "finds no known tag in 102 of 139 corpus documents, which is how this was noticed.",
+            "and <code>^&amp;a</code> is written <code>a&amp;</code>.",
             "A record too big for one row <strong>runs on into further rows</strong> under "
-            "the same tag and key. ETF calls each row an <em>incidence</em>. A record's "
-            "payload is its rows' data concatenated in file order.",
+            "the same tag and key. ETF calls each row an <em>incidence</em>, and a record's "
+            "payload is its rows' data concatenated in file order. A reader knows where a "
+            "record ends because rows are grouped and sorted by tag and key: the run stops "
+            "at the first row whose tag or key differs. How many rows to expect is fixed by "
+            "the structure &mdash; a staff spec takes three, a page spec two &mdash; and the "
+            "last row is zero-padded to fill it.",
         ],
     )
 

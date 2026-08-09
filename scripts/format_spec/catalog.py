@@ -309,9 +309,12 @@ TIER_C_OTHERS = "213 and 215 (25,576 each), 140 (18,624), 214 (12,681), 125 (12,
 148 (11,887), 126 (11,208), 183 (10,114), 192 and 241 (7,353 each), 217 (6,638)"
 TIER_C_DETAILS = "1043 (166,524), 1064 (8,162), 1063 (2,162), 1066 (1,483), \
 1034 (1,164), 1060 (1,156)"
-TIER_C_ETF = "IV (15,274), IK (15,024), SD (13,838), sL and sb (13,802 each), \
-FB (8,448), IX (7,415), DT (4,429), TX (4,068); and in details DF (74,730), \
-fb (63,324), DN (18,647)"
+TIER_C_ETF = "<code>FB</code> (8,448), <code>BC</code> (3,809), \
+<code>DA</code> (2,963), <code>fg</code> (2,884), <code>OC</code> (2,170), \
+<code>ls</code> (1,809), and the <code>&amp;a</code>/<code>&amp;d</code>/\
+<code>&amp;f</code> family; in details <code>DF</code> (74,730), \
+<code>fb</code> (63,324) and <code>DN</code> (18,647) &mdash; the two most \
+common records in a DCL document are among them"
 
 
 def render_tag_tables() -> str:
@@ -337,7 +340,9 @@ documents.</p>
 <table><thead><tr><th>Tag</th><th>ETF</th><th>Name</th><th>Pool</th>
 <th>Description</th></tr></thead><tbody>{a}</tbody></table>
 
-<h4>Tier B &mdash; named by key-sequence matching only</h4>
+{render_etf_tags()}
+
+<h4>Tier B &mdash; numeric tags named by key-sequence matching only</h4>
 <p>Identified by matching each tag's <code>(cmper, part)</code> sequence against
 the <code>.musx</code> <code>others</code> pool. <strong>Treat these as leads,
 not facts</strong>: a tag whose record count collides with another's could be
@@ -372,4 +377,118 @@ Everything above is largely layout, spacing, fonts, page format and text blocks.
 By tag count this specification covers under a fifth of the vocabulary, and by
 record count rather less &mdash; it is a specification for extracting the music,
 not a complete description of the file.</div>
+"""
+
+
+# --------------------------------------------------------------------------
+# ETF tags named by Coda's own documentation. These are a stronger claim than
+# the key-sequence matches below: the vendor named them.
+# --------------------------------------------------------------------------
+
+ETF_OTHERS: list[tuple[str, str, str, str]] = [
+    ("MS", "Measure Spec", "measure number", "spec"),
+    ("IS", "Staff Spec", "instrument (staff) number", "spec"),
+    ("IU", "Instrument Used", "IUList id; one incidence per slot", "spec"),
+    ("FR", "Frame", "frame id; the entry span of one layer", "lily"),
+    ("AC", "Tempo", "measure", "spec"),
+    ("DY", "Score Expression", "measure", "spec"),
+    ("DI", "Separate Placement", "measure of the score expression", "spec"),
+    ("DT", "Text Expression", "dynumber in staff/score expression", "spec"),
+    ("DO", "Shape Expression", "dynumber in staff/score expression", "spec"),
+    ("PD", "Play Dump", "value in text/shape expression", "spec"),
+    ("SD", "Shape", "shapedef in a shape expression", "spec"),
+    ("SL", "Shape Instructions", "instlist; 3 instructions per record", "spec"),
+    ("SB", "Shape Data", "datalist; the data those instructions use", "spec"),
+    ("TX", "Text Block", "text block id; layout of a block of text", "spec"),
+    ("pT", "Page Text Block", "page", "spec"),
+    ("PS", "Page Spec", "page number", "spec"),
+    ("SS", "Staff System Spec", "system number", "spec"),
+    ("MN", "MeasNumberRegion", "which measure-number region", "spec"),
+    ("IV", "Chord Suffix", "which chord suffix", "spec"),
+    ("IK", "Chord Playback", "matches the cmper of its IV", "spec"),
+    ("IX", "Articulation Definition", "referenced by an IM", "spec"),
+    ("Sx", "Slur", "slur number; four rows per slur", "lily"),
+]
+
+ETF_DETAILS: list[tuple[str, str, str, str]] = [
+    ("GF", "Frame Hold", "(staff, measure)", "lily"),
+    ("NG", "Group Spec", "(iuList, groupID)", "spec"),
+    ("FL", "Floats: independent key and time", "(instrument, measure)", "spec"),
+    ("mt", "Measure Text Block", "(instrument, measure)", "spec"),
+    ("LP", "Staff Enduction", "(staff system, instrument)", "spec"),
+    ("MI", "MeasNumberSeparate", "(instrument, measure)", "spec"),
+    ("ME", "Midi Expression", "(instrument, measure)", "spec"),
+    ("hC", "Learned Chord", "(root, alternate bass)", "spec"),
+    ("Ex", "Slur detail", "two rows per slur, paired with Sx", "thesis"),
+]
+
+ETF_ENTRY: list[tuple[str, str, str, str]] = [
+    ("ac", "Performance data", "MIDI velocity and duration, per note", "spec"),
+    ("ED", "Staff Expression", "one per expression on the entry", "spec"),
+    ("CD", "Cross Staffing", "note moved to another staff", "spec"),
+    ("IM", "Articulation", "positions a mark; names an IX", "spec"),
+    ("CH", "Chord", "chord symbol on the entry", "spec"),
+    ("CN", "Notehead Mods", "per-note custom attributes", "spec"),
+    ("ve", "Lyric: verse", "syllable offset into a raw text record", "spec"),
+    ("ch", "Lyric: chorus", "as ve", "spec"),
+    ("se", "Lyric: section", "as ve", "spec"),
+]
+
+_SOURCE = {
+    "spec": "ETF&nbsp;spec",
+    "lily": "LilyPond",
+    "thesis": "thesis",
+}
+
+
+def _etf_rows(rows: list[tuple[str, str, str, str]]) -> str:
+    return "".join(
+        f"<tr><td><code>^{t}</code></td><td>{n}</td><td>{k}</td>"
+        f"<td class=sz>{_SOURCE[src]}</td></tr>"
+        for t, n, k, src in rows
+    )
+
+
+def render_etf_tags() -> str:
+    return f"""
+<h4>ETF tags named by their vendor</h4>
+<p>The 2001&ndash;2005 era uses ETF's two-character tags, and Coda documented
+many of them. These are a <strong>stronger claim than the numeric tags
+below</strong>: the vendor named them, rather than this project inferring a name
+by matching key sequences. The source column says which document.</p>
+
+<h4>others</h4>
+<table><thead><tr><th>Tag</th><th>Name</th><th>Key (cmper)</th>
+<th>Source</th></tr></thead><tbody>{_etf_rows(ETF_OTHERS)}</tbody></table>
+
+<h4>details</h4>
+<table><thead><tr><th>Tag</th><th>Name</th><th>Keys</th>
+<th>Source</th></tr></thead><tbody>{_etf_rows(ETF_DETAILS)}</tbody></table>
+
+<h4>entry details</h4>
+<p>Keyed by an entry number rather than by position &mdash; the two cmpers hold
+the high and low words of the entry number.</p>
+<table><thead><tr><th>Tag</th><th>Name</th><th>Carries</th>
+<th>Source</th></tr></thead><tbody>{_etf_rows(ETF_ENTRY)}</tbody></table>
+
+<div class=note><strong>Case is significant.</strong> <code>^AC</code> is Tempo
+and <code>^ac</code> is performance data; <code>^CH</code> is a chord and
+<code>^hC</code> a learned one. A reader that upper-cases a tag before comparing
+it will conflate unrelated records.</div>
+
+<div class=warn><strong>A documented variant this project has never seen.</strong>
+The LilyPond notes describe a second form of <code>^GF</code> occupying a single
+row, laid out <code>frame, clef, ...</code> rather than <code>clef, flags,
+frames</code>. A reader assuming the two-row form would take a frame id for a
+clef. Measured across all 139 DCL corpus documents: every one of the 14,191
+<code>GF</code> records has exactly two incidences and a 20-byte payload, so the
+single-row form does not occur here. It is recorded as a known gap rather than a
+defect.</div>
+
+<div class=note><strong>Pairs travel together.</strong> Several of these are two
+halves of one thing, which is why their record counts match almost exactly
+across the corpus: <code>SL</code> and <code>SB</code> are a shape's
+instructions and its data; <code>IV</code> and <code>IK</code> are a chord
+suffix and its playback; <code>Sx</code> and <code>Ex</code> are a slur's
+others-half and details-half.</div>
 """

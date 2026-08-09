@@ -59,6 +59,12 @@ CITE_XXE = cite(
     "&ldquo;XML external entity attack&rdquo;, Wikipedia: "
     "<code>en.wikipedia.org/wiki/XML_external_entity_attack</code>."
 )
+CITE_PAD = cite(
+    "Han-Wen Nienhuys, &ldquo;The ETF format&rdquo;, LilyPond project notes: "
+    "&ldquo;If an object is too large to fit on a single line ... it is put on "
+    "multiple lines and padded with zero's.&rdquo; Vendored as "
+    "<code>docs/lilypond-etf-format.html</code>."
+)
 
 section(
     "Scope and provenance",
@@ -312,8 +318,7 @@ end to end.</p>
 gaps. The DCL era <strong>labels</strong> its pools: every pool record opens
 with a two-byte <code>kind</code> field naming which pool follows &mdash;
 {PAY.POOL_OTHERS} others, {PAY.POOL_DETAILS} details, {PAY.POOL_ENTRIES}
-entries, {PAY.POOL_TEXT} text. A reader does not have to work out what it is
-looking at; the container says so.</p>
+entries, {PAY.POOL_TEXT} text.</p>
 {render_struct(S["dcl_pool_record"]())}
 
 <h3>2011 era: an unlabeled chain</h3>
@@ -329,11 +334,18 @@ self-identifying records and yields a plausible number of them, and the
 <code>entries</code> pool if it divides exactly into 38-byte slots with
 consistent entry numbers. A stream that satisfies neither is left alone.</p>
 
-<div class=note>Recognition is used rather than position because position is an
-assumption a file can violate and shape is not. The streams do appear in a
-consistent order across the corpus, but nothing in the format requires it, and a
-reader relying on order would fail <em>silently</em> on the first file that broke
-the pattern &mdash; producing a wrong score rather than an error.</div>
+<p>The order <em>is</em> consistent in practice. Across all 99 2011-era corpus
+documents the <code>others</code> pool is the first stream, without exception,
+and the text pool is last in 98 of them. So a reader keyed to position would
+work on every file measured here.</p>
+
+<div class=note>Recognition is still the right choice, because position is an
+assumption a file can violate and shape is not. A reader relying on order would
+fail <em>silently</em> on the first file that broke the pattern &mdash; producing
+a wrong score rather than an error &mdash; and 99 documents from a two-year
+window is thin evidence for a rule the format never states. More data would
+raise confidence in the ordering; it would not make the ordering a
+guarantee.</div>
 """,
 )
 
@@ -342,20 +354,17 @@ section(
     "Records: framing and addressing",
     f"""
 <h3>What a record is</h3>
-<p>A record is <strong>a row in a table, not an object in a tree</strong>. Almost
-every wrong intuition about these formats comes from expecting a document tree,
-so it is worth stating plainly before any bytes.</p>
-
-<p>A record is three things:</p>
+<p>A record is an object that contains three things:</p>
 <dl>
-<dt>A tag</dt><dd>What kind of thing this is &mdash; <code>measSpec</code>,
-<code>gfhold</code>. Think table name.</dd>
-<dt>One or more keys</dt><dd>What it is <em>about</em>. A <code>measSpec</code>
-keyed 7 is measure 7; a <code>gfhold</code> keyed (3, 7) is staff 3, measure 7.
-Think primary key.</dd>
-<dt>A payload</dt><dd>Bytes whose meaning depends entirely on the tag. Think
-columns. There is no self-description inside a payload: without the tag, the
-bytes mean nothing.</dd>
+<dt>A tag</dt><dd>What kind of record this is &mdash; <code>measSpec</code>,
+<code>gfhold</code>. The full vocabulary is catalogued at the end of this
+section.</dd>
+<dt>One or more keys</dt><dd>What a record is about. A <code>measSpec</code>
+keyed 7 is measure 7; a <code>gfhold</code> keyed (3, 7) is staff 3,
+measure 7.</dd>
+<dt>A payload</dt><dd>Bytes whose meaning depends entirely on the tag. There is
+no self-description inside a payload: without the tag, the bytes mean
+nothing.</dd>
 </dl>
 
 <p>Three consequences matter to anyone writing a reader.</p>
@@ -402,9 +411,15 @@ payload holds its own <code>noteCount</code> and the note records themselves;
 they have no independent key and cannot be addressed from outside. Everything
 else is reference by key.</p>
 
-<div class=note>In one line: <strong>pools contain records; records reference
-each other by key; only entries contain anything, and what they contain is
-notes.</strong></div>
+<p>Everything else a score holds lives in a record's <em>payload</em>, as
+fields. A lyric syllable, a staff name and a page margin are all payload bytes
+of some record, addressed by offset once the tag is known. What makes an entry's
+notes different is that they are a <em>repeated substructure</em>, counted by a
+field of their parent, rather than fields at fixed offsets.</p>
+
+<div class=note>In one line: <strong>pools contain records, records reference
+each other by key, and a record's payload holds its fields &mdash; of which only
+an entry's notes are themselves a repeated substructure.</strong></div>
 
 <h3>2011 era: self-identifying records</h3>
 {render_struct(S["mus2011_record"]())}
@@ -417,13 +432,13 @@ continues into the next row.</p>
 {render_struct(S["dcl_details_row"]())}
 
 <h3>How items point to each other</h3>
-<p>There is no pointer arithmetic anywhere in these formats. Addressing is by
-<strong>key</strong>, and the keys are small integers.</p>
+<p>Addressing is by <strong>key</strong>, and the keys are small integers.</p>
 <dl>
 <dt><code>cmper</code> (&ldquo;comparator&rdquo;)</dt>
 <dd>A record's key &mdash; the <code>(n)</code> in ETF's <code>^XX(n)</code>
-notation. For a <code>measSpec</code> it is the measure number; for a
-<code>staffSpec</code>, the staff.</dd>
+notation. What it counts depends on the tag: for a <code>measSpec</code> it is
+the measure number, for a <code>staffSpec</code> the staff. The tag tables below
+give the key's meaning for every documented record.</dd>
 <dt><code>cmper1</code>, <code>cmper2</code></dt>
 <dd>Details records are keyed by a <em>pair</em>, which is how a record hangs
 off an intersection &mdash; a <code>gfhold</code>, for instance, at
@@ -448,9 +463,27 @@ inclusive, are that layer's music for that measure.</li>
 <li>Each entry carries its own <code>next</code> pointer, so the run can also be
 walked as a linked list.</li>
 </ol>
+<pre class=cstruct>for staff in staves:
+    for measure in measures:
+        hold = details["GF", staff, measure]     # absent =&gt; staff rests here
+        if hold is None:
+            continue
+        for layer in 0..3:
+            frame_id = hold.frame[layer]         # 0 =&gt; layer is empty
+            if frame_id == 0:
+                continue
+            frame = others["FR", frame_id]
+            for entry in entries[frame.startEntry .. frame.endEntry]:
+                emit(entry, staff, measure, layer)</pre>
+
+<p>Four key lookups and no arithmetic on file positions. The entry range is
+inclusive at both ends, and the same run can also be walked through each entry's
+<code>next</code> field, which is how the format itself threads a layer
+together.</p>
+
 <div class=note>An entry reached by more than one frame is a corrupt document,
-not a shared voice. A reader should refuse it rather than emit the notes
-twice.</div>
+not a shared voice &mdash; except where it is a mirror (&sect;2). A reader should
+refuse rather than emit the notes twice.</div>
 """
     + catalog.render_tag_tables(),
 )
