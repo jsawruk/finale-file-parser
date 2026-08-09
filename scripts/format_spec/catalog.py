@@ -312,9 +312,8 @@ TIER_C_DETAILS = "1043 (166,524), 1064 (8,162), 1063 (2,162), 1066 (1,483), \
 TIER_C_ETF = "<code>BC</code> (3,809), \
 <code>DA</code> (2,963), <code>fg</code> (2,884), <code>OC</code> (2,170), \
 <code>ls</code> (1,809), and the <code>&amp;a</code>/<code>&amp;d</code>/\
-<code>&amp;f</code> family; in details <code>DF</code> (74,730), \
-<code>fb</code> (63,324) and <code>DN</code> (18,647) &mdash; the two most \
-common records in a DCL document are among them"
+<code>&amp;f</code> family; in details <code>fb</code> (63,324) \
+and <code>DN</code> (18,647)"
 
 
 def render_tag_tables() -> str:
@@ -422,6 +421,7 @@ ETF_DETAILS: list[tuple[str, str, str, str]] = [
     ("hC", "Learned Chord", "(root, alternate bass)", "spec"),
     ("Ex", "Slur detail", "two rows per slur, paired with Sx", "thesis"),
     ("GT", "Fretboard index", "root as MIDI 60&ndash;71; 16 incidences each", "measured"),
+    ("DF", "Percussion map", "(map id 1&ndash;26, MIDI note 0&ndash;127)", "measured"),
 ]
 
 ETF_ENTRY: list[tuple[str, str, str, str]] = [
@@ -491,6 +491,21 @@ same 44 of 139 documents and in no others, and nothing else shares that set.</p>
 <p>The library is written only when the feature is used: 44 of 139 DCL documents
 carry it, against 149 of 150 <code>.musx</code> documents, later versions
 shipping the defaults regardless.</p></div>
+
+<div class=note><strong><code>^DF</code> is a percussion map</strong>, on three
+independent signals. Its keys are a map id (1&ndash;26) and a value spanning
+exactly 0&ndash;127, a MIDI note range; the id tops out at 21 or 25 whatever the
+document's staff count, so it selects one of a fixed library of maps rather than
+describing a staff. The payload's first field <em>repeats its own key</em> in
+9,396 of 10,434 non-empty records. And while General MIDI percussion occupies
+notes 35&ndash;81, which is 37% of the range, 79% of non-empty entries fall
+inside it &mdash; the first in any document sitting at note 35, General MIDI's
+first defined percussion note, with everything below it empty.
+
+<p>It is the most common record in a DCL document, which a table of roughly
+twenty-five maps by 128 notes accounts for. The reading of the remaining payload
+fields &mdash; presumably notehead and staff position &mdash; is not established
+here.</p></div>
 
 <div class=warn><strong>Not every DCL tag is two characters.</strong> A reader
 that assumes the tag field always holds printable ASCII will mishandle a family
