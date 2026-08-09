@@ -133,10 +133,15 @@ def mus2011_record() -> Struct:
             "These records are <strong>self-identifying</strong>: each carries its own key, "
             "so nothing outside the record is needed to address it &mdash; no directory, no "
             "key array, no positional convention.",
-            "Records of one tag sit together in a section, and sections may be separated "
-            "by two-byte zero padding, which a walk must skip. The padding is a consequence "
-            "of how a record is stored rather than a delimiter: a record is written into "
-            "whole rows, and its last row is filled out with zeroes.",
+            "Records of one tag sit together in a section, and sections are separated by "
+            "runs of two-byte zeroes, which a walk must skip. A zero there cannot begin a "
+            "record: it would mean tag 0, which no record uses. Measured across the corpus, "
+            "6,372 of 6,416 such runs are followed by a <em>different</em> tag, so they mark "
+            "section boundaries rather than occurring at random. Most are a single two-byte "
+            "unit, and skipping one lands the walk on a four-byte boundary 85% of the time, "
+            "which points at alignment before a new section &mdash; though the 15% that do "
+            "not leave that unproven. This is the 2011 era only: the row-based DCL era pads "
+            "differently, filling out a record's last row.",
         ],
     )
 
@@ -149,21 +154,40 @@ def dcl_others_row() -> Struct:
         fields=[
             Field(0, 2, "cmper", "uint16", "the (n) in an ETF ^XX(n)"),
             Field(2, 2, "tag", "uint16", "two characters stored as a u16"),
-            Field(4, 12, "data", "uint8[12]", "ETF's 6 twobyte values (or 3 fourbytes)"),
+            Field(
+                4,
+                12,
+                "data",
+                "uint8[12]",
+                "six 16-bit values, or three 32-bit (ETF: twobytes and fourbytes)",
+            ),
         ],
         data=data,
         caption="A 2001&ndash;2005 others row: fixed 16 bytes, ETF's two-character tag.",
         notes=[
-            "<strong>The tag is a u16, not two bytes.</strong> On a little-endian file its "
-            "characters come out reversed: <code>^MS</code> is written <code>SM</code>, "
-            "and <code>^&amp;a</code> is written <code>a&amp;</code>.",
+            "<strong>The tag is a u16, not two characters.</strong> Coda stores the two "
+            "letters as one 16-bit integer, so the machine's byte order applies to them as "
+            "it would to any number. Worked through with real bytes, for the measure spec "
+            "tag <code>^MS</code>:<br><br>"
+            "<code>big-endian file&nbsp;&nbsp;&nbsp;&nbsp;bytes 4d 53&nbsp;&nbsp;&rarr;&nbsp;"
+            "as text &lsquo;MS&rsquo;&nbsp;&nbsp;&rarr;&nbsp;as u16 0x4d53</code><br>"
+            "<code>little-endian file&nbsp;bytes 53 4d&nbsp;&nbsp;&rarr;&nbsp;"
+            "as text &lsquo;SM&rsquo;&nbsp;&nbsp;&rarr;&nbsp;as u16 0x4d53</code><br><br>"
+            "Both hold the same tag, 0x4d53, whose high byte 0x4d is &lsquo;M&rsquo; and "
+            "low byte 0x53 is &lsquo;S&rsquo;. Only the order the two bytes sit in differs. "
+            "A reader that takes the pair as text gets &lsquo;SM&rsquo; from the "
+            "little-endian file and finds no such tag; one that reads a u16 and splits it "
+            "into high and low bytes gets &lsquo;MS&rsquo; from both.",
             "A record too big for one row <strong>runs on into further rows</strong> under "
             "the same tag and key. ETF calls each row an <em>incidence</em>, and a record's "
             "payload is its rows' data concatenated in file order. A reader knows where a "
             "record ends because rows are grouped and sorted by tag and key: the run stops "
-            "at the first row whose tag or key differs. How many rows to expect is fixed by "
-            "the structure &mdash; a staff spec takes three, a page spec two &mdash; and the "
-            "last row is zero-padded to fill it.",
+            "at the first row whose tag or key differs, so a reader needs no count. The "
+            "expected number is a property of each structure rather than anything the file "
+            "states &mdash; Coda's specification gives it per record type, saying a staff "
+            "spec is stored over three incidences and a page spec over two &mdash; and the "
+            "final row is zero-padded to fill it. Since the file never records that number, "
+            "concatenating until the key changes is the reliable rule.",
         ],
     )
 
@@ -176,7 +200,7 @@ def dcl_details_row() -> Struct:
             Field(0, 2, "cmper1", "uint16", "first key"),
             Field(2, 2, "cmper2", "uint16", "second key"),
             Field(4, 2, "tag", "uint16", "two characters as a u16"),
-            Field(6, 10, "data", "uint8[10]", "ETF's 5 twobytes"),
+            Field(6, 10, "data", "uint8[10]", "five 16-bit values (ETF calls them twobytes)"),
         ],
         data=data,
         caption="A details row. Two keys rather than one &mdash; details are addressed by a "

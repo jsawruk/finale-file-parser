@@ -59,12 +59,6 @@ CITE_XXE = cite(
     "&ldquo;XML external entity attack&rdquo;, Wikipedia: "
     "<code>en.wikipedia.org/wiki/XML_external_entity_attack</code>."
 )
-CITE_PAD = cite(
-    "Han-Wen Nienhuys, &ldquo;The ETF format&rdquo;, LilyPond project notes: "
-    "&ldquo;If an object is too large to fit on a single line ... it is put on "
-    "multiple lines and padded with zero's.&rdquo; Vendored as "
-    "<code>docs/lilypond-etf-format.html</code>."
-)
 
 section(
     "Scope and provenance",
@@ -394,10 +388,17 @@ right. Pools do contain records. But an entry <strong>is</strong> a record: it
 lives in its own pool, keyed by entry number, a peer of <code>measSpec</code>
 rather than a child of anything.</p>
 
-<p>What misleads is <code>frameSpec</code>, which looks like containment and is
-not. It holds <code>startEntry</code> and <code>endEntry</code> &mdash; two
-integers naming a range of keys. Delete the <code>frameSpec</code> and its
-entries are still there, orphaned but intact.</p>
+<p><code>frameSpec</code> is what makes this look like containment. Reading
+&ldquo;a frame holds entries 101 to 108&rdquo;, it is natural to picture the
+entries sitting inside the frame. They do not. The <code>frameSpec</code>
+record's payload is eight bytes: the number 101 and the number 108. The entries
+are in a different pool entirely, each keyed by its own number, and the
+<code>frameSpec</code> merely names two of those keys.</p>
+
+<p>Concretely: a <code>frameSpec</code> is the same size on disk whether it names
+two entries or two hundred. Delete one and entries 101 to 108 are still in the
+entry pool, unchanged and readable &mdash; there is simply nothing left saying
+which staff and measure they belong to.</p>
 
 <pre class=cstruct>file
 &#9492;&#9472;&#9472; pools                    others &#183; details &#183; entries &#183; text
@@ -408,8 +409,7 @@ entries are still there, orphaned but intact.</p>
 
 <p><strong>Notes are the one genuine nesting in the format.</strong> An entry's
 payload holds its own <code>noteCount</code> and the note records themselves;
-they have no independent key and cannot be addressed from outside. Everything
-else is reference by key.</p>
+they have no independent key and cannot be addressed from outside.</p>
 
 <p>Everything else a score holds lives in a record's <em>payload</em>, as
 fields. A lyric syllable, a staff name and a page margin are all payload bytes
