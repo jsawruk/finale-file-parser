@@ -227,29 +227,43 @@ def entry_first_slot() -> Struct:
     return Struct(
         name="EntrySlotFirst",
         fields=[
-            Field(0, 4, "entnum", "uint32", "the (n) in ETF ^eE(n)"),
-            Field(4, 2, "slot", "uint16", "0 for an entry's first slot, then 1, 2, ..."),
+            Field(0, 4, "entnum", "uint32", "this entry's number, its key"),
+            Field(4, 2, "slot", "uint16", "0 for this entry's first slot, then 1, 2, ..."),
             Field(6, 4, "prev", "uint32", "previous entry number, 0 if none"),
             Field(10, 4, "next", "uint32", "next entry number, 0 if none"),
             Field(14, 2, "dura", "uint16", "written duration in EDU; 1024 = quarter note"),
             Field(16, 2, "pos", "int16", "manual positioning in EVPU, signed"),
-            Field(18, 4, "flags", "uint32", "SETBIT 0x80000000 always; NOTEBIT 0x40000000"),
+            Field(18, 4, "flags", "uint32", "SETBIT: a real entry; NOTEBIT: note, not rest"),
             Field(22, 2, "extflags", "uint16", "extended flags"),
-            Field(24, 2, "noteCount", "uint16", "how many note records follow, across slots"),
-            Field(26, 6, "note[0]", "NoteRec", "TCD (2) + note flag (4)"),
+            Field(24, 2, "noteCount", "uint16", "notes in this entry, across all its slots"),
+            Field(26, 6, "note[0]", "NoteRec", "pitch word + flags; see below"),
             Field(32, 6, "note[1]", "NoteRec", "the first slot holds two"),
         ],
         data=bytes(buf),
-        caption=f"An entry's first slot. The pool is a flat array of fixed {ENT._SLOT}-byte "
-        "slots, each tagged with the entry it belongs to.",
+        caption=f"The first slot of one entry, in the entries pool. The pool is a flat "
+        f"array of fixed {ENT._SLOT}-byte <em>slots</em>; an entry occupies one slot if it "
+        f"has two notes or fewer, and further slots for the rest. Every slot repeats the "
+        f"entry number it belongs to, so a reader never has to track position.",
         notes=[
-            f"Continuation slots (index &gt; 0) carry only notes, {ENT._CONT_SLOT_NOTES} per "
-            f"slot, from offset {ENT._SLOT_HEADER}. An entry may carry up to "
+            f"A <strong>slot</strong> is one fixed {ENT._SLOT}-byte cell of the pool. An "
+            f"entry's first slot carries the entry's own fields plus its first two notes; "
+            f"if it has more, they continue in further slots holding "
+            f"{ENT._CONT_SLOT_NOTES} notes each from offset {ENT._SLOT_HEADER}, under the "
+            f"same entry number with an increasing slot index. An entry may carry up to "
             f"{ENT._MAX_NOTES} notes.",
-            "<strong>Both eras share this layout.</strong> What differs is only which way "
-            "round the integers are written. That the layout really is shared is the "
-            "corpus's verdict, not an assumption: across 136 DCL-era documents the slots "
-            "tile the pool exactly and every entry has SETBIT set.",
+            "<strong>The two entry flags a reader must respect.</strong> "
+            "<code>SETBIT</code> (0x80000000) is set on every legitimate entry, so a slot "
+            "without it is not one. <code>NOTEBIT</code> (0x40000000) distinguishes a note "
+            "from a rest: when it is clear the entry sounds nothing, and a rest normally "
+            "carries no note records at all.",
+            "<strong>Both eras share this layout</strong>, field for field and offset for "
+            "offset. They differ only in <em>byte order</em>: the same fields, with their "
+            "bytes in the opposite order on a Mac-written 2001-2005 file. That the layout "
+            "really is shared is the corpus's verdict rather than an assumption. Across 136 "
+            "DCL-era documents the slots <em>tile the pool exactly</em> &mdash; reading "
+            f"{ENT._SLOT}-byte cells from the start consumes the pool with no remainder and "
+            "no overrun, which a wrong slot size would not do &mdash; and every entry has "
+            "SETBIT set.",
         ],
     )
 
@@ -260,17 +274,39 @@ def note_record() -> Struct:
     return Struct(
         name="NoteRec",
         fields=[
-            Field(0, 2, "tcd", "uint16", "upper 12 bits pitch (signed), low nibble alteration"),
-            Field(2, 4, "flags", "uint32", "TIE_START 0x40000000, TIE_END 0x20000000"),
+            Field(0, 2, "tcd", "uint16", "Tone Center Displacement: pitch and alteration"),
+            Field(2, 4, "flags", "uint32", "ties, accidental display, note id; see below"),
         ],
         data=data,
-        caption="A note record: six bytes, two of them carrying both pitch and alteration.",
+        caption="A note record: six bytes carrying one note's pitch and its tie and "
+        "accidental state.",
         notes=[
             "<strong>The alteration is sign-and-magnitude, not two's complement.</strong> "
-            "Bit 3 is the sign. <code>eeppd.txt</code> describes it as &ldquo;a signed "
-            "quantity ... -8 to +7&rdquo;, which reads as two's complement; the corpus "
-            "disagrees, and the corpus wins. Observed: 0x0 &rarr; 0, 0x1 &rarr; +1, "
-            "0x9 &rarr; &minus;1.",
+            "Coda's documentation calls it &ldquo;a signed quantity ... -8 to +7&rdquo;, "
+            "which reads as two's complement. The corpus disagrees, and the corpus wins. "
+            "The low nibble is a sign bit above a three-bit magnitude:<br><br>"
+            "<code>bit&nbsp;&nbsp;&nbsp;3&nbsp;&nbsp;&nbsp;2&nbsp;&nbsp;&nbsp;1"
+            "&nbsp;&nbsp;&nbsp;0</code><br>"
+            "<code>&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;s&nbsp;][&nbsp;m&nbsp;&nbsp;&nbsp;m"
+            "&nbsp;&nbsp;&nbsp;m&nbsp;]</code><br>"
+            "<code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sign&nbsp;&nbsp;magnitude 0-7</code>"
+            "<br><br>"
+            "The two readings agree on naturals and sharps and diverge on every flat. "
+            "Observed in the corpus: <code>0x0</code> is 0 and <code>0x1</code> is +1, "
+            "which both readings give; but <code>0x9</code> = <code>1001</code> is "
+            "<strong>&minus;1</strong>, sign set with magnitude 1. Read as two's "
+            "complement the same nibble would be &minus;7, spelling a note six steps away "
+            "from the one Finale displays.",
+            "<strong>The flags carry more than ties.</strong> The 32-bit field also holds "
+            "accidental display and the note's identity within its entry. From Coda's "
+            "specification: <code>0x80000000</code> legality, always set; "
+            "<code>0x40000000</code> tie start; <code>0x20000000</code> tie end; "
+            "<code>0x10000000</code> cross-staff; <code>0x02000000</code> upper stem of a "
+            "split stem; <code>0x01000000</code> show an accidental, which Finale "
+            "recomputes while editing unless frozen; <code>0x00800000</code> parenthesize "
+            "that accidental; <code>0x001F0000</code> a mask holding the note's id, 1 to "
+            "12, by which entry details such as articulations and performance data address "
+            "one note of a chord; <code>0x00000002</code> freeze the accidental bit.",
         ],
     )
 

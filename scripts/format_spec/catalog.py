@@ -507,7 +507,7 @@ twenty-five maps by 128 notes accounts for. The reading of the remaining payload
 fields &mdash; presumably notehead and staff position &mdash; is not established
 here.</p></div>
 
-<div class=warn><strong>Not every DCL tag is two characters.</strong> A reader
+<div class=warn><strong>Not every DCL tag is two printable characters.</strong> A reader
 that assumes the tag field always holds printable ASCII will mishandle a family
 that every document carries. Alongside the character tags, the details pool
 holds thirty <strong>numeric</strong> tags in three regular runs &mdash;

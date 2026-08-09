@@ -59,6 +59,12 @@ CITE_XXE = cite(
     "&ldquo;XML external entity attack&rdquo;, Wikipedia: "
     "<code>en.wikipedia.org/wiki/XML_external_entity_attack</code>."
 )
+CITE_UNITS = cite(
+    "Both expansions are Coda's, from the ETF specification (see note 1): "
+    "&ldquo;the entry duration in EDUs (Enigma Duration Units, 1024 == quarter "
+    "note)&rdquo; and &ldquo;manual positioning in EVPUs (Enigma Virtual Page "
+    "Units, 288 per inch)&rdquo;."
+)
 
 section(
     "Scope and provenance",
@@ -492,14 +498,50 @@ refuse rather than emit the notes twice.</div>
 section(
     "The entry pool",
     f"""
-<p>The notes. This is the one structure both <code>.mus</code> eras share
-byte-for-byte, differing only in integer byte order.</p>
+<p>The entry pool contains the actual musical notes &mdash; both pitch and
+duration. It is the one structure the two <code>.mus</code> eras share field for
+field, differing only in the byte order their integers are written in.</p>
+
+<h4>Two units, and one word, used throughout</h4>
+<dl>
+<dt>EDU &mdash; Enigma Duration Units</dt>
+<dd>Coda's time unit, in which <strong>1024 is a quarter note</strong>. A whole
+note is 4096, a dotted quarter 1536.{CITE_UNITS}</dd>
+<dt>EVPU &mdash; Enigma Virtual Page Units</dt>
+<dd>Coda's distance unit, <strong>288 to the inch</strong>. Positions and widths
+elsewhere in this document are in EVPU.{CITE_UNITS}</dd>
+<dt>Entry</dt>
+<dd>In Coda's terminology an entry is <strong>a note, a chord, or a
+rest</strong> &mdash; everything sounding, or deliberately not sounding, at one
+point in one layer. A chord is one entry with several notes, not several
+entries.</dd>
+</dl>
 {render_struct(S["entry_first_slot"]())}
 <h3>The note record</h3>
+<h4>TCD &mdash; Tone Center Displacement</h4>
+<p>The first two bytes of a note record are a single 16-bit field Coda calls the
+<strong>TCD</strong>, and it carries two things at once: which pitch, and how it
+is altered against the key.</p>
+
+<pre class=cstruct>bit  15 14 13 12 11 10  9  8  7  6  5  4 | 3  2  1  0
+    [        harmonic value (12 bits)      |sign  magnitude ]
+              signed, 0 = tonic             alteration</pre>
+
+<p>The <strong>harmonic value</strong> is a diatonic step count relative to the
+current key, not a chromatic pitch: 0 is the tonic in the octave from middle C,
+1 the step above it, &minus;1 the step below, 7 an octave up. Because it is
+relative, transposing a passage by changing its key signature moves every note
+with it and rewrites nothing.</p>
+
+<p>The <strong>alteration</strong> is how far the note is bent from that
+diatonic step &mdash; 0 natural to the key, +1 a semitone up, &minus;1 down.
+Note that this is relative to the key, not to the printed accidental: in G
+major, an F natural has an alteration of &minus;1, because it sits a semitone
+below the key's F sharp.</p>
 {render_struct(S["note_record"]())}
 <h4>Durations</h4>
-<p>Durations are in <strong>EDU</strong>, where 1024 is a quarter note and 4096
-a whole note. Dotted values are the plain value plus half again, so 1536 is a
+<p>Durations are measured in <strong>EDU</strong>, where 1024 is a quarter note
+and 4096 a whole note. Dotted values are the plain value plus half again, so 1536 is a
 dotted quarter. Across 136 DCL-era corpus documents, 71,801 durations took just
 16 distinct values &mdash; every one a note value with 0&ndash;2 dots, which is
 itself evidence the field was read correctly.</p>
