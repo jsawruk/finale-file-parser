@@ -309,7 +309,7 @@ TIER_C_OTHERS = "213 and 215 (25,576 each), 140 (18,624), 214 (12,681), 125 (12,
 148 (11,887), 126 (11,208), 183 (10,114), 192 and 241 (7,353 each), 217 (6,638)"
 TIER_C_DETAILS = "1043 (166,524), 1064 (8,162), 1063 (2,162), 1066 (1,483), \
 1034 (1,164), 1060 (1,156)"
-TIER_C_ETF = "<code>FB</code> (8,448), <code>BC</code> (3,809), \
+TIER_C_ETF = "<code>BC</code> (3,809), \
 <code>DA</code> (2,963), <code>fg</code> (2,884), <code>OC</code> (2,170), \
 <code>ls</code> (1,809), and the <code>&amp;a</code>/<code>&amp;d</code>/\
 <code>&amp;f</code> family; in details <code>DF</code> (74,730), \
@@ -408,6 +408,7 @@ ETF_OTHERS: list[tuple[str, str, str, str]] = [
     ("IK", "Chord Playback", "matches the cmper of its IV", "spec"),
     ("IX", "Articulation Definition", "referenced by an IM", "spec"),
     ("Sx", "Slur", "slur number; four rows per slur", "lily"),
+    ("FB", "Fretboard library", "1&ndash;192; a fixed table, see below", "measured"),
 ]
 
 ETF_DETAILS: list[tuple[str, str, str, str]] = [
@@ -420,6 +421,7 @@ ETF_DETAILS: list[tuple[str, str, str, str]] = [
     ("ME", "Midi Expression", "(instrument, measure)", "spec"),
     ("hC", "Learned Chord", "(root, alternate bass)", "spec"),
     ("Ex", "Slur detail", "two rows per slur, paired with Sx", "thesis"),
+    ("GT", "Fretboard index", "root as MIDI 60&ndash;71; 16 incidences each", "measured"),
 ]
 
 ETF_ENTRY: list[tuple[str, str, str, str]] = [
@@ -438,6 +440,7 @@ _SOURCE = {
     "spec": "ETF&nbsp;spec",
     "lily": "LilyPond",
     "thesis": "thesis",
+    "measured": "measured",
 }
 
 
@@ -470,6 +473,24 @@ by matching key sequences. The source column says which document.</p>
 the high and low words of the entry number.</p>
 <table><thead><tr><th>Tag</th><th>Name</th><th>Carries</th>
 <th>Source</th></tr></thead><tbody>{_etf_rows(ETF_ENTRY)}</tbody></table>
+
+<div class=note><strong><code>^FB</code> and <code>^GT</code> were identified by
+structure, not by a document.</strong> Neither appears in any source consulted.
+They were matched because <code>FB</code> holds <strong>exactly 192 records in
+every document that has it</strong>, keyed contiguously 1&ndash;192 &mdash; a
+fixed table rather than per-score data &mdash; and EnigmaXML's
+<code>fretboardSymbol</code> holds exactly 192 in every document too. An
+invariant of that kind survives the two corpora being different sizes and
+different repertoire, which ordinary frequency comparisons do not.
+
+<p><code>GT</code> is its index: twelve records keyed 60&ndash;71, the chromatic
+pitch classes from middle C, with sixteen incidences each. Twelve roots times
+sixteen shapes is 192. <code>FB</code> and <code>GT</code> appear in exactly the
+same 44 of 139 documents and in no others, and nothing else shares that set.</p>
+
+<p>The library is written only when the feature is used: 44 of 139 DCL documents
+carry it, against 149 of 150 <code>.musx</code> documents, later versions
+shipping the defaults regardless.</p></div>
 
 <div class=note><strong>Case is significant.</strong> <code>^AC</code> is Tempo
 and <code>^ac</code> is performance data; <code>^CH</code> is a chord and
