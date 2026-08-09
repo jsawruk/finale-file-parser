@@ -492,6 +492,17 @@ same 44 of 139 documents and in no others, and nothing else shares that set.</p>
 carry it, against 149 of 150 <code>.musx</code> documents, later versions
 shipping the defaults regardless.</p></div>
 
+<div class=warn><strong>Not every DCL tag is two characters.</strong> A reader
+that assumes the tag field always holds printable ASCII will mishandle a family
+that every document carries. Alongside the character tags, the details pool
+holds thirty <strong>numeric</strong> tags in three regular runs &mdash;
+<code>0x8001</code>&ndash;<code>0x800a</code>,
+<code>0x9001</code>&ndash;<code>0x900a</code> and
+<code>0xa001</code>&ndash;<code>0xa00a</code> &mdash; each appearing about once
+per document in all 139 DCL documents, and in both byte orders. Their meaning is
+not established here; what matters for an implementer is that the field is a
+u16, and only sometimes a pair of letters.</div>
+
 <div class=note><strong>Case is significant.</strong> <code>^AC</code> is Tempo
 and <code>^ac</code> is performance data; <code>^CH</code> is a chord and
 <code>^hC</code> a learned one. A reader that upper-cases a tag before comparing
