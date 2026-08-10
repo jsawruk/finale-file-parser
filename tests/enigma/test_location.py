@@ -24,7 +24,8 @@ def _entries(*specs: str) -> str:
 
 
 # Two measures on one staff. Measure 1 (frame 10) has entries 1->2; measure 2
-# (frame 11) has entry 3. Measure 1 sets key 2; measure 2 omits keySig (inherits).
+# (frame 11) has entry 3. Measure 1 sets key 2; measure 2 omits keySig, which
+# means C major rather than a continuation of key 2.
 BASIC = _doc(
     _entries("1:2", "2:0", "3:0")
     + """
@@ -54,10 +55,48 @@ def test_places_entries_in_staff_and_measure() -> None:
     assert loc[3].measure == 2
 
 
-def test_key_inheritance() -> None:
-    # measure 2 has no keySig -> inherits key 2 from measure 1
+def test_a_measure_without_a_keysig_is_c_major_not_the_previous_key() -> None:
+    """Finale writes C major by omitting the element, never by storing 0.
+
+    Reading the absence as inheritance keeps a piece in its opening key through
+    every passage that returns to C. The corpus case is `Easy Holiday Ukulele
+    Songbook.musx`: key=1 through measure 32, no element for 33-52, key=1 again
+    from 53, and Finale renders 33 with a natural cancelling the sharp and
+    chords of C, G7 and F. Inheriting spelled twenty measures a step sharp.
+    """
     loc = locate_entries(parse_enigma(BASIC))
-    assert loc[3].key_signature == 2
+    assert loc[3].key_signature == 0
+
+
+def test_a_key_returns_after_an_absent_measure() -> None:
+    """The shape that exposed the bug: stated, absent, stated again."""
+    doc = _doc(
+        _entries("1:0", "2:0", "3:0")
+        + """
+        <others>
+          <frameSpec cmper="10" inci="0">
+            <startEntry>1</startEntry><endEntry>1</endEntry>
+          </frameSpec>
+          <frameSpec cmper="11" inci="0">
+            <startEntry>2</startEntry><endEntry>2</endEntry>
+          </frameSpec>
+          <frameSpec cmper="12" inci="0">
+            <startEntry>3</startEntry><endEntry>3</endEntry>
+          </frameSpec>
+          <measSpec cmper="1"><keySig><key>1</key></keySig></measSpec>
+          <measSpec cmper="2"><width>100</width></measSpec>
+          <measSpec cmper="3"><keySig><key>1</key></keySig></measSpec>
+          <staffSpec cmper="1"><x>a</x></staffSpec>
+        </others>
+        <details>
+          <gfhold cmper1="1" cmper2="1"><frame1>10</frame1></gfhold>
+          <gfhold cmper1="1" cmper2="2"><frame1>11</frame1></gfhold>
+          <gfhold cmper1="1" cmper2="3"><frame1>12</frame1></gfhold>
+        </details>
+        """
+    )
+    loc = locate_entries(parse_enigma(doc))
+    assert [loc[n].key_signature for n in (1, 2, 3)] == [1, 0, 1]
 
 
 def test_first_measure_without_keysig_defaults_to_zero() -> None:
