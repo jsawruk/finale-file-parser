@@ -70,9 +70,6 @@ def mus_file_header() -> Struct:
             "The banner field is fixed-size and is <em>not</em> zero-filled when Finale "
             "rewrites it, so a shorter banner can leave the tail of a previous, longer one "
             "behind. Everything from the first NUL onward must be discarded.",
-            "A stamp is all-or-nothing: an implausible date or an empty application tag "
-            "means the whole stamp is untrustworthy, because a reader cannot tell which "
-            "half of a partial stamp to believe.",
         ],
     )
 
@@ -86,12 +83,18 @@ def dcl_pool_record() -> Struct:
         fields=[
             Field(0, 2, "kind", "uint16", "15 others, 16 details, 17 entries, 18 text"),
             Field(2, 4, "length", "uint32", "whole record, this 10-byte header included"),
-            Field(6, 4, "checksum", "uint32", "omitted entirely when length == 6"),
+            Field(
+                6,
+                4,
+                "checksum",
+                "uint32",
+                "omitted entirely when the pool is empty (length == 6)",
+            ),
             Field(10, len(stream), "stream", "uint8[]", "PKWARE DCL data, length - 10 bytes"),
         ],
         data=data,
-        caption="A DCL-era pool record, little-endian (Windows-written). Records lie end to "
-        "end from 0x200 to the last byte of the file, with no gaps.",
+        caption="A DCL-era pool record. Records lie end to end from 0x200 to the "
+        "last byte of the file, with no gaps.",
         notes=[
             "<strong>length counts its own header.</strong> The chain is walked by adding "
             "length to the current position. This is also why a fixed 0x20A works as "
@@ -99,30 +102,6 @@ def dcl_pool_record() -> Struct:
             "A length of exactly 6 means the pool is <strong>empty</strong> &mdash; kind and "
             "length and nothing else, no checksum and no stream.",
         ],
-    )
-
-
-def dcl_pool_record_be() -> Struct:
-    """The same record, written by a Mac."""
-    stream = bytes.fromhex("00040ec5b39a2f")
-    data = (
-        be16(PAY.POOL_OTHERS)
-        + (10 + len(stream)).to_bytes(4, "big")
-        + (0x0044219C).to_bytes(4, "big")
-        + stream
-    )
-    return Struct(
-        name="DclPoolRecord",
-        fields=[
-            Field(0, 2, "kind", "uint16", "15 &mdash; only 15 one way round"),
-            Field(2, 4, "length", "uint32", ""),
-            Field(6, 4, "checksum", "uint32", ""),
-            Field(10, len(stream), "stream", "uint8[]", ""),
-        ],
-        data=data,
-        caption="The identical record written big-endian (Mac). Byte order is detected from "
-        "this first record rather than assumed: its kind is always 15, which reads "
-        "as 15 only one way round.",
     )
 
 
@@ -148,18 +127,22 @@ def mus2011_record() -> Struct:
             Field(10 + len(payload), 4, "trailer", "uint32", "the length again"),
         ],
         data=data,
-        caption="A 2011-era record: tag 176 (measSpec), key 1, score part. One record "
-        f"occupies {OTH._HEADER} + length + {OTH._EXTRA_LENGTH} bytes.",
+        caption="A measSpec (tag 176) describing measure 1, belonging to the score "
+        "rather than to a linked part. One record occupies "
+        f"{OTH._HEADER} + length + {OTH._EXTRA_LENGTH} bytes.",
         notes=[
             "These records are <strong>self-identifying</strong>: each carries its own key, "
             "so nothing outside the record is needed to address it &mdash; no directory, no "
             "key array, no positional convention.",
-            "Records of one tag sit together in a section; sections may be separated by "
-            "two-byte zero padding, which a walk must skip.",
-            "Why this took so long to find: earlier attempts anchored on a payload field "
-            "located by searching for a value already known from a paired .musx, then read "
-            "<em>forward</em>. The key sits ten bytes <em>behind</em> that anchor, so it was "
-            "never in view.",
+            "Records of one tag sit together in a section, and sections are separated by "
+            "runs of two-byte zeroes, which a walk must skip. A zero there cannot begin a "
+            "record: it would mean tag 0, which no record uses. Measured across the corpus, "
+            "6,372 of 6,416 such runs are followed by a <em>different</em> tag, so they mark "
+            "section boundaries rather than occurring at random. Most are a single two-byte "
+            "unit, and skipping one lands the walk on a four-byte boundary 85% of the time, "
+            "which points at alignment before a new section &mdash; though the 15% that do "
+            "not leave that unproven. This is the 2011 era only: the row-based DCL era pads "
+            "differently, filling out a record's last row.",
         ],
     )
 
@@ -170,20 +153,44 @@ def dcl_others_row() -> Struct:
     return Struct(
         name="DclOthersRow",
         fields=[
-            Field(0, 2, "cmper", "uint16", "the (n) in an ETF ^XX(n)"),
+            Field(0, 2, "cmper", "uint16", "the (n) in an ETF ^XX(n) &mdash; the record's key"),
             Field(2, 2, "tag", "uint16", "two characters stored as a u16"),
-            Field(4, 12, "data", "uint8[12]", "ETF's 6 twobyte values (or 3 fourbytes)"),
+            Field(
+                4,
+                12,
+                "data",
+                "uint8[12]",
+                "six 16-bit values, or three 32-bit (ETF: twobytes and fourbytes)",
+            ),
         ],
         data=data,
         caption="A 2001&ndash;2005 others row: fixed 16 bytes, ETF's two-character tag.",
         notes=[
-            "<strong>The tag is a u16, not two bytes.</strong> On a little-endian file its "
-            "characters come out reversed: <code>^MS</code> is written <code>SM</code>, "
-            "<code>^&amp;a</code> is written <code>a&amp;</code>. Reading the pair verbatim "
-            "finds no known tag in 102 of 139 corpus documents, which is how this was noticed.",
             "A record too big for one row <strong>runs on into further rows</strong> under "
-            "the same tag and key. ETF calls each row an <em>incidence</em>. A record's "
-            "payload is its rows' data concatenated in file order.",
+            "the same tag and key. ETF calls each row an <em>incidence</em>, and a record's "
+            "payload is its rows' data concatenated in file order. A reader knows where a "
+            "record ends because rows are grouped and sorted by tag and key: the run stops "
+            "at the first row whose tag or key differs. The expected number of rows is a "
+            "property of each structure rather than anything the file states. Coda's "
+            "specification states it for some record types but not all &mdash; a staff "
+            "spec over three incidences, a page spec over two, a text block over four "
+            "&mdash; and says nothing about the rest. The final row is zero-padded to "
+            "fill it. Since the file never records that number, concatenating until the "
+            "key changes is the reliable rule.",
+            "<strong>Worked example.</strong> A staff spec's transposition sits at offset "
+            "20 of the record. No row is 20 bytes long &mdash; each carries only 12 bytes "
+            "of data &mdash; so offset 20 exists only once the rows are joined:<br><br>"
+            "<code>&nbsp;&nbsp;row 0&nbsp;&nbsp;[cmper][tag][ 12 bytes ]&nbsp;&rarr;&nbsp;"
+            "payload offsets&nbsp; 0..11</code><br>"
+            "<code>&nbsp;&nbsp;row 1&nbsp;&nbsp;[cmper][tag][ 12 bytes ]&nbsp;&rarr;&nbsp;"
+            "payload offsets 12..23</code><br>"
+            "<code>&nbsp;&nbsp;row 2&nbsp;&nbsp;[cmper][tag][ 12 bytes ]&nbsp;&rarr;&nbsp;"
+            "payload offsets 24..35</code><br><br>"
+            "Offset 20 falls in <strong>row 1, eight bytes into that row's data</strong>. A "
+            "reader does not compute that. It concatenates the rows' data into one 36-byte "
+            "payload and reads offset 20 of it, exactly as it would for a 2011 record that "
+            "arrived in one piece. Each row's own <code>cmper</code> and tag are addressing, "
+            "not content, and are dropped before the join.",
         ],
     )
 
@@ -196,11 +203,13 @@ def dcl_details_row() -> Struct:
             Field(0, 2, "cmper1", "uint16", "first key"),
             Field(2, 2, "cmper2", "uint16", "second key"),
             Field(4, 2, "tag", "uint16", "two characters as a u16"),
-            Field(6, 10, "data", "uint8[10]", "ETF's 5 twobytes"),
+            Field(6, 10, "data", "uint8[10]", "five 16-bit values (ETF calls them twobytes)"),
         ],
         data=data,
-        caption="A details row. Two keys rather than one &mdash; details are addressed by a "
-        "pair, which is how a record hangs off a (staff, measure) intersection.",
+        caption="A details row. Details are addressed by a pair of keys rather than one. "
+        "What the pair means depends on the tag: a frame hold is keyed by (staff, measure), "
+        "a group spec by (instrument list, group id), a learned chord by (root, alternate "
+        "bass), and an entry detail by the two halves of a 32-bit entry number.",
     )
 
 
@@ -223,29 +232,40 @@ def entry_first_slot() -> Struct:
     return Struct(
         name="EntrySlotFirst",
         fields=[
-            Field(0, 4, "entnum", "uint32", "the (n) in ETF ^eE(n)"),
-            Field(4, 2, "slot", "uint16", "0 for an entry's first slot, then 1, 2, ..."),
+            Field(0, 4, "entnum", "uint32", "this entry's number, its key"),
+            Field(4, 2, "slot", "uint16", "0 for this entry's first slot, then 1, 2, ..."),
             Field(6, 4, "prev", "uint32", "previous entry number, 0 if none"),
             Field(10, 4, "next", "uint32", "next entry number, 0 if none"),
             Field(14, 2, "dura", "uint16", "written duration in EDU; 1024 = quarter note"),
             Field(16, 2, "pos", "int16", "manual positioning in EVPU, signed"),
-            Field(18, 4, "flags", "uint32", "SETBIT 0x80000000 always; NOTEBIT 0x40000000"),
+            Field(18, 4, "flags", "uint32", "SETBIT: a real entry; NOTEBIT: note, not rest"),
             Field(22, 2, "extflags", "uint16", "extended flags"),
-            Field(24, 2, "noteCount", "uint16", "how many note records follow, across slots"),
-            Field(26, 6, "note[0]", "NoteRec", "TCD (2) + note flag (4)"),
+            Field(24, 2, "noteCount", "uint16", "notes in this entry, across all its slots"),
+            Field(26, 6, "note[0]", "NoteRec", "pitch word + flags; see below"),
             Field(32, 6, "note[1]", "NoteRec", "the first slot holds two"),
         ],
         data=bytes(buf),
-        caption=f"An entry's first slot. The pool is a flat array of fixed {ENT._SLOT}-byte "
-        "slots, each tagged with the entry it belongs to.",
+        caption=f"The entry pool is a flat array of fixed {ENT._SLOT}-byte <em>slots</em>. "
+        f"Every slot repeats the entry number it belongs to, so a reader never has to track "
+        f"position.",
         notes=[
-            f"Continuation slots (index &gt; 0) carry only notes, {ENT._CONT_SLOT_NOTES} per "
-            f"slot, from offset {ENT._SLOT_HEADER}. An entry may carry up to "
+            f"<strong>An entry is the musical object; a slot is the storage cell.</strong> "
+            f"Every slot is {ENT._SLOT} bytes, and an entry uses as many as its notes "
+            f"require. They hold different numbers of notes because the first spends bytes "
+            f"on the entry itself:<br><br>"
+            f"&nbsp;&nbsp;first slot &mdash; {ENT._SLOT_HEADER} bytes of slot header, "
+            f"{ENT._FIRST_NOTE_OFFSET - ENT._SLOT_HEADER} bytes of entry fields, then room "
+            f"for {ENT._FIRST_SLOT_NOTES} notes<br>"
+            f"&nbsp;&nbsp;later slots &mdash; {ENT._SLOT_HEADER} bytes of slot header, then "
+            f"room for {ENT._CONT_SLOT_NOTES} notes<br><br>"
+            f"So a three-note chord occupies two slots: two notes in the first and one in "
+            f"the second, with the rest of the second slot unused. An entry may carry up to "
             f"{ENT._MAX_NOTES} notes.",
-            "<strong>Both eras share this layout.</strong> What differs is only which way "
-            "round the integers are written. That the layout really is shared is the "
-            "corpus's verdict, not an assumption: across 136 DCL-era documents the slots "
-            "tile the pool exactly and every entry has SETBIT set.",
+            "<strong>The two entry flags a reader must respect.</strong> "
+            "<code>SETBIT</code> (0x80000000) is set on every legitimate entry, so a slot "
+            "without it is not one. <code>NOTEBIT</code> (0x40000000) distinguishes a note "
+            "from a rest: when it is clear the entry sounds nothing, and a rest normally "
+            "carries no note records at all.",
         ],
     )
 
@@ -256,25 +276,18 @@ def note_record() -> Struct:
     return Struct(
         name="NoteRec",
         fields=[
-            Field(0, 2, "tcd", "uint16", "upper 12 bits pitch (signed), low nibble alteration"),
-            Field(2, 4, "flags", "uint32", "TIE_START 0x40000000, TIE_END 0x20000000"),
+            Field(0, 2, "tcd", "uint16", "Tone Center Displacement: pitch and alteration"),
+            Field(2, 4, "flags", "uint32", "note properties; see the table below"),
         ],
         data=data,
-        caption="A note record: six bytes, two of them carrying both pitch and alteration.",
-        notes=[
-            "<strong>The alteration is sign-and-magnitude, not two's complement.</strong> "
-            "Bit 3 is the sign. <code>eeppd.txt</code> describes it as &ldquo;a signed "
-            "quantity ... -8 to +7&rdquo;, which reads as two's complement; the corpus "
-            "disagrees, and the corpus wins. Observed: 0x0 &rarr; 0, 0x1 &rarr; +1, "
-            "0x9 &rarr; &minus;1.",
-        ],
+        caption="A note record: six bytes carrying a note's pitch and its properties.",
+        notes=[],
     )
 
 
 ALL_STRUCTS = {
     "mus_file_header": mus_file_header,
     "dcl_pool_record": dcl_pool_record,
-    "dcl_pool_record_be": dcl_pool_record_be,
     "mus2011_record": mus2011_record,
     "dcl_others_row": dcl_others_row,
     "dcl_details_row": dcl_details_row,

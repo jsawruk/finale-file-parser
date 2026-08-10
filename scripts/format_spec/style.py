@@ -89,3 +89,43 @@ dl { margin: 6pt 0; }
 dt { font-weight: 600; margin-top: 6pt; }
 dd { margin: 0 0 4pt 14pt; }
 """
+
+CSS += """
+/* --- footnotes, charts ------------------------------------------------- */
+sup.fn { font-size: 7pt; color: #14507a; padding-left: 1pt; }
+.notes { margin-top: 14pt; border-top: 0.5pt solid #ccc; padding-top: 6pt; }
+ol.footnotes { font-size: 8.5pt; color: #444; padding-left: 16pt; }
+ol.footnotes li { margin: 3pt 0; }
+
+.chart { display: flex; align-items: center; gap: 18pt; margin: 10pt 0 12pt;
+         break-inside: avoid; }
+.chart svg { flex: 0 0 auto; }
+ul.chartkey { list-style: none; padding: 0; margin: 0; font-size: 9.5pt; }
+ul.chartkey li { margin: 4pt 0; }
+ul.chartkey .swatch { margin-right: 5pt; }
+"""
+
+CSS += """
+.staff { margin: 10pt 0 12pt; break-inside: avoid; }
+.staff svg { display: block; }
+.staff .hexcap { margin-top: 2pt; }
+"""
+
+CSS += """
+.score { margin: 12pt 0 14pt; break-inside: avoid; }
+/* Verovio emits a viewBox and no width, so max-width:100% would stretch the
+   staff to the column. Fix the height and let the width follow the aspect. */
+.score svg { height: 88pt; width: auto; max-width: 100%; display: block; }
+"""
+
+CSS += """
+.scorerow { display: flex; align-items: flex-end; gap: 5pt; }
+.scoreart { min-width: 0; }
+/* The two lyric rows sit at the foot of the engraving; the labels are set to
+   the same rhythm and bottom-aligned with them. */
+.scorekey {
+  display: flex; flex-direction: column; text-align: right;
+  font-size: 9pt; color: #444; padding-bottom: 2pt; white-space: nowrap;
+}
+.scorekey span { line-height: 11pt; }
+"""
