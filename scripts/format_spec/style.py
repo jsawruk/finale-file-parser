@@ -115,7 +115,7 @@ CSS += """
 .score { margin: 12pt 0 14pt; break-inside: avoid; }
 /* Verovio emits a viewBox and no width, so max-width:100% would stretch the
    staff to the column. Fix the height and let the width follow the aspect. */
-.score svg { height: 96pt; width: auto; max-width: 100%; display: block; }
+.score svg { height: 68pt; width: auto; max-width: 100%; display: block; }
 """
 
 CSS += """
@@ -125,7 +125,7 @@ CSS += """
    the same rhythm and bottom-aligned with them. */
 .scorekey {
   display: flex; flex-direction: column; text-align: right;
-  font-size: 8pt; color: #444; padding-bottom: 3pt; white-space: nowrap;
+  font-size: 9pt; color: #444; padding-bottom: 2pt; white-space: nowrap;
 }
-.scorekey span { line-height: 15pt; }
+.scorekey span { line-height: 11pt; }
 """

@@ -100,7 +100,7 @@ ul.chartkey .swatch { margin-right: 5pt; }
 .score { margin: 12pt 0 14pt; break-inside: avoid; }
 /* Verovio emits a viewBox and no width, so max-width:100% would stretch the
    staff to the column. Fix the height and let the width follow the aspect. */
-.score svg { height: 96pt; width: auto; max-width: 100%; display: block; }
+.score svg { height: 68pt; width: auto; max-width: 100%; display: block; }
 
 .scorerow { display: flex; align-items: flex-end; gap: 5pt; }
 .scoreart { min-width: 0; }
@@ -108,9 +108,9 @@ ul.chartkey .swatch { margin-right: 5pt; }
    the same rhythm and bottom-aligned with them. */
 .scorekey {
   display: flex; flex-direction: column; text-align: right;
-  font-size: 8pt; color: #444; padding-bottom: 3pt; white-space: nowrap;
+  font-size: 9pt; color: #444; padding-bottom: 2pt; white-space: nowrap;
 }
-.scorekey span { line-height: 15pt; }
+.scorekey span { line-height: 11pt; }
 </style></head><body><h1>Finale file formats</h1><p class=subtitle>A reader's specification for <code>.mus</code> and <code>.musx</code></p><p class=meta>Reconstructed by the finale-file-parser project. All hex dumps are synthetic.</p><h2>Contents</h2><ol class=toc><li><a href="#s1">Scope and provenance</a></li><li><a href="#s2">Which formats are supported</a></li><li><a href="#s3">Byte order, compression, and encryption</a></li><li><a href="#s4">The <code>.mus</code> file header</a></li><li><a href="#s5">Container: how the payload is found</a></li><li><a href="#s6">Records: framing and addressing</a></li><li><a href="#s7">The entry pool</a></li><li><a href="#s8">The <code>.musx</code> container</a></li><li><a href="#s9">Record catalog</a></li></ol><section id="s1"><h2>1. Scope and provenance</h2>
 <p class=lead>This document describes the binary layout of Finale's
 <code>.mus</code> and <code>.musx</code> files as reconstructed by the
@@ -758,130 +758,130 @@ tonic; &minus;1 is a step below, while 7 is an octave up.</p>
 <p>The value counts <em>steps of the key</em>, not semitones, so the same
 numbers name different pitches in different keys:</p>
 
-<div class=score><div class=scorerow><div class=scorekey><span>Harmonic value:</span><span>Alteration:</span></div><div class=scoreart><svg viewBox="0 0 231 88" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" overflow="visible" id="j1mvjxdo">
+<div class=score><div class=scorerow><div class=scorekey><span>Harmonic value:</span><span>Alteration:</span></div><div class=scoreart><svg viewBox="0 0 231 88" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" overflow="visible" id="w1jeolkk">
    <desc>Engraved by Verovio 6.2.1-8d42439</desc>
    <defs>
-      <g id="E050-j1mvjxdo">
+      <g id="E050-w1jeolkk">
          <path transform="scale(1,-1)" d="M441 -245c-23 -4 -48 -6 -76 -6c-59 0 -102 7 -130 20c-88 42 -150 93 -187 154c-26 44 -43 103 -48 176c0 6 -1 13 -1 19c0 54 15 111 45 170c29 57 65 106 110 148s96 85 153 127c-3 16 -8 46 -13 92c-4 43 -5 73 -5 89c0 117 16 172 69 257c34 54 64 82 89 82 c21 0 43 -30 69 -92s39 -115 41 -159v-15c0 -109 -21 -162 -67 -241c-13 -20 -63 -90 -98 -118c-13 -9 -25 -19 -37 -29l31 -181c8 1 18 2 28 2c58 0 102 -12 133 -35c59 -43 92 -104 98 -184c1 -7 1 -15 1 -22c0 -123 -87 -209 -181 -248c8 -57 17 -110 25 -162 c5 -31 6 -58 6 -80c0 -30 -5 -53 -14 -70c-35 -64 -88 -99 -158 -103c-5 0 -11 -1 -16 -1c-37 0 -72 10 -108 27c-50 24 -77 59 -80 105v11c0 29 7 55 20 76c18 28 45 42 79 44h6c49 0 93 -42 97 -87v-9c0 -51 -34 -86 -105 -106c17 -24 51 -36 102 -36c62 0 116 43 140 85 c9 16 13 41 13 74c0 20 -1 42 -5 67c-8 53 -18 106 -26 159zM461 939c-95 0 -135 -175 -135 -286c0 -24 2 -48 5 -71c50 39 92 82 127 128c40 53 60 100 60 140v8c-4 53 -22 81 -55 81h-2zM406 119l54 -326c73 25 110 78 110 161c0 7 0 15 -1 23c-7 95 -57 142 -151 142h-12 zM382 117c-72 -2 -128 -47 -128 -120v-7c2 -46 43 -99 75 -115c-3 -2 -7 -5 -10 -10c-70 33 -116 88 -123 172v11c0 68 44 126 88 159c23 17 49 29 78 36l-29 170c-21 -13 -52 -37 -92 -73c-50 -44 -86 -84 -109 -119c-45 -69 -67 -130 -67 -182v-13c5 -68 35 -127 93 -176 s125 -73 203 -73c25 0 50 3 75 9c-19 111 -36 221 -54 331z" />
       </g>
-      <g id="E0A2-j1mvjxdo">
+      <g id="E0A2-w1jeolkk">
          <path transform="scale(1,-1)" d="M198 133c102 0 207 -45 207 -133c0 -92 -118 -133 -227 -133c-101 0 -178 46 -178 133c0 88 93 133 198 133zM293 -21c0 14 -3 29 -8 44c-7 20 -18 38 -33 54c-20 21 -43 31 -68 31l-20 -2c-15 -5 -27 -14 -36 -28c-4 -9 -6 -17 -8 -24s-3 -16 -3 -27c0 -15 3 -34 9 -57 s18 -41 34 -55c15 -15 36 -23 62 -23c4 0 10 1 18 2c19 5 32 15 40 30s13 34 13 55z" />
       </g>
    </defs>
-   <style type="text/css">#j1mvjxdo g.ending, #j1mvjxdo g.fing, #j1mvjxdo g.reh, #j1mvjxdo g.tempo {font-weight:bold;}#j1mvjxdo g.dir, #j1mvjxdo g.dynam, #j1mvjxdo g.mNum {font-style:italic;}#j1mvjxdo g.label {font-weight:normal;}#j1mvjxdo ellipse, #j1mvjxdo path, #j1mvjxdo polygon, #j1mvjxdo polyline, #j1mvjxdo rect {stroke:currentColor}</style>
+   <style type="text/css">#w1jeolkk g.ending, #w1jeolkk g.fing, #w1jeolkk g.reh, #w1jeolkk g.tempo {font-weight:bold;}#w1jeolkk g.dir, #w1jeolkk g.dynam, #w1jeolkk g.mNum {font-style:italic;}#w1jeolkk g.label {font-weight:normal;}#w1jeolkk ellipse, #w1jeolkk path, #w1jeolkk polygon, #w1jeolkk polyline, #w1jeolkk rect {stroke:currentColor}</style>
    <svg class="definition-scale" color="black" font-family="Times, serif" viewBox="0 0 7690 2920">
       <g class="page-margin" transform="translate(250, 250)">
-         <g id="t15b0hf5" class="mdiv pageMilestone" />
-         <g id="utr51n8" class="score pageMilestone" />
-         <g id="f9fdvj1" class="system">
-            <g id="w1xbqs2a" class="section systemMilestone" />
-            <g id="z15z9car" class="section systemMilestone" />
-            <g id="i12vsbet" class="measure">
-               <g id="rxm6kgh" class="staff">
+         <g id="g1lgn9ny" class="mdiv pageMilestone" />
+         <g id="h1m0t56" class="score pageMilestone" />
+         <g id="s18kkk3g" class="system">
+            <g id="j7boxy0" class="section systemMilestone" />
+            <g id="mnyrrl" class="section systemMilestone" />
+            <g id="v13798ye" class="measure">
+               <g id="e657bix" class="staff">
                   <path d="M0 540 L7198 540" stroke-width="13" />
                   <path d="M0 720 L7198 720" stroke-width="13" />
                   <path d="M0 900 L7198 900" stroke-width="13" />
                   <path d="M0 1080 L7198 1080" stroke-width="13" />
                   <path d="M0 1260 L7198 1260" stroke-width="13" />
-                  <g id="e10igqv3" class="clef">
-                     <use href="#E050-j1mvjxdo" transform="translate(90, 1080) scale(0.72, 0.72)" />
+                  <g id="rk2muqh" class="clef">
+                     <use href="#E050-w1jeolkk" transform="translate(90, 1080) scale(0.72, 0.72)" />
                   </g>
-                  <g id="fxds3g8" class="keySig" />
+                  <g id="si8nl0b" class="keySig" />
                   <g class="ledgerLines below">
                      <path d="M777 1440 L1163 1440" stroke-width="22" />
                      <path d="M3957 1440 L4343 1440" stroke-width="22" />
                   </g>
-                  <g id="sjkqu8s" class="layer">
-                     <g id="tt9wt3i" class="note">
+                  <g id="f1ivi9ky" class="layer">
+                     <g id="g16g5wae" class="note">
                         <g class="notehead">
-                           <use href="#E0A2-j1mvjxdo" transform="translate(825, 1440) scale(0.72, 0.72)" />
+                           <use href="#E0A2-w1jeolkk" transform="translate(825, 1440) scale(0.72, 0.72)" />
                         </g>
-                        <g id="u9dj5is" class="accid" />
-                        <g id="v16twf63" class="verse">
-                           <g id="w1qfoelw" class="syl">
+                        <g id="hc53oqv" class="accid" />
+                        <g id="izvgn6g" class="verse">
+                           <g id="jhh4u2u" class="syl">
                               <text x="735" y="1937" font-size="0px">
-                                 <tspan id="xxxo7ks" class="text">
+                                 <tspan id="k11hoqab" class="text">
                                     <tspan font-size="405px">0</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
-                        <g id="yx7msl3" class="verse">
-                           <g id="z1ay918k" class="syl">
+                        <g id="l63tl4l" class="verse">
+                           <g id="m1uhbla9" class="syl">
                               <text x="735" y="2337" font-size="0px">
-                                 <tspan id="amay9k6" class="text">
+                                 <tspan id="n120w8si" class="text">
                                     <tspan font-size="405px">0</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="bnw9etu" class="note">
+                     <g id="o9bbg27" class="note">
                         <g class="notehead">
-                           <use href="#E0A2-j1mvjxdo" transform="translate(2415, 1350) scale(0.72, 0.72)" />
+                           <use href="#E0A2-w1jeolkk" transform="translate(2415, 1350) scale(0.72, 0.72)" />
                         </g>
-                        <g id="c1na8tnz" class="accid" />
-                        <g id="dbb71hk" class="verse">
-                           <g id="e1bs336f" class="syl">
+                        <g id="p1oo41" class="accid" />
+                        <g id="qlfucp4" class="verse">
+                           <g id="rtwtak6" class="syl">
                               <text x="2325" y="1937" font-size="0px">
-                                 <tspan id="f3138eo" class="text">
+                                 <tspan id="s1s4fg65" class="text">
                                     <tspan font-size="405px">1</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
-                        <g id="g1vbjitw" class="verse">
-                           <g id="hx75p1m" class="syl">
+                        <g id="tlvvht5" class="verse">
+                           <g id="um2ylmr" class="syl">
                               <text x="2325" y="2337" font-size="0px">
-                                 <tspan id="i1bvpl56" class="text">
+                                 <tspan id="v182tdoi" class="text">
                                     <tspan font-size="405px">0</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="j1rtjwk5" class="note">
+                     <g id="wdnk8db" class="note">
                         <g class="notehead">
-                           <use href="#E0A2-j1mvjxdo" transform="translate(4005, 1530) scale(0.72, 0.72)" />
+                           <use href="#E0A2-w1jeolkk" transform="translate(4005, 1530) scale(0.72, 0.72)" />
                         </g>
-                        <g id="k1qa8gwm" class="accid" />
-                        <g id="l18steqa" class="verse">
-                           <g id="mmoc5oi" class="syl">
+                        <g id="xe7yiiz" class="accid" />
+                        <g id="y195pt4l" class="verse">
+                           <g id="z1ca5dni" class="syl">
                               <text x="3915" y="1937" font-size="0px">
-                                 <tspan id="n6ketp2" class="text">
+                                 <tspan id="a1hhkbzw" class="text">
                                     <tspan font-size="405px">−1</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
-                        <g id="o1gz4d52" class="verse">
-                           <g id="prh89ep" class="syl">
+                        <g id="bsoujh" class="verse">
+                           <g id="c5gor05" class="syl">
                               <text x="3915" y="2337" font-size="0px">
-                                 <tspan id="q191fe6y" class="text">
+                                 <tspan id="dz3fhyf" class="text">
                                     <tspan font-size="405px">0</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="rill17r" class="note">
+                     <g id="e17nusbc" class="note">
                         <g class="notehead">
-                           <use href="#E0A2-j1mvjxdo" transform="translate(5595, 810) scale(0.72, 0.72)" />
+                           <use href="#E0A2-w1jeolkk" transform="translate(5595, 810) scale(0.72, 0.72)" />
                         </g>
-                        <g id="s1lckg6z" class="accid" />
-                        <g id="t1xkhzg2" class="verse">
-                           <g id="u1l057u4" class="syl">
+                        <g id="f6cjydl" class="accid" />
+                        <g id="g180e11" class="verse">
+                           <g id="h1kszrmo" class="syl">
                               <text x="5505" y="1937" font-size="0px">
-                                 <tspan id="v6as229" class="text">
+                                 <tspan id="iyzk8wk" class="text">
                                     <tspan font-size="405px">7</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
-                        <g id="wp9cdt7" class="verse">
-                           <g id="xdfc0s9" class="syl">
+                        <g id="j1x9snnq" class="verse">
+                           <g id="k7ev7l3" class="syl">
                               <text x="5505" y="2337" font-size="0px">
-                                 <tspan id="ywlbokr" class="text">
+                                 <tspan id="l19826ud" class="text">
                                     <tspan font-size="405px">0</tspan>
                                  </tspan>
                               </text>
@@ -890,147 +890,147 @@ numbers name different pitches in different keys:</p>
                      </g>
                   </g>
                </g>
-               <g id="q1n0jlpr" class="barLine">
+               <g id="d354mwo" class="barLine">
                   <path d="M7185 540 L7185 1260" stroke-width="27" />
                </g>
             </g>
-            <g id="isaeg45" class="systemMilestoneEnd z15z9car" />
-            <g id="j2mgtaq" class="systemMilestoneEnd w1xbqs2a" />
+            <g id="vwnp879" class="systemMilestoneEnd mnyrrl" />
+            <g id="w1lip1x5" class="systemMilestoneEnd j7boxy0" />
          </g>
-         <g id="kqub2et" class="pageMilestoneEnd utr51n8" />
-         <g id="lv5wmp" class="pageMilestoneEnd t15b0hf5" />
+         <g id="x1ddi927" class="pageMilestoneEnd h1m0t56" />
+         <g id="y1u7zqeo" class="pageMilestoneEnd g1lgn9ny" />
       </g>
    </svg>
 </svg>
 </div></div></div>
 
-<div class=score><div class=scorerow><div class=scorekey><span>Harmonic value:</span><span>Alteration:</span></div><div class=scoreart><svg viewBox="0 0 241 83" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" overflow="visible" id="a1izljk">
+<div class=score><div class=scorerow><div class=scorekey><span>Harmonic value:</span><span>Alteration:</span></div><div class=scoreart><svg viewBox="0 0 241 83" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" overflow="visible" id="n1d1km2q">
    <desc>Engraved by Verovio 6.2.1-8d42439</desc>
    <defs>
-      <g id="E050-a1izljk">
+      <g id="E050-n1d1km2q">
          <path transform="scale(1,-1)" d="M441 -245c-23 -4 -48 -6 -76 -6c-59 0 -102 7 -130 20c-88 42 -150 93 -187 154c-26 44 -43 103 -48 176c0 6 -1 13 -1 19c0 54 15 111 45 170c29 57 65 106 110 148s96 85 153 127c-3 16 -8 46 -13 92c-4 43 -5 73 -5 89c0 117 16 172 69 257c34 54 64 82 89 82 c21 0 43 -30 69 -92s39 -115 41 -159v-15c0 -109 -21 -162 -67 -241c-13 -20 -63 -90 -98 -118c-13 -9 -25 -19 -37 -29l31 -181c8 1 18 2 28 2c58 0 102 -12 133 -35c59 -43 92 -104 98 -184c1 -7 1 -15 1 -22c0 -123 -87 -209 -181 -248c8 -57 17 -110 25 -162 c5 -31 6 -58 6 -80c0 -30 -5 -53 -14 -70c-35 -64 -88 -99 -158 -103c-5 0 -11 -1 -16 -1c-37 0 -72 10 -108 27c-50 24 -77 59 -80 105v11c0 29 7 55 20 76c18 28 45 42 79 44h6c49 0 93 -42 97 -87v-9c0 -51 -34 -86 -105 -106c17 -24 51 -36 102 -36c62 0 116 43 140 85 c9 16 13 41 13 74c0 20 -1 42 -5 67c-8 53 -18 106 -26 159zM461 939c-95 0 -135 -175 -135 -286c0 -24 2 -48 5 -71c50 39 92 82 127 128c40 53 60 100 60 140v8c-4 53 -22 81 -55 81h-2zM406 119l54 -326c73 25 110 78 110 161c0 7 0 15 -1 23c-7 95 -57 142 -151 142h-12 zM382 117c-72 -2 -128 -47 -128 -120v-7c2 -46 43 -99 75 -115c-3 -2 -7 -5 -10 -10c-70 33 -116 88 -123 172v11c0 68 44 126 88 159c23 17 49 29 78 36l-29 170c-21 -13 -52 -37 -92 -73c-50 -44 -86 -84 -109 -119c-45 -69 -67 -130 -67 -182v-13c5 -68 35 -127 93 -176 s125 -73 203 -73c25 0 50 3 75 9c-19 111 -36 221 -54 331z" />
       </g>
-      <g id="E262-a1izljk">
+      <g id="E262-n1d1km2q">
          <path transform="scale(1,-1)" d="M136 186v169h17v-164l44 14v-91l-44 -14v-165l44 12v-91l-44 -13v-155h-17v150l-76 -22v-155h-17v149l-43 -13v90l43 14v167l-43 -14v92l43 13v169h17v-163zM60 73v-167l76 22v168z" />
       </g>
-      <g id="E0A2-a1izljk">
+      <g id="E0A2-n1d1km2q">
          <path transform="scale(1,-1)" d="M198 133c102 0 207 -45 207 -133c0 -92 -118 -133 -227 -133c-101 0 -178 46 -178 133c0 88 93 133 198 133zM293 -21c0 14 -3 29 -8 44c-7 20 -18 38 -33 54c-20 21 -43 31 -68 31l-20 -2c-15 -5 -27 -14 -36 -28c-4 -9 -6 -17 -8 -24s-3 -16 -3 -27c0 -15 3 -34 9 -57 s18 -41 34 -55c15 -15 36 -23 62 -23c4 0 10 1 18 2c19 5 32 15 40 30s13 34 13 55z" />
       </g>
    </defs>
-   <style type="text/css">#a1izljk g.ending, #a1izljk g.fing, #a1izljk g.reh, #a1izljk g.tempo {font-weight:bold;}#a1izljk g.dir, #a1izljk g.dynam, #a1izljk g.mNum {font-style:italic;}#a1izljk g.label {font-weight:normal;}#a1izljk ellipse, #a1izljk path, #a1izljk polygon, #a1izljk polyline, #a1izljk rect {stroke:currentColor}</style>
+   <style type="text/css">#n1d1km2q g.ending, #n1d1km2q g.fing, #n1d1km2q g.reh, #n1d1km2q g.tempo {font-weight:bold;}#n1d1km2q g.dir, #n1d1km2q g.dynam, #n1d1km2q g.mNum {font-style:italic;}#n1d1km2q g.label {font-weight:normal;}#n1d1km2q ellipse, #n1d1km2q path, #n1d1km2q polygon, #n1d1km2q polyline, #n1d1km2q rect {stroke:currentColor}</style>
    <svg class="definition-scale" color="black" font-family="Times, serif" viewBox="0 0 8010 2740">
       <g class="page-margin" transform="translate(250, 250)">
-         <g id="k1byfi5t" class="mdiv pageMilestone" />
-         <g id="li8d2zj" class="score pageMilestone" />
-         <g id="wgeullm" class="system">
-            <g id="ny671gb" class="section systemMilestone" />
-            <g id="q1qfxxqf" class="section systemMilestone" />
-            <g id="z1h4a5pj" class="measure">
-               <g id="ij82rr1" class="staff">
+         <g id="x1qu09p1" class="mdiv pageMilestone" />
+         <g id="y12zxy4s" class="score pageMilestone" />
+         <g id="jla6noa" class="system">
+            <g id="a1sgtu7s" class="section systemMilestone" />
+            <g id="d17n5c0w" class="section systemMilestone" />
+            <g id="m5hkk7b" class="measure">
+               <g id="v1eyhtzt" class="staff">
                   <path d="M0 540 L7519 540" stroke-width="13" />
                   <path d="M0 720 L7519 720" stroke-width="13" />
                   <path d="M0 900 L7519 900" stroke-width="13" />
                   <path d="M0 1080 L7519 1080" stroke-width="13" />
                   <path d="M0 1260 L7519 1260" stroke-width="13" />
-                  <g id="ichyd1g" class="clef">
-                     <use href="#E050-a1izljk" transform="translate(90, 1080) scale(0.72, 0.72)" />
+                  <g id="vqgzmra" class="clef">
+                     <use href="#E050-n1d1km2q" transform="translate(90, 1080) scale(0.72, 0.72)" />
                   </g>
-                  <g id="jb0s2n8" class="keySig">
-                     <g id="k1q84eza" class="keyAccid">
-                        <use href="#E262-a1izljk" transform="translate(735, 540) scale(0.72, 0.72)" />
+                  <g id="w1w0py0q" class="keySig">
+                     <g id="x7e8yoz" class="keyAccid">
+                        <use href="#E262-n1d1km2q" transform="translate(735, 540) scale(0.72, 0.72)" />
                      </g>
                   </g>
-                  <g id="j1ac0ujs" class="layer">
-                     <g id="ka9onrk" class="note">
+                  <g id="w1rbis2r" class="layer">
+                     <g id="x1n6pa9t" class="note">
                         <g class="notehead">
-                           <use href="#E0A2-a1izljk" transform="translate(1146, 1080) scale(0.72, 0.72)" />
+                           <use href="#E0A2-n1d1km2q" transform="translate(1146, 1080) scale(0.72, 0.72)" />
                         </g>
-                        <g id="lvjnn4r" class="accid" />
-                        <g id="m2r3ne" class="verse">
-                           <g id="nyhmvcz" class="syl">
+                        <g id="yu6bzyo" class="accid" />
+                        <g id="zmy1ta5" class="verse">
+                           <g id="a1depqa9" class="syl">
                               <text x="1056" y="1752" font-size="0px">
-                                 <tspan id="o1hay40g" class="text">
+                                 <tspan id="b1j1ersd" class="text">
                                     <tspan font-size="405px">0</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
-                        <g id="p6pzjxp" class="verse">
-                           <g id="qusv4jl" class="syl">
+                        <g id="cmsbywi" class="verse">
+                           <g id="dv2pvkl" class="syl">
                               <text x="1056" y="2152" font-size="0px">
-                                 <tspan id="rovw949" class="text">
+                                 <tspan id="eeo51ma" class="text">
                                     <tspan font-size="405px">0</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="sc5nq46" class="note">
+                     <g id="fupxxaz" class="note">
                         <g class="notehead">
-                           <use href="#E0A2-a1izljk" transform="translate(2736, 990) scale(0.72, 0.72)" />
+                           <use href="#E0A2-n1d1km2q" transform="translate(2736, 990) scale(0.72, 0.72)" />
                         </g>
-                        <g id="t1xnjxdz" class="accid" />
-                        <g id="u3q9cw9" class="verse">
-                           <g id="v3purpo" class="syl">
+                        <g id="g1nzh6pp" class="accid" />
+                        <g id="h13dkol" class="verse">
+                           <g id="i1nt19p5" class="syl">
                               <text x="2646" y="1752" font-size="0px">
-                                 <tspan id="wjyhak5" class="text">
+                                 <tspan id="jv6xqz2" class="text">
                                     <tspan font-size="405px">1</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
-                        <g id="xb7s0d8" class="verse">
-                           <g id="yqdkgo7" class="syl">
+                        <g id="k15x6ybf" class="verse">
+                           <g id="l1y7rh30" class="syl">
                               <text x="2646" y="2152" font-size="0px">
-                                 <tspan id="zsdxlkt" class="text">
+                                 <tspan id="m3wtp9h" class="text">
                                     <tspan font-size="405px">0</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="arz7mww" class="note">
+                     <g id="n1ttf00x" class="note">
                         <g class="notehead">
-                           <use href="#E0A2-a1izljk" transform="translate(4326, 1170) scale(0.72, 0.72)" />
+                           <use href="#E0A2-n1d1km2q" transform="translate(4326, 1170) scale(0.72, 0.72)" />
                         </g>
-                        <g id="bb5bd9i" class="accid" />
-                        <g id="cc1oske" class="verse">
-                           <g id="d3pwh0c" class="syl">
+                        <g id="o1fg5enz" class="accid" />
+                        <g id="pv6r29j" class="verse">
+                           <g id="qvphyra" class="syl">
                               <text x="4236" y="1752" font-size="0px">
-                                 <tspan id="ehwvlhs" class="text">
+                                 <tspan id="r1rhx3vr" class="text">
                                     <tspan font-size="405px">−1</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
-                        <g id="f1vgu65x" class="verse">
-                           <g id="g1m52ojl" class="syl">
+                        <g id="s15zg1ec" class="verse">
+                           <g id="tvzu6rw" class="syl">
                               <text x="4236" y="2152" font-size="0px">
-                                 <tspan id="h118ja5r" class="text">
+                                 <tspan id="uqsshpx" class="text">
                                     <tspan font-size="405px">0</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="ioejiag" class="note">
+                     <g id="v17gxloy" class="note">
                         <g class="notehead">
-                           <use href="#E0A2-a1izljk" transform="translate(5916, 450) scale(0.72, 0.72)" />
+                           <use href="#E0A2-n1d1km2q" transform="translate(5916, 450) scale(0.72, 0.72)" />
                         </g>
-                        <g id="j1be4i8q" class="accid" />
-                        <g id="kuaae1p" class="verse">
-                           <g id="l2kpc4b" class="syl">
+                        <g id="w15pyzpn" class="accid" />
+                        <g id="x1yx5c7o" class="verse">
+                           <g id="y1ku6ils" class="syl">
                               <text x="5826" y="1752" font-size="0px">
-                                 <tspan id="m8xf64r" class="text">
+                                 <tspan id="zkw4zpj" class="text">
                                     <tspan font-size="405px">7</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
-                        <g id="n10osatg" class="verse">
-                           <g id="o1ipphew" class="syl">
+                        <g id="a1fum2vc" class="verse">
+                           <g id="byg3ucz" class="syl">
                               <text x="5826" y="2152" font-size="0px">
-                                 <tspan id="p116knd2" class="text">
+                                 <tspan id="cp7npxo" class="text">
                                     <tspan font-size="405px">0</tspan>
                                  </tspan>
                               </text>
@@ -1039,15 +1039,15 @@ numbers name different pitches in different keys:</p>
                      </g>
                   </g>
                </g>
-               <g id="h1o4422s" class="barLine">
+               <g id="u68huh6" class="barLine">
                   <path d="M7506 540 L7506 1260" stroke-width="27" />
                </g>
             </g>
-            <g id="z1uo5fmr" class="systemMilestoneEnd q1qfxxqf" />
-            <g id="a1lerdhg" class="systemMilestoneEnd ny671gb" />
+            <g id="m1fdfyq7" class="systemMilestoneEnd d17n5c0w" />
+            <g id="njnhp9w" class="systemMilestoneEnd a1sgtu7s" />
          </g>
-         <g id="byh7tyl" class="pageMilestoneEnd li8d2zj" />
-         <g id="cf9czr7" class="pageMilestoneEnd k1byfi5t" />
+         <g id="omohbn" class="pageMilestoneEnd y12zxy4s" />
+         <g id="pxkt5t9" class="pageMilestoneEnd x1qu09p1" />
       </g>
    </svg>
 </svg>
@@ -1062,239 +1062,239 @@ octave is simply seven steps: 7 is an octave above the tonic, &minus;7 an octave
 below, 14 two octaves above. Twelve bits give it a range of
 &minus;2048&hellip;2047, which is far more than any notation needs.</p>
 
-<div class=score><div class=scorerow><div class=scoreart><svg viewBox="0 0 389 126" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" overflow="visible" id="nw463af">
+<div class=score><div class=scorerow><div class=scoreart><svg viewBox="0 0 389 126" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" overflow="visible" id="a8i3cnx">
    <desc>Engraved by Verovio 6.2.1-8d42439</desc>
    <defs>
-      <g id="E050-nw463af">
+      <g id="E050-a8i3cnx">
          <path transform="scale(1,-1)" d="M441 -245c-23 -4 -48 -6 -76 -6c-59 0 -102 7 -130 20c-88 42 -150 93 -187 154c-26 44 -43 103 -48 176c0 6 -1 13 -1 19c0 54 15 111 45 170c29 57 65 106 110 148s96 85 153 127c-3 16 -8 46 -13 92c-4 43 -5 73 -5 89c0 117 16 172 69 257c34 54 64 82 89 82 c21 0 43 -30 69 -92s39 -115 41 -159v-15c0 -109 -21 -162 -67 -241c-13 -20 -63 -90 -98 -118c-13 -9 -25 -19 -37 -29l31 -181c8 1 18 2 28 2c58 0 102 -12 133 -35c59 -43 92 -104 98 -184c1 -7 1 -15 1 -22c0 -123 -87 -209 -181 -248c8 -57 17 -110 25 -162 c5 -31 6 -58 6 -80c0 -30 -5 -53 -14 -70c-35 -64 -88 -99 -158 -103c-5 0 -11 -1 -16 -1c-37 0 -72 10 -108 27c-50 24 -77 59 -80 105v11c0 29 7 55 20 76c18 28 45 42 79 44h6c49 0 93 -42 97 -87v-9c0 -51 -34 -86 -105 -106c17 -24 51 -36 102 -36c62 0 116 43 140 85 c9 16 13 41 13 74c0 20 -1 42 -5 67c-8 53 -18 106 -26 159zM461 939c-95 0 -135 -175 -135 -286c0 -24 2 -48 5 -71c50 39 92 82 127 128c40 53 60 100 60 140v8c-4 53 -22 81 -55 81h-2zM406 119l54 -326c73 25 110 78 110 161c0 7 0 15 -1 23c-7 95 -57 142 -151 142h-12 zM382 117c-72 -2 -128 -47 -128 -120v-7c2 -46 43 -99 75 -115c-3 -2 -7 -5 -10 -10c-70 33 -116 88 -123 172v11c0 68 44 126 88 159c23 17 49 29 78 36l-29 170c-21 -13 -52 -37 -92 -73c-50 -44 -86 -84 -109 -119c-45 -69 -67 -130 -67 -182v-13c5 -68 35 -127 93 -176 s125 -73 203 -73c25 0 50 3 75 9c-19 111 -36 221 -54 331z" />
       </g>
-      <g id="E0A3-nw463af">
+      <g id="E0A3-a8i3cnx">
          <path transform="scale(1,-1)" d="M278 64c0 22 -17 39 -43 39c-12 0 -26 -3 -41 -10c-85 -43 -165 -94 -165 -156c5 -25 15 -32 49 -32c67 11 200 95 200 159zM0 -36c0 68 73 174 200 174c66 0 114 -39 114 -97c0 -84 -106 -173 -218 -173c-64 0 -96 32 -96 96z" />
       </g>
-      <g id="E062-nw463af">
+      <g id="E062-a8i3cnx">
          <path transform="scale(1,-1)" d="M582 -120c0 32 26 58 58 58s58 -26 58 -58s-26 -58 -58 -58s-58 26 -58 58zM582 120c0 32 26 58 58 58s58 -26 58 -58s-26 -58 -58 -58s-58 26 -58 58zM158 96c51 0 73 -14 88 -49l16 -39c0 -17 -2 -30 -7 -40c-3 -11 -10 -21 -19 -31c-17 -18 -49 -43 -84 -43 c-55 0 -77 13 -112 44c-24 21 -35 55 -35 100c0 46 14 81 32 112c30 52 71 79 137 93l36 6l26 2c154 0 235 -68 274 -182c11 -32 18 -68 18 -107c0 -103 -26 -182 -68 -250c-89 -145 -234 -230 -412 -288l-30 -5c-9 0 -14 3 -14 8c3 10 5 11 10 16c35 15 70 30 96 44l78 43 c96 57 162 136 197 258c9 33 17 60 22 100c3 22 5 35 6 39c-7 69 -16 115 -23 140s-4 22 -16 40c-8 12 -19 23 -31 34c-24 21 -62 44 -118 44c-48 0 -84 -8 -113 -28c-28 -19 -42 -44 -42 -73v-16c2 -5 3 -9 4 -11c24 22 52 39 84 39z" />
       </g>
    </defs>
-   <style type="text/css">#nw463af g.ending, #nw463af g.fing, #nw463af g.reh, #nw463af g.tempo {font-weight:bold;}#nw463af g.dir, #nw463af g.dynam, #nw463af g.mNum {font-style:italic;}#nw463af g.label {font-weight:normal;}#nw463af ellipse, #nw463af path, #nw463af polygon, #nw463af polyline, #nw463af rect {stroke:currentColor}</style>
+   <style type="text/css">#a8i3cnx g.ending, #a8i3cnx g.fing, #a8i3cnx g.reh, #a8i3cnx g.tempo {font-weight:bold;}#a8i3cnx g.dir, #a8i3cnx g.dynam, #a8i3cnx g.mNum {font-style:italic;}#a8i3cnx g.label {font-weight:normal;}#a8i3cnx ellipse, #a8i3cnx path, #a8i3cnx polygon, #a8i3cnx polyline, #a8i3cnx rect {stroke:currentColor}</style>
    <svg class="definition-scale" color="black" font-family="Times, serif" viewBox="0 0 12950 4200">
       <g class="page-margin" transform="translate(250, 250)">
-         <g id="xiirgnq" class="mdiv pageMilestone" />
-         <g id="yvz4jem" class="score pageMilestone" />
-         <g id="vjctis" class="system">
+         <g id="kh335uz" class="mdiv pageMilestone" />
+         <g id="l152v8ts" class="score pageMilestone" />
+         <g id="i1phhbxi" class="system">
             <path d="M13 540 L13 3060" stroke-width="27" />
-            <g id="f4y71hi" class="grpSym">
+            <g id="soqmjlm" class="grpSym">
                <path d="M-72,3042 C-432,2502 18,1980 -252,1800 C81,1980 -369,2502 -72,3042" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" />
                <path d="M-72,558 C-369,1098 81,1620 -252,1800 C18,1620 -432,1098 -72,558" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" />
             </g>
-            <g id="a1qf7mg7" class="section systemMilestone" />
-            <g id="p1vsclkr" class="section systemMilestone" />
-            <g id="w1hfcfs4" class="measure">
-               <g id="f1y9i0t0" class="staff">
+            <g id="n1wgl4u6" class="section systemMilestone" />
+            <g id="cu1uap0" class="section systemMilestone" />
+            <g id="ju3wfq3" class="measure">
+               <g id="sivwd6n" class="staff">
                   <path d="M0 540 L12451 540" stroke-width="13" />
                   <path d="M0 720 L12451 720" stroke-width="13" />
                   <path d="M0 900 L12451 900" stroke-width="13" />
                   <path d="M0 1080 L12451 1080" stroke-width="13" />
                   <path d="M0 1260 L12451 1260" stroke-width="13" />
-                  <g id="v1wudn6" class="clef">
-                     <use href="#E050-nw463af" transform="translate(117, 1080) scale(0.72, 0.72)" />
+                  <g id="i1w9k1qp" class="clef">
+                     <use href="#E050-a8i3cnx" transform="translate(117, 1080) scale(0.72, 0.72)" />
                   </g>
-                  <g id="wyft69j" class="keySig" />
+                  <g id="jdqxwzr" class="keySig" />
                   <g class="ledgerLines below">
                      <path d="M840 1440 L1162 1440" stroke-width="22" />
                   </g>
-                  <g id="h19n5o4y" class="layer">
-                     <g id="iqms13t" class="note">
+                  <g id="u11mjj9e" class="layer">
+                     <g id="v1dm3aig" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(888, 1440) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(888, 1440) scale(0.72, 0.72)" />
                         </g>
-                        <g id="e1vjad3h" class="stem">
+                        <g id="r1lkvnw3" class="stem">
                            <path d="M1105 1412 L1105 810" stroke-width="18" />
                         </g>
-                        <g id="j1dswkrs" class="accid" />
-                        <g id="k1krar9i" class="verse">
-                           <g id="lemhzxu" class="syl">
+                        <g id="w1g74tfv" class="accid" />
+                        <g id="x1e93oyo" class="verse">
+                           <g id="y1cm7ba5" class="syl">
                               <text x="798" y="1847" font-size="0px">
-                                 <tspan id="m1xk3f4a" class="text">
+                                 <tspan id="z9tooiy" class="text">
                                     <tspan font-size="405px">0</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="n13siyac" class="note">
+                     <g id="a1p18rt9" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(1938, 1350) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(1938, 1350) scale(0.72, 0.72)" />
                         </g>
-                        <g id="f1to7os2" class="stem">
+                        <g id="sr4tnn2" class="stem">
                            <path d="M2155 1322 L2155 720" stroke-width="18" />
                         </g>
-                        <g id="ottht6h" class="accid" />
-                        <g id="puyzv3b" class="verse">
-                           <g id="qc48da" class="syl">
+                        <g id="b1xlwd1w" class="accid" />
+                        <g id="c1x39x7h" class="verse">
+                           <g id="d8gpd8d" class="syl">
                               <text x="1848" y="1847" font-size="0px">
-                                 <tspan id="r13odey8" class="text">
+                                 <tspan id="ejfaulk" class="text">
                                     <tspan font-size="405px">1</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="scxx0bb" class="note">
+                     <g id="f1ybqit3" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(2988, 1260) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(2988, 1260) scale(0.72, 0.72)" />
                         </g>
-                        <g id="gh1qwhw" class="stem">
+                        <g id="toc666z" class="stem">
                            <path d="M3205 1232 L3205 630" stroke-width="18" />
                         </g>
-                        <g id="tkgfe95" class="accid" />
-                        <g id="u1mq8vgv" class="verse">
-                           <g id="v1y282om" class="syl">
+                        <g id="g7wgzin" class="accid" />
+                        <g id="h1lisurv" class="verse">
+                           <g id="i1k4u2e3" class="syl">
                               <text x="2898" y="1847" font-size="0px">
-                                 <tspan id="w19cr4fh" class="text">
+                                 <tspan id="jamu95r" class="text">
                                     <tspan font-size="405px">2</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="xw4g31y" class="note">
+                     <g id="k1e5ymgn" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(4038, 1170) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(4038, 1170) scale(0.72, 0.72)" />
                         </g>
-                        <g id="h1grqg5y" class="stem">
+                        <g id="u27y1az" class="stem">
                            <path d="M4255 1142 L4255 540" stroke-width="18" />
                         </g>
-                        <g id="y11u1vv8" class="accid" />
-                        <g id="z16wpwg5" class="verse">
-                           <g id="agjtggs" class="syl">
+                        <g id="lmfevnw" class="accid" />
+                        <g id="m1pgfqo7" class="verse">
+                           <g id="na65wlf" class="syl">
                               <text x="3948" y="1847" font-size="0px">
-                                 <tspan id="brm0jy6" class="text">
+                                 <tspan id="o7o5ugp" class="text">
                                     <tspan font-size="405px">3</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="c1u4oqib" class="note">
+                     <g id="p92jyit" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(5088, 1080) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(5088, 1080) scale(0.72, 0.72)" />
                         </g>
-                        <g id="i2gp9n" class="stem">
+                        <g id="v1dkosyu" class="stem">
                            <path d="M5305 1052 L5305 450" stroke-width="18" />
                         </g>
-                        <g id="dz2mvfr" class="accid" />
-                        <g id="ekyn1aj" class="verse">
-                           <g id="frpnpvp" class="syl">
+                        <g id="q11asjj9" class="accid" />
+                        <g id="rhtxcki" class="verse">
+                           <g id="s4lpcxk" class="syl">
                               <text x="4998" y="1847" font-size="0px">
-                                 <tspan id="g17hqhaa" class="text">
+                                 <tspan id="tsx2n8f" class="text">
                                     <tspan font-size="405px">4</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="htvxybi" class="note">
+                     <g id="ub6jul8" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(6138, 990) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(6138, 990) scale(0.72, 0.72)" />
                         </g>
-                        <g id="j9a298t" class="stem">
+                        <g id="w121gq0z" class="stem">
                            <path d="M6355 962 L6355 360" stroke-width="18" />
                         </g>
-                        <g id="i1quj18k" class="accid" />
-                        <g id="jxecfuo" class="verse">
-                           <g id="k1l0lk8l" class="syl">
+                        <g id="vosoq2l" class="accid" />
+                        <g id="w1ahu8fh" class="verse">
+                           <g id="xr18fkj" class="syl">
                               <text x="6048" y="1847" font-size="0px">
-                                 <tspan id="l1lpztep" class="text">
+                                 <tspan id="ym5kbzm" class="text">
                                     <tspan font-size="405px">5</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="m1vyx7dd" class="note">
+                     <g id="zywg0zv" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(7188, 900) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(7188, 900) scale(0.72, 0.72)" />
                         </g>
-                        <g id="k1m4pbsa" class="stem">
+                        <g id="xfo5fmw" class="stem">
                            <path d="M7197 925 L7197 1500" stroke-width="18" />
                         </g>
-                        <g id="nax5i1u" class="accid" />
-                        <g id="o192b5cz" class="verse">
-                           <g id="p1x0wtz3" class="syl">
+                        <g id="aovzvgm" class="accid" />
+                        <g id="b55yh7i" class="verse">
+                           <g id="c4sn9dz" class="syl">
                               <text x="7098" y="1847" font-size="0px">
-                                 <tspan id="qzxkdvh" class="text">
+                                 <tspan id="d1ajmwos" class="text">
                                     <tspan font-size="405px">6</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="rut2bwj" class="note">
+                     <g id="e1z103qr" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(8238, 810) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(8238, 810) scale(0.72, 0.72)" />
                         </g>
-                        <g id="l1cvbaun" class="stem">
+                        <g id="y1se01y3" class="stem">
                            <path d="M8247 835 L8247 1440" stroke-width="18" />
                         </g>
-                        <g id="s1iecmzd" class="accid" />
-                        <g id="tkd80t9" class="verse">
-                           <g id="u1fg37bq" class="syl">
+                        <g id="f14kd7p1" class="accid" />
+                        <g id="g1evpncx" class="verse">
+                           <g id="hpt2e4l" class="syl">
                               <text x="8148" y="1847" font-size="0px">
-                                 <tspan id="vwv37wy" class="text">
+                                 <tspan id="i1wl6yeq" class="text">
                                     <tspan font-size="405px">7</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="w1vvwqqu" class="note">
+                     <g id="j1llhyel" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(9288, 720) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(9288, 720) scale(0.72, 0.72)" />
                         </g>
-                        <g id="m1xr8nsp" class="stem">
+                        <g id="z1kiejl7" class="stem">
                            <path d="M9297 745 L9297 1350" stroke-width="18" />
                         </g>
-                        <g id="x15aisci" class="accid" />
-                        <g id="y1o5a2ky" class="verse">
-                           <g id="zcwtpfg" class="syl">
+                        <g id="kswt0ho" class="accid" />
+                        <g id="l7rae7n" class="verse">
+                           <g id="mjm7vyi" class="syl">
                               <text x="9198" y="1847" font-size="0px">
-                                 <tspan id="awznn6s" class="text">
+                                 <tspan id="nakrxi9" class="text">
                                     <tspan font-size="405px">8</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="b14ahbyd" class="note">
+                     <g id="on2xkrj" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(10338, 630) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(10338, 630) scale(0.72, 0.72)" />
                         </g>
-                        <g id="n12lmkbt" class="stem">
+                        <g id="a3xsbj2" class="stem">
                            <path d="M10347 655 L10347 1260" stroke-width="18" />
                         </g>
-                        <g id="cdcsv7a" class="accid" />
-                        <g id="d19sb0qw" class="verse">
-                           <g id="e1sldyzi" class="syl">
+                        <g id="p1m59vfc" class="accid" />
+                        <g id="q1brrxss" class="verse">
+                           <g id="r1krdwx0" class="syl">
                               <text x="10248" y="1847" font-size="0px">
-                                 <tspan id="f1dki2w2" class="text">
+                                 <tspan id="s1smcbo8" class="text">
                                     <tspan font-size="405px">9</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="g1580blb" class="note">
+                     <g id="tpd9zdw" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(11388, 540) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(11388, 540) scale(0.72, 0.72)" />
                         </g>
-                        <g id="o1u7s0ie" class="stem">
+                        <g id="bnd1wxa" class="stem">
                            <path d="M11397 565 L11397 1170" stroke-width="18" />
                         </g>
-                        <g id="h1m8cnni" class="accid" />
-                        <g id="ix4nzhj" class="verse">
-                           <g id="jlzp2zi" class="syl">
+                        <g id="u14wmhfx" class="accid" />
+                        <g id="v1e6qego" class="verse">
+                           <g id="wxov5bf" class="syl">
                               <text x="11298" y="1847" font-size="0px">
-                                 <tspan id="kkgq1lu" class="text">
+                                 <tspan id="xeluvu0" class="text">
                                     <tspan font-size="405px">10</tspan>
                                  </tspan>
                               </text>
@@ -1303,212 +1303,212 @@ below, 14 two octaves above. Twelve bits give it a range of
                      </g>
                   </g>
                </g>
-               <g id="g53vnte" class="staff">
+               <g id="t1iyph32" class="staff">
                   <path d="M0 2340 L12451 2340" stroke-width="13" />
                   <path d="M0 2520 L12451 2520" stroke-width="13" />
                   <path d="M0 2700 L12451 2700" stroke-width="13" />
                   <path d="M0 2880 L12451 2880" stroke-width="13" />
                   <path d="M0 3060 L12451 3060" stroke-width="13" />
-                  <g id="xjx9k4p" class="clef">
-                     <use href="#E062-nw463af" transform="translate(117, 2520) scale(0.72, 0.72)" />
+                  <g id="klcctej" class="clef">
+                     <use href="#E062-a8i3cnx" transform="translate(117, 2520) scale(0.72, 0.72)" />
                   </g>
-                  <g id="ycs0l9p" class="keySig" />
+                  <g id="l4unvsp" class="keySig" />
                   <g class="ledgerLines above">
                      <path d="M840 2160 L1162 2160" stroke-width="22" />
                   </g>
-                  <g id="l14m8dgi" class="layer">
-                     <g id="mx8ogqz" class="note">
+                  <g id="ya85scu" class="layer">
+                     <g id="zipjovh" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(888, 2160) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(888, 2160) scale(0.72, 0.72)" />
                         </g>
-                        <g id="pyr93uo" class="stem">
+                        <g id="c1njycqh" class="stem">
                            <path d="M897 2185 L897 2790" stroke-width="18" />
                         </g>
-                        <g id="n6zdgif" class="accid" />
-                        <g id="o1j6n0g6" class="verse">
-                           <g id="p2nfmz3" class="syl">
+                        <g id="asl8pge" class="accid" />
+                        <g id="b1bmy6gs" class="verse">
+                           <g id="c1njb39d" class="syl">
                               <text x="798" y="3621" font-size="0px">
-                                 <tspan id="q8turdi" class="text">
+                                 <tspan id="dnvjfrw" class="text">
                                     <tspan font-size="405px">0</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="r157eucn" class="note">
+                     <g id="e1okmapk" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(1938, 2250) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(1938, 2250) scale(0.72, 0.72)" />
                         </g>
-                        <g id="qxsj1qh" class="stem">
+                        <g id="d1tnmotv" class="stem">
                            <path d="M1947 2275 L1947 2880" stroke-width="18" />
                         </g>
-                        <g id="s1q6jihl" class="accid" />
-                        <g id="t1nbsgtn" class="verse">
-                           <g id="u1w03gvf" class="syl">
+                        <g id="f169jewt" class="accid" />
+                        <g id="g1p1bnpz" class="verse">
+                           <g id="hx72xfv" class="syl">
                               <text x="1848" y="3621" font-size="0px">
-                                 <tspan id="v10o05o8" class="text">
+                                 <tspan id="i1dwunb4" class="text">
                                     <tspan font-size="405px">-1</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="w1pl9vom" class="note">
+                     <g id="jrnwytd" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(2988, 2340) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(2988, 2340) scale(0.72, 0.72)" />
                         </g>
-                        <g id="r127nnyh" class="stem">
+                        <g id="e11pjyst" class="stem">
                            <path d="M2997 2365 L2997 2970" stroke-width="18" />
                         </g>
-                        <g id="x3fa3c8" class="accid" />
-                        <g id="y1439r2m" class="verse">
-                           <g id="zo8v2xw" class="syl">
+                        <g id="k1eqm06" class="accid" />
+                        <g id="lju87pm" class="verse">
+                           <g id="mab8q1z" class="syl">
                               <text x="2898" y="3621" font-size="0px">
-                                 <tspan id="a1d3e03t" class="text">
+                                 <tspan id="n13q4lkf" class="text">
                                     <tspan font-size="405px">-2</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="bixuwzg" class="note">
+                     <g id="ou0rm39" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(4038, 2430) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(4038, 2430) scale(0.72, 0.72)" />
                         </g>
-                        <g id="sb5etrt" class="stem">
+                        <g id="fe3aapu" class="stem">
                            <path d="M4047 2455 L4047 3060" stroke-width="18" />
                         </g>
-                        <g id="c1oompz9" class="accid" />
-                        <g id="djk76t4" class="verse">
-                           <g id="e12svnvn" class="syl">
+                        <g id="prxbdrk" class="accid" />
+                        <g id="qsma2c6" class="verse">
+                           <g id="rzabl7q" class="syl">
                               <text x="3948" y="3621" font-size="0px">
-                                 <tspan id="fjod6df" class="text">
+                                 <tspan id="s1weiocq" class="text">
                                     <tspan font-size="405px">-3</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="goaadzd" class="note">
+                     <g id="t1wpp35h" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(5088, 2520) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(5088, 2520) scale(0.72, 0.72)" />
                         </g>
-                        <g id="t1gy4qkz" class="stem">
+                        <g id="gvg2aq2" class="stem">
                            <path d="M5097 2545 L5097 3150" stroke-width="18" />
                         </g>
-                        <g id="h8z3brr" class="accid" />
-                        <g id="i1yca6lf" class="verse">
-                           <g id="jqvmjt3" class="syl">
+                        <g id="uuexjy9" class="accid" />
+                        <g id="v18dy0y5" class="verse">
+                           <g id="wnvexwn" class="syl">
                               <text x="4998" y="3621" font-size="0px">
-                                 <tspan id="ke2yczr" class="text">
+                                 <tspan id="xbrlnvi" class="text">
                                     <tspan font-size="405px">-4</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="l1uy2nnz" class="note">
+                     <g id="yb36ofb" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(6138, 2610) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(6138, 2610) scale(0.72, 0.72)" />
                         </g>
-                        <g id="u1djbag0" class="stem">
+                        <g id="h11cyul6" class="stem">
                            <path d="M6147 2635 L6147 3240" stroke-width="18" />
                         </g>
-                        <g id="m17x3w6w" class="accid" />
-                        <g id="nkidbr" class="verse">
-                           <g id="oni4mtk" class="syl">
+                        <g id="zpd240b" class="accid" />
+                        <g id="a1wh45pq" class="verse">
+                           <g id="b1hm3hja" class="syl">
                               <text x="6048" y="3621" font-size="0px">
-                                 <tspan id="p2o0vg4" class="text">
+                                 <tspan id="c11hl9i7" class="text">
                                     <tspan font-size="405px">-5</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="q1o44i8n" class="note">
+                     <g id="d1qlr0ag" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(7188, 2700) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(7188, 2700) scale(0.72, 0.72)" />
                         </g>
-                        <g id="vc553c3" class="stem">
+                        <g id="i87pjng" class="stem">
                            <path d="M7197 2725 L7197 3300" stroke-width="18" />
                         </g>
-                        <g id="rh6y0zv" class="accid" />
-                        <g id="s1095xmr" class="verse">
-                           <g id="tvg9w3f" class="syl">
+                        <g id="e1irsus6" class="accid" />
+                        <g id="f1w68i8t" class="verse">
+                           <g id="gxt7tj7" class="syl">
                               <text x="7098" y="3621" font-size="0px">
-                                 <tspan id="u14jqjka" class="text">
+                                 <tspan id="h18iq0sk" class="text">
                                     <tspan font-size="405px">-6</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="v1n5uca6" class="note">
+                     <g id="i1jyytla" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(8238, 2790) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(8238, 2790) scale(0.72, 0.72)" />
                         </g>
-                        <g id="w14o2pgk" class="stem">
+                        <g id="j1daef65" class="stem">
                            <path d="M8455 2762 L8455 2160" stroke-width="18" />
                         </g>
-                        <g id="wjl4vt3" class="accid" />
-                        <g id="x1esaevc" class="verse">
-                           <g id="y17c3bkx" class="syl">
+                        <g id="jbff0p1" class="accid" />
+                        <g id="k1x4n9sn" class="verse">
+                           <g id="loy7w5" class="syl">
                               <text x="8148" y="3621" font-size="0px">
-                                 <tspan id="z1tm7l16" class="text">
+                                 <tspan id="mdbse40" class="text">
                                     <tspan font-size="405px">-7</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="aufuzv8" class="note">
+                     <g id="njixc6c" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(9288, 2880) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(9288, 2880) scale(0.72, 0.72)" />
                         </g>
-                        <g id="xi19uwd" class="stem">
+                        <g id="k796zcf" class="stem">
                            <path d="M9505 2852 L9505 2250" stroke-width="18" />
                         </g>
-                        <g id="bc2kupv" class="accid" />
-                        <g id="c1a9w212" class="verse">
-                           <g id="d14ntxqc" class="syl">
+                        <g id="o14b8z9q" class="accid" />
+                        <g id="poc0d6y" class="verse">
+                           <g id="q1ga4vnf" class="syl">
                               <text x="9198" y="3621" font-size="0px">
-                                 <tspan id="ed5pxnn" class="text">
+                                 <tspan id="r11zhdbd" class="text">
                                     <tspan font-size="405px">-8</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="f1gbe367" class="note">
+                     <g id="sdpp6ph" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(10338, 2970) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(10338, 2970) scale(0.72, 0.72)" />
                         </g>
-                        <g id="y9lzuo9" class="stem">
+                        <g id="ldu9ix" class="stem">
                            <path d="M10555 2942 L10555 2340" stroke-width="18" />
                         </g>
-                        <g id="g1xhjh5m" class="accid" />
-                        <g id="hlb65ue" class="verse">
-                           <g id="i1l3reo1" class="syl">
+                        <g id="t125v0qd" class="accid" />
+                        <g id="ulrsmb8" class="verse">
+                           <g id="v1obfo9v" class="syl">
                               <text x="10248" y="3621" font-size="0px">
-                                 <tspan id="jf2dnbb" class="text">
+                                 <tspan id="wct0gu" class="text">
                                     <tspan font-size="405px">-9</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="k14iyo40" class="note">
+                     <g id="x1pmd9zs" class="note">
                         <g class="notehead">
-                           <use href="#E0A3-nw463af" transform="translate(11388, 3060) scale(0.72, 0.72)" />
+                           <use href="#E0A3-a8i3cnx" transform="translate(11388, 3060) scale(0.72, 0.72)" />
                         </g>
-                        <g id="z1snx7vg" class="stem">
+                        <g id="mts1gsf" class="stem">
                            <path d="M11605 3032 L11605 2430" stroke-width="18" />
                         </g>
-                        <g id="l1d80957" class="accid" />
-                        <g id="mmytf58" class="verse">
-                           <g id="nvyivlx" class="syl">
+                        <g id="y14a273u" class="accid" />
+                        <g id="z1nh5kks" class="verse">
+                           <g id="areg515" class="syl">
                               <text x="11298" y="3621" font-size="0px">
-                                 <tspan id="o14gbidz" class="text">
+                                 <tspan id="b17f6ka6" class="text">
                                     <tspan font-size="405px">-10</tspan>
                                  </tspan>
                               </text>
@@ -1517,17 +1517,17 @@ below, 14 two octaves above. Twelve bits give it a range of
                      </g>
                   </g>
                </g>
-               <g id="e1mvttl0" class="barLine">
+               <g id="rqnq6q" class="barLine">
                   <path d="M12438 540 L12438 1260" stroke-width="27" />
                   <path d="M12438 2340 L12438 3060" stroke-width="27" />
                   <path d="M12438 1260 L12438 2340" stroke-width="27" />
                </g>
             </g>
-            <g id="ymacy2i" class="systemMilestoneEnd p1vsclkr" />
-            <g id="z5yr1e2" class="systemMilestoneEnd a1qf7mg7" />
+            <g id="lv6q3zh" class="systemMilestoneEnd cu1uap0" />
+            <g id="m345ub" class="systemMilestoneEnd n1wgl4u6" />
          </g>
-         <g id="ab8nysu" class="pageMilestoneEnd yvz4jem" />
-         <g id="bgnv0za" class="pageMilestoneEnd xiirgnq" />
+         <g id="n1u7ims" class="pageMilestoneEnd l152v8ts" />
+         <g id="o11e7nym" class="pageMilestoneEnd kh335uz" />
       </g>
    </svg>
 </svg>
@@ -1538,121 +1538,121 @@ below, 14 two octaves above. Twelve bits give it a range of
 the note the key gives, +1 a semitone above it, &minus;1 a semitone below.</p>
 <p>It is measured against the key, not against the printed accidental:</p>
 
-<div class=score><div class=scorerow><div class=scorekey><span>Harmonic value:</span><span>Alteration:</span></div><div class=scoreart><svg viewBox="0 0 199 83" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" overflow="visible" id="ovg95d">
+<div class=score><div class=scorerow><div class=scorekey><span>Harmonic value:</span><span>Alteration:</span></div><div class=scoreart><svg viewBox="0 0 199 83" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" overflow="visible" id="bcnsbgd">
    <desc>Engraved by Verovio 6.2.1-8d42439</desc>
    <defs>
-      <g id="E050-ovg95d">
+      <g id="E050-bcnsbgd">
          <path transform="scale(1,-1)" d="M441 -245c-23 -4 -48 -6 -76 -6c-59 0 -102 7 -130 20c-88 42 -150 93 -187 154c-26 44 -43 103 -48 176c0 6 -1 13 -1 19c0 54 15 111 45 170c29 57 65 106 110 148s96 85 153 127c-3 16 -8 46 -13 92c-4 43 -5 73 -5 89c0 117 16 172 69 257c34 54 64 82 89 82 c21 0 43 -30 69 -92s39 -115 41 -159v-15c0 -109 -21 -162 -67 -241c-13 -20 -63 -90 -98 -118c-13 -9 -25 -19 -37 -29l31 -181c8 1 18 2 28 2c58 0 102 -12 133 -35c59 -43 92 -104 98 -184c1 -7 1 -15 1 -22c0 -123 -87 -209 -181 -248c8 -57 17 -110 25 -162 c5 -31 6 -58 6 -80c0 -30 -5 -53 -14 -70c-35 -64 -88 -99 -158 -103c-5 0 -11 -1 -16 -1c-37 0 -72 10 -108 27c-50 24 -77 59 -80 105v11c0 29 7 55 20 76c18 28 45 42 79 44h6c49 0 93 -42 97 -87v-9c0 -51 -34 -86 -105 -106c17 -24 51 -36 102 -36c62 0 116 43 140 85 c9 16 13 41 13 74c0 20 -1 42 -5 67c-8 53 -18 106 -26 159zM461 939c-95 0 -135 -175 -135 -286c0 -24 2 -48 5 -71c50 39 92 82 127 128c40 53 60 100 60 140v8c-4 53 -22 81 -55 81h-2zM406 119l54 -326c73 25 110 78 110 161c0 7 0 15 -1 23c-7 95 -57 142 -151 142h-12 zM382 117c-72 -2 -128 -47 -128 -120v-7c2 -46 43 -99 75 -115c-3 -2 -7 -5 -10 -10c-70 33 -116 88 -123 172v11c0 68 44 126 88 159c23 17 49 29 78 36l-29 170c-21 -13 -52 -37 -92 -73c-50 -44 -86 -84 -109 -119c-45 -69 -67 -130 -67 -182v-13c5 -68 35 -127 93 -176 s125 -73 203 -73c25 0 50 3 75 9c-19 111 -36 221 -54 331z" />
       </g>
-      <g id="E262-ovg95d">
+      <g id="E262-bcnsbgd">
          <path transform="scale(1,-1)" d="M136 186v169h17v-164l44 14v-91l-44 -14v-165l44 12v-91l-44 -13v-155h-17v150l-76 -22v-155h-17v149l-43 -13v90l43 14v167l-43 -14v92l43 13v169h17v-163zM60 73v-167l76 22v168z" />
       </g>
-      <g id="E0A2-ovg95d">
+      <g id="E0A2-bcnsbgd">
          <path transform="scale(1,-1)" d="M198 133c102 0 207 -45 207 -133c0 -92 -118 -133 -227 -133c-101 0 -178 46 -178 133c0 88 93 133 198 133zM293 -21c0 14 -3 29 -8 44c-7 20 -18 38 -33 54c-20 21 -43 31 -68 31l-20 -2c-15 -5 -27 -14 -36 -28c-4 -9 -6 -17 -8 -24s-3 -16 -3 -27c0 -15 3 -34 9 -57 s18 -41 34 -55c15 -15 36 -23 62 -23c4 0 10 1 18 2c19 5 32 15 40 30s13 34 13 55z" />
       </g>
-      <g id="E261-ovg95d">
+      <g id="E261-bcnsbgd">
          <path transform="scale(1,-1)" d="M0 -188v539h18v-191l139 22v-533h-17v186zM18 -100l122 17v176l-122 -19v-174z" />
       </g>
-      <g id="E263-ovg95d">
+      <g id="E263-bcnsbgd">
          <path transform="scale(1,-1)" d="M0 120h74v-54l15 -17h79l15 16v55h74v-72h-59l-25 -28v-38l25 -32h59v-70h-75v55l-14 15h-80l-14 -15v-55h-74v72h60l26 30v38l-28 29h-58v71z" />
       </g>
    </defs>
-   <style type="text/css">#ovg95d g.ending, #ovg95d g.fing, #ovg95d g.reh, #ovg95d g.tempo {font-weight:bold;}#ovg95d g.dir, #ovg95d g.dynam, #ovg95d g.mNum {font-style:italic;}#ovg95d g.label {font-weight:normal;}#ovg95d ellipse, #ovg95d path, #ovg95d polygon, #ovg95d polyline, #ovg95d rect {stroke:currentColor}</style>
+   <style type="text/css">#bcnsbgd g.ending, #bcnsbgd g.fing, #bcnsbgd g.reh, #bcnsbgd g.tempo {font-weight:bold;}#bcnsbgd g.dir, #bcnsbgd g.dynam, #bcnsbgd g.mNum {font-style:italic;}#bcnsbgd g.label {font-weight:normal;}#bcnsbgd ellipse, #bcnsbgd path, #bcnsbgd polygon, #bcnsbgd polyline, #bcnsbgd rect {stroke:currentColor}</style>
    <svg class="definition-scale" color="black" font-family="Times, serif" viewBox="0 0 6610 2740">
       <g class="page-margin" transform="translate(250, 250)">
-         <g id="y1n8mcex" class="mdiv pageMilestone" />
-         <g id="z1h5rokd" class="score pageMilestone" />
-         <g id="c2ff5v9" class="system">
-            <g id="b1aigaiq" class="section systemMilestone" />
-            <g id="w1vg7hma" class="section systemMilestone" />
-            <g id="nw9zh7k" class="measure">
-               <g id="whqujxh" class="staff">
+         <g id="l1eps8pu" class="mdiv pageMilestone" />
+         <g id="m1pemzd" class="score pageMilestone" />
+         <g id="pftute2" class="system">
+            <g id="oex87yb" class="section systemMilestone" />
+            <g id="j38ruji" class="section systemMilestone" />
+            <g id="aqzq6an" class="measure">
+               <g id="j1lrjniy" class="staff">
                   <path d="M0 540 L6115 540" stroke-width="13" />
                   <path d="M0 720 L6115 720" stroke-width="13" />
                   <path d="M0 900 L6115 900" stroke-width="13" />
                   <path d="M0 1080 L6115 1080" stroke-width="13" />
                   <path d="M0 1260 L6115 1260" stroke-width="13" />
-                  <g id="na36vut" class="clef">
-                     <use href="#E050-ovg95d" transform="translate(90, 1080) scale(0.72, 0.72)" />
+                  <g id="apc4hlu" class="clef">
+                     <use href="#E050-bcnsbgd" transform="translate(90, 1080) scale(0.72, 0.72)" />
                   </g>
-                  <g id="ovfwjg7" class="keySig">
-                     <g id="pyy4nqy" class="keyAccid">
-                        <use href="#E262-ovg95d" transform="translate(735, 540) scale(0.72, 0.72)" />
+                  <g id="b1a3gfko" class="keySig">
+                     <g id="cdcj77v" class="keyAccid">
+                        <use href="#E262-bcnsbgd" transform="translate(735, 540) scale(0.72, 0.72)" />
                      </g>
                   </g>
-                  <g id="xnxw004" class="layer">
-                     <g id="y1swudaf" class="note">
+                  <g id="k14829s5" class="layer">
+                     <g id="l1owisow" class="note">
                         <g class="notehead">
-                           <use href="#E0A2-ovg95d" transform="translate(1332, 1170) scale(0.72, 0.72)" />
+                           <use href="#E0A2-bcnsbgd" transform="translate(1332, 1170) scale(0.72, 0.72)" />
                         </g>
-                        <g id="z718d7d" class="accid">
-                           <use href="#E262-ovg95d" transform="translate(1146, 1170) scale(0.72, 0.72)" />
+                        <g id="m12sbk2y" class="accid">
+                           <use href="#E262-bcnsbgd" transform="translate(1146, 1170) scale(0.72, 0.72)" />
                         </g>
-                        <g id="az5e06y" class="verse">
-                           <g id="bfdqjwa" class="syl">
+                        <g id="n1l4kt57" class="verse">
+                           <g id="o1h2vrkz" class="syl">
                               <text x="1242" y="1752" font-size="0px">
-                                 <tspan id="c1w10n33" class="text">
+                                 <tspan id="pu4ambw" class="text">
                                     <tspan font-size="405px">−1</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
-                        <g id="dmazlnt" class="verse">
-                           <g id="e1bnv7kr" class="syl">
+                        <g id="q68z2ws" class="verse">
+                           <g id="ryx8ikq" class="syl">
                               <text x="1242" y="2152" font-size="0px">
-                                 <tspan id="f1sf01gn" class="text">
+                                 <tspan id="sedtkhz" class="text">
                                     <tspan font-size="405px">0</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="g14maaeg" class="note">
+                     <g id="tl5vyta" class="note">
                         <g class="notehead">
-                           <use href="#E0A2-ovg95d" transform="translate(2922, 1170) scale(0.72, 0.72)" />
+                           <use href="#E0A2-bcnsbgd" transform="translate(2922, 1170) scale(0.72, 0.72)" />
                         </g>
-                        <g id="h1bsipvv" class="accid">
-                           <use href="#E261-ovg95d" transform="translate(2764, 1170) scale(0.72, 0.72)" />
+                        <g id="ui3g7qw" class="accid">
+                           <use href="#E261-bcnsbgd" transform="translate(2764, 1170) scale(0.72, 0.72)" />
                         </g>
-                        <g id="ih3c7zt" class="verse">
-                           <g id="jg0jbkm" class="syl">
+                        <g id="v1kmmh7u" class="verse">
+                           <g id="w6rr53m" class="syl">
                               <text x="2832" y="1752" font-size="0px">
-                                 <tspan id="k3zs5lh" class="text">
+                                 <tspan id="x1e3jls0" class="text">
                                     <tspan font-size="405px">−1</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
-                        <g id="lfnuo91" class="verse">
-                           <g id="m1vgsb0f" class="syl">
+                        <g id="y92nqz3" class="verse">
+                           <g id="z2r42yg" class="syl">
                               <text x="2832" y="2152" font-size="0px">
-                                 <tspan id="n16366zz" class="text">
+                                 <tspan id="a1e0j9vm" class="text">
                                     <tspan font-size="405px">−1</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
                      </g>
-                     <g id="o1r8fl7p" class="note">
+                     <g id="baj6koz" class="note">
                         <g class="notehead">
-                           <use href="#E0A2-ovg95d" transform="translate(4512, 1170) scale(0.72, 0.72)" />
+                           <use href="#E0A2-bcnsbgd" transform="translate(4512, 1170) scale(0.72, 0.72)" />
                         </g>
-                        <g id="p1szm7ag" class="accid">
-                           <use href="#E263-ovg95d" transform="translate(4282, 1170) scale(0.72, 0.72)" />
+                        <g id="c1l0qgw3" class="accid">
+                           <use href="#E263-bcnsbgd" transform="translate(4282, 1170) scale(0.72, 0.72)" />
                         </g>
-                        <g id="qsmy328" class="verse">
-                           <g id="r1fbfwd0" class="syl">
+                        <g id="d19499pt" class="verse">
+                           <g id="e9pd2x0" class="syl">
                               <text x="4422" y="1752" font-size="0px">
-                                 <tspan id="s4au414" class="text">
+                                 <tspan id="f1wjcszg" class="text">
                                     <tspan font-size="405px">−1</tspan>
                                  </tspan>
                               </text>
                            </g>
                         </g>
-                        <g id="t189d404" class="verse">
-                           <g id="ul62i50" class="syl">
+                        <g id="g7mkn4u" class="verse">
+                           <g id="h1a0zlib" class="syl">
                               <text x="4422" y="2152" font-size="0px">
-                                 <tspan id="vms0mvc" class="text">
+                                 <tspan id="i12hze5j" class="text">
                                     <tspan font-size="405px">+1</tspan>
                                  </tspan>
                               </text>
@@ -1661,15 +1661,15 @@ the note the key gives, +1 a semitone above it, &minus;1 a semitone below.</p>
                      </g>
                   </g>
                </g>
-               <g id="v1auy6qb" class="barLine">
+               <g id="i124ae40" class="barLine">
                   <path d="M6102 540 L6102 1260" stroke-width="27" />
                </g>
             </g>
-            <g id="fj41o4m" class="systemMilestoneEnd w1vg7hma" />
-            <g id="g1yvr1km" class="systemMilestoneEnd b1aigaiq" />
+            <g id="sg7hyr2" class="systemMilestoneEnd j38ruji" />
+            <g id="t1ese1c7" class="systemMilestoneEnd oex87yb" />
          </g>
-         <g id="h1xmdsm2" class="pageMilestoneEnd z1h5rokd" />
-         <g id="i9s3idd" class="pageMilestoneEnd y1n8mcex" />
+         <g id="u1l2mgpe" class="pageMilestoneEnd m1pemzd" />
+         <g id="v5upa91" class="pageMilestoneEnd l1eps8pu" />
       </g>
    </svg>
 </svg>
