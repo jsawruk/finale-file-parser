@@ -18,10 +18,11 @@ carry frame2/frame3). Which slot placed an entry is recorded as `layer`, because
 each layer independently fills the measure: durations must be grouped by layer or
 a multi-layer measure appears to hold two or three times its time signature.
 
-Not every measure carries a `keySig` (449 of 2622 omit it); a measure without
-one inherits the previous measure's effective key, computed by walking measures
-in cmper order. The
-key is exposed raw (undecoded) -- decoding it is a later slice.
+Not every measure carries a `keySig` (449 of 2622 omit it), and **a measure
+without one is C major** -- Finale writes C major by omitting the element rather
+than by storing zero. See `effective_keys` for the evidence, and for why reading
+the absence as inheritance is wrong. The key is exposed raw (undecoded) --
+decoding it is a later slice.
 
 A frame number (`gfhold`'s `frame1..4`) can name more than one `frameSpec`
 *incidence* sharing that `cmper`: 73 of 67,558 corpus frame cmpers carry two
@@ -138,7 +139,23 @@ def locate_entries(doc: EnigmaDocument) -> dict[int, EntryLocation]:
 
 
 def effective_keys(doc: EnigmaDocument) -> dict[int, int]:
-    """Effective raw key per measure, carrying the last seen `keySig.key` forward."""
+    """Effective raw key per measure.
+
+    **A measure whose `measSpec` carries no `keySig` is C major, not a
+    continuation of the previous key.** Finale writes C major by omitting the
+    element rather than by storing zero: across 401 corpus documents not one of
+    19,644 `keySig` elements holds the value 0.
+
+    Reading the absence as inheritance is the tempting mistake, and it is wrong.
+    `Easy Holiday Ukulele Songbook.musx` runs `key=1` for measures 1-32, no
+    element for 33-52, then `key=1` again from 53. Finale renders measure 33
+    with a natural cancelling the sharp and chords of C, G7 and F: a key change
+    to C major, at the start of a new song. Inheriting there spells twenty
+    measures a step sharp -- F# where the file means F.
+
+    A measure with no `measSpec` at all is a different case: nothing is stated
+    about it, so the running key carries across the gap.
+    """
     meas_specs = [r for r in doc.others.of_tag("measSpec") if "part" not in r.attrs]
     by_measure = {_int(r.attrs.get("cmper"), "measSpec cmper"): r for r in meas_specs}
     if not by_measure:
@@ -148,12 +165,17 @@ def effective_keys(doc: EnigmaDocument) -> dict[int, int]:
     last = 0
     for measure in range(min(by_measure), max(by_measure) + 1):
         record = by_measure.get(measure)
-        key_sig = record.fields.get("keySig") if record is not None else None
+        if record is None:
+            result[measure] = last  # no measure stated; carry across the gap
+            continue
+        key_sig = record.fields.get("keySig")
         if isinstance(key_sig, Record):
             key_value = key_sig.fields.get("key")
             if not isinstance(key_value, str):
                 raise MalformedScoreError(f"measSpec {measure} keySig.key is missing or not scalar")
             last = _int(key_value, "keySig.key")
+        else:
+            last = 0  # no keySig element: C major
         result[measure] = last
     return result
 

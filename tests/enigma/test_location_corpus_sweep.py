@@ -97,3 +97,57 @@ def test_layers_are_recorded_and_multi_layer_measures_exist() -> None:
     assert set(seen) <= {1, 2, 3, 4}, f"layer outside 1-4: {sorted(seen)}"
     assert seen[1] > 0
     assert multi_layer_measures > 0, "corpus exercises only layer 1; the field is untested"
+
+
+RETURNS_TO_C = 18
+"""Times a measure drops its `keySig` while a non-C key is running.
+
+A `measSpec` that carries no `keySig` is C major. Reading the absence as
+"carry the previous key forward" instead keeps a piece in its opening key
+through every passage that returns to C, and the reader did exactly that until
+`Easy Holiday Ukulele Songbook.musx` was rendered: key=1 through measure 32, no
+element for 33-52, key=1 again from 53, and Finale showing a natural cancelling
+the sharp over chords of C, G7 and F.
+
+Each is the start of a passage in C major. Across the corpus they cover 741
+measures holding 11,421 entries.
+
+Pinned because **nothing else moved when the rule was corrected**. The full
+suite passed under both readings, so every one of those entries was invisible to
+every other assertion. This number falling means a passage stopped returning to
+C; it rising means more documents do.
+"""
+
+DOCUMENTS_RETURNING_TO_C = 15
+"""Corpus documents containing at least one such measure."""
+
+
+def test_a_measure_without_a_keysig_reads_as_c_major_not_the_previous_key() -> None:
+    """See `MEASURES_RETURNING_TO_C`. Counts only measures where the two rules
+    disagree: a measure with no `keySig` whose running key is not already 0."""
+    from finale_file_parser.enigma.location import effective_keys
+
+    measures = 0
+    documents = 0
+    for path in _archives():
+        document = parse_enigma(score_xml(path))
+        keys = effective_keys(document)
+        specs = {
+            int(r.attrs["cmper"]): r
+            for r in document.others.of_tag("measSpec")
+            if "part" not in r.attrs and "cmper" in r.attrs
+        }
+        running = 0
+        hit = 0
+        for measure in sorted(specs):
+            record = specs[measure]
+            stated = record.fields.get("keySig")
+            if stated is None and running != 0:
+                hit += 1
+            running = keys.get(measure, running)
+        if hit:
+            documents += 1
+            measures += hit
+
+    assert measures == RETURNS_TO_C
+    assert documents == DOCUMENTS_RETURNING_TO_C
