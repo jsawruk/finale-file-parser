@@ -122,7 +122,7 @@ def engrave_xml(xml: str) -> str:
     tk.setOptions(_OPTIONS)
     if not tk.loadData(xml):
         return ""
-    return tk.renderToSVG(1)
+    return _restyle(tk.renderToSVG(1))
 
 
 def engrave(
@@ -138,3 +138,25 @@ def engrave(
     if not tk.loadData(musicxml(notes, fifths, show_acc)):
         return ""
     return tk.renderToSVG(1)
+
+
+_LYRIC_STYLE = (
+    "<style>.syl text, .syl tspan {"
+    " font-family: Charter, Georgia, 'Times New Roman', serif;"
+    " font-size: 265px; }</style>"
+)
+
+
+def _restyle(svg: str) -> str:
+    """Set the lyric numbers in the document's own face, at a chosen size.
+
+    Verovio engraves lyrics in its text font at staff scale, which lands far
+    larger than the body text and cannot be brought down past its lyricSize
+    floor. Its *positioning* is right, though -- each number centred under its
+    note -- so the numbers stay where Verovio put them and only their typography
+    is overridden, by a stylesheet inside the SVG.
+    """
+    at = svg.find(">", svg.find("<svg"))
+    if at < 0:
+        return svg
+    return svg[: at + 1] + _LYRIC_STYLE + svg[at + 1 :]
