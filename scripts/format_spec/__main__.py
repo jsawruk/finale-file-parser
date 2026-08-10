@@ -508,11 +508,12 @@ frames naming the same entry span is how a <em>mirror</em> is stored
 marks it as such: the two <code>gfhold</code> records are ordinary, and the only
 sign is that their frames resolve to the same entries.
 
-<p>A reader that gives each entry a single location cannot represent that, and
-must choose. Emitting the notes twice puts them in both places, which is what
-the file means but breaks any model where an entry has one home; refusing is
-safe but rejects a document Finale considers valid. This implementation refuses,
-and the eight non-building corpus documents include one such file.</p></div>
+<p>The record decodes without difficulty; what is hard is representing it. An
+intermediate form that gives each entry one location cannot hold an entry that
+sounds in two places, so this implementation refuses such a document rather than
+place the notes wrongly. That is a limitation of the representation, not of the
+decoding, and one of the eight non-building corpus documents is a case of
+it.</p></div>
 """
     + catalog.render_tag_tables(),
 )

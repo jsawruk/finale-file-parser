@@ -426,7 +426,7 @@ each other by key, and a record's payload holds its fields &mdash; of which only
 an entry's notes are themselves a repeated substructure.</strong></div>
 
 <h3>2011 era: self-identifying records</h3>
-<div class=structblock><p class=caption>A 2011-era record: tag 176 (measSpec), key 1, score part. One record occupies 10 + length + 4 bytes.</p><pre class=cstruct>struct MusRecord2011 {
+<div class=structblock><p class=caption>A measSpec (tag 176) describing measure 1, belonging to the score rather than to a linked part. One record occupies 10 + length + 4 bytes.</p><pre class=cstruct>struct MusRecord2011 {
     uint16   tag;                         // +0x0    record type; .musx names the sa...
     uint16   cmper;                       // +0x2    the (n) in an ETF ^XX(n) — the...
     uint16   part;                        // +0x4    0 for the score, then 1, 2, ......
@@ -440,10 +440,10 @@ an entry's notes are themselves a repeated substructure.</strong></div>
 carries its own length, a DCL row is always 16 bytes and a long record simply
 continues into the next row.</p>
 <div class=structblock><p class=caption>A 2001&ndash;2005 others row: fixed 16 bytes, ETF's two-character tag.</p><pre class=cstruct>struct DclOthersRow {
-    uint16     cmper;                     // +0x0    the (n) in an ETF ^XX(n)
+    uint16     cmper;                     // +0x0    the (n) in an ETF ^XX(n) — the...
     uint16     tag;                       // +0x2    two characters stored as a u16
     uint8[12]  data;                      // +0x4    six 16-bit values, or three 32-...
-};</pre><table class=struct><thead><tr><th></th><th>offset</th><th>size</th><th>type</th><th>field</th><th>meaning</th></tr></thead><tbody><tr><td class=sw><span class=swatch style="background:#ffd9d9"></span></td><td class=off>0x00&#8211;0x01</td><td class=sz>2</td><td class=ty><code>uint16</code></td><td class=nm><code>cmper</code></td><td class=nt>the (n) in an ETF ^XX(n)</td></tr><tr><td class=sw><span class=swatch style="background:#d9ecff"></span></td><td class=off>0x02&#8211;0x03</td><td class=sz>2</td><td class=ty><code>uint16</code></td><td class=nm><code>tag</code></td><td class=nt>two characters stored as a u16</td></tr><tr><td class=sw><span class=swatch style="background:#dcffd9"></span></td><td class=off>0x04&#8211;0x0f</td><td class=sz>12</td><td class=ty><code>uint8[12]</code></td><td class=nm><code>data</code></td><td class=nt>six 16-bit values, or three 32-bit (ETF: twobytes and fourbytes)</td></tr></tbody></table><p class=hexcap>Example bytes (16 shown), tinted to match the table above.</p><div class=hexdump><div class=hexrow><span class=off>0000</span><span class=hex><span class=b style="background:#ffd9d9" title="cmper">01</span> <span class=b style="background:#ffd9d9" title="cmper">00</span> <span class=b style="background:#d9ecff" title="tag">53</span> <span class=b style="background:#d9ecff" title="tag">4d</span> <span class=b style="background:#dcffd9" title="data">60</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">58</span> <span class=b style="background:#dcffd9" title="data">02</span> <span class=b style="background:#dcffd9" title="data">04</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">01</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">00</span></span><span class=asc><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#d9ecff">S</span><span class=b style="background:#d9ecff">M</span><span class=b style="background:#dcffd9">`</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">X</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span></span></div></div><p class=note>A record too big for one row <strong>runs on into further rows</strong> under the same tag and key. ETF calls each row an <em>incidence</em>, and a record's payload is its rows' data concatenated in file order. A reader knows where a record ends because rows are grouped and sorted by tag and key: the run stops at the first row whose tag or key differs. The expected number of rows is a property of each structure rather than anything the file states. Coda's specification gives it per record type, saying a staff spec is stored over three incidences and a page spec over two. The final row is zero-padded to fill it. Since the file never records that number, concatenating until the key changes is the reliable rule.</p><p class=note><strong>Worked example.</strong> A staff spec's transposition sits at offset 20 of the record. No row is 20 bytes long &mdash; each carries only 12 bytes of data &mdash; so offset 20 exists only once the rows are joined:<br><br><code>&nbsp;&nbsp;row 0&nbsp;&nbsp;[cmper][tag][ 12 bytes ]&nbsp;&rarr;&nbsp;payload offsets&nbsp; 0..11</code><br><code>&nbsp;&nbsp;row 1&nbsp;&nbsp;[cmper][tag][ 12 bytes ]&nbsp;&rarr;&nbsp;payload offsets 12..23</code><br><code>&nbsp;&nbsp;row 2&nbsp;&nbsp;[cmper][tag][ 12 bytes ]&nbsp;&rarr;&nbsp;payload offsets 24..35</code><br><br>Offset 20 falls in <strong>row 1, eight bytes into that row's data</strong>. A reader does not compute that. It concatenates the rows' data into one 36-byte payload and reads offset 20 of it, exactly as it would for a 2011 record that arrived in one piece. Each row's own <code>cmper</code> and tag are addressing, not content, and are dropped before the join.</p></div>
+};</pre><table class=struct><thead><tr><th></th><th>offset</th><th>size</th><th>type</th><th>field</th><th>meaning</th></tr></thead><tbody><tr><td class=sw><span class=swatch style="background:#ffd9d9"></span></td><td class=off>0x00&#8211;0x01</td><td class=sz>2</td><td class=ty><code>uint16</code></td><td class=nm><code>cmper</code></td><td class=nt>the (n) in an ETF ^XX(n) — the record&#x27;s key</td></tr><tr><td class=sw><span class=swatch style="background:#d9ecff"></span></td><td class=off>0x02&#8211;0x03</td><td class=sz>2</td><td class=ty><code>uint16</code></td><td class=nm><code>tag</code></td><td class=nt>two characters stored as a u16</td></tr><tr><td class=sw><span class=swatch style="background:#dcffd9"></span></td><td class=off>0x04&#8211;0x0f</td><td class=sz>12</td><td class=ty><code>uint8[12]</code></td><td class=nm><code>data</code></td><td class=nt>six 16-bit values, or three 32-bit (ETF: twobytes and fourbytes)</td></tr></tbody></table><p class=hexcap>Example bytes (16 shown), tinted to match the table above.</p><div class=hexdump><div class=hexrow><span class=off>0000</span><span class=hex><span class=b style="background:#ffd9d9" title="cmper">01</span> <span class=b style="background:#ffd9d9" title="cmper">00</span> <span class=b style="background:#d9ecff" title="tag">53</span> <span class=b style="background:#d9ecff" title="tag">4d</span> <span class=b style="background:#dcffd9" title="data">60</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">58</span> <span class=b style="background:#dcffd9" title="data">02</span> <span class=b style="background:#dcffd9" title="data">04</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">01</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">00</span> <span class=b style="background:#dcffd9" title="data">00</span></span><span class=asc><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#ffd9d9">.</span><span class=b style="background:#d9ecff">S</span><span class=b style="background:#d9ecff">M</span><span class=b style="background:#dcffd9">`</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">X</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span><span class=b style="background:#dcffd9">.</span></span></div></div><p class=note>A record too big for one row <strong>runs on into further rows</strong> under the same tag and key. ETF calls each row an <em>incidence</em>, and a record's payload is its rows' data concatenated in file order. A reader knows where a record ends because rows are grouped and sorted by tag and key: the run stops at the first row whose tag or key differs. The expected number of rows is a property of each structure rather than anything the file states. Coda's specification states it for some record types but not all &mdash; a staff spec over three incidences, a page spec over two, a text block over four &mdash; and says nothing about the rest. The final row is zero-padded to fill it. Since the file never records that number, concatenating until the key changes is the reliable rule.</p><p class=note><strong>Worked example.</strong> A staff spec's transposition sits at offset 20 of the record. No row is 20 bytes long &mdash; each carries only 12 bytes of data &mdash; so offset 20 exists only once the rows are joined:<br><br><code>&nbsp;&nbsp;row 0&nbsp;&nbsp;[cmper][tag][ 12 bytes ]&nbsp;&rarr;&nbsp;payload offsets&nbsp; 0..11</code><br><code>&nbsp;&nbsp;row 1&nbsp;&nbsp;[cmper][tag][ 12 bytes ]&nbsp;&rarr;&nbsp;payload offsets 12..23</code><br><code>&nbsp;&nbsp;row 2&nbsp;&nbsp;[cmper][tag][ 12 bytes ]&nbsp;&rarr;&nbsp;payload offsets 24..35</code><br><br>Offset 20 falls in <strong>row 1, eight bytes into that row's data</strong>. A reader does not compute that. It concatenates the rows' data into one 36-byte payload and reads offset 20 of it, exactly as it would for a 2011 record that arrived in one piece. Each row's own <code>cmper</code> and tag are addressing, not content, and are dropped before the join.</p></div>
 <div class=structblock><p class=caption>A details row. Details are addressed by a pair of keys rather than one. What the pair means depends on the tag: a frame hold is keyed by (staff, measure), a group spec by (instrument list, group id), a learned chord by (root, alternate bass), and an entry detail by the two halves of a 32-bit entry number.</p><pre class=cstruct>struct DclDetailsRow {
     uint16     cmper1;                    // +0x0    first key
     uint16     cmper2;                    // +0x2    second key
@@ -521,34 +521,38 @@ frames naming the same entry span is how a <em>mirror</em> is stored
 marks it as such: the two <code>gfhold</code> records are ordinary, and the only
 sign is that their frames resolve to the same entries.
 
-<p>A reader that gives each entry a single location cannot represent that, and
-must choose. Emitting the notes twice puts them in both places, which is what
-the file means but breaks any model where an entry has one home; refusing is
-safe but rejects a document Finale considers valid. This implementation refuses,
-and the eight non-building corpus documents include one such file.</p></div>
+<p>The record decodes without difficulty; what is hard is representing it. An
+intermediate form that gives each entry one location cannot hold an entry that
+sounds in two places, so this implementation refuses such a document rather than
+place the notes wrongly. That is a limitation of the representation, not of the
+decoding, and one of the eight non-building corpus documents is a case of
+it.</p></div>
 
 <h3>Known record tags</h3>
 <p>One vocabulary in three spellings: ETF's two-character tags, the 2011 era's
-numbers, and EnigmaXML's symbolic names. The three tiers below are kept apart on
-purpose &mdash; a payload-confirmed identification and a key-sequence guess are
-not the same claim.</p>
+numbers, and EnigmaXML's symbolic names.</p>
 
 <h4>Tier A &mdash; decoded and payload-confirmed</h4>
 <p>Parsed by this project, with fields verified against paired <code>.musx</code>
 documents.</p>
-<table><thead><tr><th>Tag</th><th>ETF</th><th>Name</th><th>Pool</th>
-<th>Description</th></tr></thead><tbody><tr><td class=off>109</td><td><code></code></td><td><code>clefOptions</code></td><td>others</td><td>Clef definition table, read as a strided array</td></tr><tr><td class=off>121</td><td><code></code></td><td><code>articDef</code></td><td>others</td><td>An articulation's definition; charMain is the glyph</td></tr><tr><td class=off>146</td><td><code>^FR</code></td><td><code>frameSpec</code></td><td>others</td><td>Entry range for one layer of one measure</td></tr><tr><td class=off>159</td><td><code></code></td><td><code>instUsed</code></td><td>others</td><td>The staves the score lays out, in layout order</td></tr><tr><td class=off>176</td><td><code>^MS</code></td><td><code>measSpec</code></td><td>others</td><td>Per measure: width, key, beats, divbeat, barline</td></tr><tr><td class=off>203</td><td><code></code></td><td><code>repeatBack</code></td><td>others</td><td>Backward repeat barline, keyed by measure</td></tr><tr><td class=off>204</td><td><code></code></td><td><code>repeatEndingStart</code></td><td>others</td><td>Ending bracket, keyed by measure</td></tr><tr><td class=off>206</td><td><code></code></td><td><code>repeatPassList</code></td><td>others</td><td>Which passes an ending is taken on</td></tr><tr><td class=off>231</td><td><code>^IS</code></td><td><code>staffSpec</code></td><td>others</td><td>Per staff; transposition at +0x14</td></tr><tr><td class=off>1009</td><td><code></code></td><td><code>articAssign</code></td><td>details</td><td>The articulation on an entry; names an articDef</td></tr><tr><td class=off>1044</td><td><code>^GF</code></td><td><code>gfhold</code></td><td>details</td><td>(staff, measure) to clef and up to four frames</td></tr><tr><td class=off>1057</td><td><code></code></td><td><code>staffGroup</code></td><td>details</td><td>Brace or bracket over a run of staves</td></tr><tr><td class=off>1072</td><td><code></code></td><td><code>tupletDef</code></td><td>details</td><td>Keyed by entry, not by (staff, measure)</td></tr><tr><td class=off>1108</td><td><code></code></td><td><code>lyrDataVerse</code></td><td>details</td><td>Verse lyrics</td></tr><tr><td class=off>&mdash;</td><td><code>^eE</code></td><td><code>entry</code></td><td>entries</td><td>The notes; fixed 38-byte slots</td></tr></tbody></table>
+<table><thead><tr><th>Name</th><th>Tag</th><th>ETF</th><th>Pool</th>
+<th>Description</th></tr></thead><tbody><tr><td><code>clefOptions</code></td><td class=off>109</td><td><code></code></td><td>others</td><td>Clef definition table, read as a strided array</td></tr><tr><td><code>articDef</code></td><td class=off>121</td><td><code></code></td><td>others</td><td>An articulation's definition; charMain is the glyph</td></tr><tr><td><code>frameSpec</code></td><td class=off>146</td><td><code>^FR</code></td><td>others</td><td>Entry range for one layer of one measure</td></tr><tr><td><code>instUsed</code></td><td class=off>159</td><td><code></code></td><td>others</td><td>The staves the score lays out, in layout order</td></tr><tr><td><code>measSpec</code></td><td class=off>176</td><td><code>^MS</code></td><td>others</td><td>Per measure: width, key, beats, divbeat, barline</td></tr><tr><td><code>repeatBack</code></td><td class=off>203</td><td><code></code></td><td>others</td><td>Backward repeat barline, keyed by measure</td></tr><tr><td><code>repeatEndingStart</code></td><td class=off>204</td><td><code></code></td><td>others</td><td>Ending bracket, keyed by measure</td></tr><tr><td><code>repeatPassList</code></td><td class=off>206</td><td><code></code></td><td>others</td><td>Which passes an ending is taken on</td></tr><tr><td><code>staffSpec</code></td><td class=off>231</td><td><code>^IS</code></td><td>others</td><td>Per staff; transposition at +0x14</td></tr><tr><td><code>articAssign</code></td><td class=off>1009</td><td><code></code></td><td>details</td><td>The articulation on an entry; names an articDef</td></tr><tr><td><code>gfhold</code></td><td class=off>1044</td><td><code>^GF</code></td><td>details</td><td>(staff, measure) to clef and up to four frames</td></tr><tr><td><code>staffGroup</code></td><td class=off>1057</td><td><code></code></td><td>details</td><td>Brace or bracket over a run of staves</td></tr><tr><td><code>tupletDef</code></td><td class=off>1072</td><td><code></code></td><td>details</td><td>Keyed by entry, not by (staff, measure)</td></tr><tr><td><code>lyrDataVerse</code></td><td class=off>1108</td><td><code></code></td><td>details</td><td>Verse lyrics</td></tr><tr><td><code>entry</code></td><td class=off>&mdash;</td><td><code>^eE</code></td><td>entries</td><td>The notes; fixed 38-byte slots</td></tr></tbody></table>
 
 
-<h4>ETF tags named by their vendor</h4>
+<h4>Named ETF tags</h4>
 <p>The 2001&ndash;2005 era uses ETF's two-character tags, and Coda documented
 many of them. The source column says which document named each one.</p>
 
-<div class=note><strong>Case is significant.</strong> <code>^AC</code> is Tempo
+<div class=prov>Where the source is given as LilyPond, the name comes from that
+project's <em>prose notes</em> on the ETF format and from nothing else. No
+LilyPond source code was read. LilyPond is GPL-licensed and this project is MIT;
+a format fact taken from a description carries no licence where code does, and
+the distinction is kept deliberately.</div>
+
+<div class=note><strong>Tag names are case sensitive.</strong> <code>^AC</code> is Tempo
 and <code>^ac</code> is performance data; <code>^CH</code> is a chord and
 <code>^hC</code> a learned one; <code>^FB</code> is the fretboard library while
-<code>^fb</code> is an unrelated record with a different partner. A reader that
-upper-cases a tag before comparing it will conflate unrelated records.</div>
+<code>^fb</code> is an unrelated record with a different partner.</div>
 
 <h4>others</h4>
 <table><thead><tr><th>Tag</th><th>Name</th><th>Key (cmper)</th>
@@ -612,14 +616,21 @@ u16, and only sometimes a pair of letters.</div>
 
 
 
-<div class=warn><strong>A documented variant this project has never seen.</strong>
-The LilyPond notes describe a second form of <code>^GF</code> occupying a single
-row, laid out <code>frame, clef, ...</code> rather than <code>clef, flags,
-frames</code>. A reader assuming the two-row form would take a frame id for a
-clef. Measured across all 139 DCL corpus documents: every one of the 14,191
-<code>GF</code> records has exactly two incidences and a 20-byte payload, so the
-single-row form does not occur here. It is recorded as a known gap rather than a
-defect.</div>
+<div class=warn><strong>A variant described in a third-party document and not
+observed.</strong> The LilyPond format notes describe a second form of
+<code>^GF</code> occupying a single row, laid out <code>frame, clef, ...</code>
+rather than <code>clef, flags, frames</code>. A reader assuming the two-row form
+would take a frame id for a clef.
+
+<p>Measured across all 139 DCL corpus documents: every one of the 14,191
+<code>GF</code> records has exactly two incidences and a 20-byte payload. The
+single-row form occurs in none of them.</p>
+
+<p>Two readings fit. The variant may be real and simply absent from this corpus,
+in which case it is a gap. Or the note may be mistaken: it is one person's
+reverse-engineering write-up rather than vendor documentation, and being written
+down does not make it correct. It is recorded so a reader meeting such a file
+knows the possibility exists, not as an established part of the format.</p></div>
 
 
 
@@ -670,22 +681,15 @@ at 166,524 records, is roughly sixteen times more common than
 <code>gfhold</code>, which suggests something per entry or per note rather than
 per measure.</div>
 
-<div class=prov><strong>What this means for scope.</strong> The tags decoded
-here are the ones on the path from a file to its notes, which is where the work
-started; they are not the most common ones. By tag count this document covers
-under a fifth of the vocabulary, and by record count rather less.
+<div class=prov><strong>What this document covers.</strong> The tags named here
+are the ones on the path from a file to its notes, which is where the work
+started; they are not the most common ones.
 
-<p>What the remaining tags hold is not known. Some can be guessed at from the
-Tier B names beside them &mdash; <code>fontName</code>, <code>lockMeas</code>,
-<code>metaTimeSig</code> &mdash; but a guess from a name is what the tier above
-already warns against, and the unnamed ones offer not even that. They are not
-&ldquo;just layout&rdquo;: that would be an assumption, and the two largest
-unknowns turned out to be a percussion map and a fretboard library, neither of
-which is layout.</p>
-
-<p>This is a description of the file as far as it has been established, and it
-is meant to become a complete one. What is missing is marked as missing rather
-than dismissed.</p></div>
+<p>Counting distinct tags observed across the corpus:
+<strong>34 of the 227</strong> numeric tags the 2011 era uses, and
+<strong>34 of the 265</strong> ETF tags the 2001&ndash;2005 era uses. Together
+<strong>68 of 492</strong>, about one in seven. What the remaining tags hold is
+not known.</p></div>
 </section><section id="s7"><h2>7. The entry pool</h2>
 <p>The entry pool contains the actual musical notes &mdash; both pitch and
 duration. It is the one structure the two <code>.mus</code> eras share field for

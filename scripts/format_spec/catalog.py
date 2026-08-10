@@ -346,8 +346,8 @@ def render_unknown() -> str:
 
 def render_tag_tables() -> str:
     a = "".join(
-        f"<tr><td class=off>{t}</td><td><code>{e}</code></td><td><code>{n}</code></td>"
-        f"<td>{p}</td><td>{d}</td></tr>"
+        f"<tr><td><code>{n}</code></td><td class=off>{t}</td>"
+        f"<td><code>{e}</code></td><td>{p}</td><td>{d}</td></tr>"
         for t, e, n, p, d in TIER_A
     )
     b = "".join(
@@ -357,14 +357,12 @@ def render_tag_tables() -> str:
     return f"""
 <h3>Known record tags</h3>
 <p>One vocabulary in three spellings: ETF's two-character tags, the 2011 era's
-numbers, and EnigmaXML's symbolic names. The three tiers below are kept apart on
-purpose &mdash; a payload-confirmed identification and a key-sequence guess are
-not the same claim.</p>
+numbers, and EnigmaXML's symbolic names.</p>
 
 <h4>Tier A &mdash; decoded and payload-confirmed</h4>
 <p>Parsed by this project, with fields verified against paired <code>.musx</code>
 documents.</p>
-<table><thead><tr><th>Tag</th><th>ETF</th><th>Name</th><th>Pool</th>
+<table><thead><tr><th>Name</th><th>Tag</th><th>ETF</th><th>Pool</th>
 <th>Description</th></tr></thead><tbody>{a}</tbody></table>
 
 {render_etf_tags()}
@@ -415,22 +413,15 @@ at 166,524 records, is roughly sixteen times more common than
 <code>gfhold</code>, which suggests something per entry or per note rather than
 per measure.</div>
 
-<div class=prov><strong>What this means for scope.</strong> The tags decoded
-here are the ones on the path from a file to its notes, which is where the work
-started; they are not the most common ones. By tag count this document covers
-under a fifth of the vocabulary, and by record count rather less.
+<div class=prov><strong>What this document covers.</strong> The tags named here
+are the ones on the path from a file to its notes, which is where the work
+started; they are not the most common ones.
 
-<p>What the remaining tags hold is not known. Some can be guessed at from the
-Tier B names beside them &mdash; <code>fontName</code>, <code>lockMeas</code>,
-<code>metaTimeSig</code> &mdash; but a guess from a name is what the tier above
-already warns against, and the unnamed ones offer not even that. They are not
-&ldquo;just layout&rdquo;: that would be an assumption, and the two largest
-unknowns turned out to be a percussion map and a fretboard library, neither of
-which is layout.</p>
-
-<p>This is a description of the file as far as it has been established, and it
-is meant to become a complete one. What is missing is marked as missing rather
-than dismissed.</p></div>
+<p>Counting distinct tags observed across the corpus:
+<strong>34 of the 227</strong> numeric tags the 2011 era uses, and
+<strong>34 of the 265</strong> ETF tags the 2001&ndash;2005 era uses. Together
+<strong>68 of 492</strong>, about one in seven. What the remaining tags hold is
+not known.</p></div>
 """
 
 
@@ -509,15 +500,20 @@ def _etf_rows(rows: list[tuple[str, str, str, str]]) -> str:
 
 def render_etf_tags() -> str:
     return f"""
-<h4>ETF tags named by their vendor</h4>
+<h4>Named ETF tags</h4>
 <p>The 2001&ndash;2005 era uses ETF's two-character tags, and Coda documented
 many of them. The source column says which document named each one.</p>
 
-<div class=note><strong>Case is significant.</strong> <code>^AC</code> is Tempo
+<div class=prov>Where the source is given as LilyPond, the name comes from that
+project's <em>prose notes</em> on the ETF format and from nothing else. No
+LilyPond source code was read. LilyPond is GPL-licensed and this project is MIT;
+a format fact taken from a description carries no licence where code does, and
+the distinction is kept deliberately.</div>
+
+<div class=note><strong>Tag names are case sensitive.</strong> <code>^AC</code> is Tempo
 and <code>^ac</code> is performance data; <code>^CH</code> is a chord and
 <code>^hC</code> a learned one; <code>^FB</code> is the fretboard library while
-<code>^fb</code> is an unrelated record with a different partner. A reader that
-upper-cases a tag before comparing it will conflate unrelated records.</div>
+<code>^fb</code> is an unrelated record with a different partner.</div>
 
 <h4>others</h4>
 <table><thead><tr><th>Tag</th><th>Name</th><th>Key (cmper)</th>
@@ -581,14 +577,21 @@ u16, and only sometimes a pair of letters.</div>
 
 
 
-<div class=warn><strong>A documented variant this project has never seen.</strong>
-The LilyPond notes describe a second form of <code>^GF</code> occupying a single
-row, laid out <code>frame, clef, ...</code> rather than <code>clef, flags,
-frames</code>. A reader assuming the two-row form would take a frame id for a
-clef. Measured across all 139 DCL corpus documents: every one of the 14,191
-<code>GF</code> records has exactly two incidences and a 20-byte payload, so the
-single-row form does not occur here. It is recorded as a known gap rather than a
-defect.</div>
+<div class=warn><strong>A variant described in a third-party document and not
+observed.</strong> The LilyPond format notes describe a second form of
+<code>^GF</code> occupying a single row, laid out <code>frame, clef, ...</code>
+rather than <code>clef, flags, frames</code>. A reader assuming the two-row form
+would take a frame id for a clef.
+
+<p>Measured across all 139 DCL corpus documents: every one of the 14,191
+<code>GF</code> records has exactly two incidences and a 20-byte payload. The
+single-row form occurs in none of them.</p>
+
+<p>Two readings fit. The variant may be real and simply absent from this corpus,
+in which case it is a gap. Or the note may be mistaken: it is one person's
+reverse-engineering write-up rather than vendor documentation, and being written
+down does not make it correct. It is recorded so a reader meeting such a file
+knows the possibility exists, not as an established part of the format.</p></div>
 
 
 """

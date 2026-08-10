@@ -127,8 +127,9 @@ def mus2011_record() -> Struct:
             Field(10 + len(payload), 4, "trailer", "uint32", "the length again"),
         ],
         data=data,
-        caption="A 2011-era record: tag 176 (measSpec), key 1, score part. One record "
-        f"occupies {OTH._HEADER} + length + {OTH._EXTRA_LENGTH} bytes.",
+        caption="A measSpec (tag 176) describing measure 1, belonging to the score "
+        "rather than to a linked part. One record occupies "
+        f"{OTH._HEADER} + length + {OTH._EXTRA_LENGTH} bytes.",
         notes=[
             "These records are <strong>self-identifying</strong>: each carries its own key, "
             "so nothing outside the record is needed to address it &mdash; no directory, no "
@@ -152,7 +153,7 @@ def dcl_others_row() -> Struct:
     return Struct(
         name="DclOthersRow",
         fields=[
-            Field(0, 2, "cmper", "uint16", "the (n) in an ETF ^XX(n)"),
+            Field(0, 2, "cmper", "uint16", "the (n) in an ETF ^XX(n) &mdash; the record's key"),
             Field(2, 2, "tag", "uint16", "two characters stored as a u16"),
             Field(
                 4,
@@ -171,8 +172,9 @@ def dcl_others_row() -> Struct:
             "record ends because rows are grouped and sorted by tag and key: the run stops "
             "at the first row whose tag or key differs. The expected number of rows is a "
             "property of each structure rather than anything the file states. Coda's "
-            "specification gives it per record type, saying a staff spec is stored over "
-            "three incidences and a page spec over two. The final row is zero-padded to "
+            "specification states it for some record types but not all &mdash; a staff "
+            "spec over three incidences, a page spec over two, a text block over four "
+            "&mdash; and says nothing about the rest. The final row is zero-padded to "
             "fill it. Since the file never records that number, concatenating until the "
             "key changes is the reliable rule.",
             "<strong>Worked example.</strong> A staff spec's transposition sits at offset "
