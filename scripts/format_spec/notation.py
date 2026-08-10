@@ -31,6 +31,11 @@ _OPTIONS = {
     "pageMarginRight": 25,
     "svgViewBox": True,
     "svgRemoveXlink": True,
+    # Verovio's default seed of 0 means "pick one at random", so every build
+    # renames every SVG element and the committed document differs from itself.
+    # Any fixed non-zero seed makes the build reproducible, so a rebuild shows a
+    # diff only where the content actually changed.
+    "xmlIdSeed": 1,
 }
 
 
