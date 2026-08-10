@@ -14,12 +14,20 @@ from finale_file_parser.version import mus as MUSHDR
 
 from . import catalog, content
 from .catalog import render_durations, render_note_flags
-from .hexview import cite, render_footnotes, render_pie, render_staff, render_struct
+from .hexview import cite, render_footnotes, render_pie, render_struct
+from .notation import engrave
 from .style import CSS
 
 S = content.ALL_STRUCTS
 
 SECTIONS: list[tuple[str, str]] = []
+
+
+def _figure(svg: str, caption: str) -> str:
+    """An engraved example, or nothing at all when Verovio is absent."""
+    if not svg:
+        return ""
+    return f"<div class=score>{svg}<p class=hexcap>{caption}</p></div>"
 
 
 def section(title: str, body: str) -> None:
@@ -559,19 +567,33 @@ tonic; &minus;1 is a step below, while 7 is an octave up.</p>
 numbers name different pitches in different keys:</p>
 
 {
-        render_staff(
-            [("C4", "0"), ("D4", "1"), ("B3", "&minus;1"), ("C5", "7")],
-            0,
-            "C major. Harmonic value below each note; all four have alteration 0.",
+        _figure(
+            engrave(
+                [
+                    ("C", 4, 0, ("0", "alt 0")),
+                    ("D", 4, 0, ("1", "alt 0")),
+                    ("B", 3, 0, ("&#8722;1", "alt 0")),
+                    ("C", 5, 0, ("7", "alt 0")),
+                ],
+                0,
+            ),
+            "C major. Harmonic value on the upper line, alteration on the lower.",
         )
     }
 
 {
-        render_staff(
-            [("G4", "0"), ("A4", "1"), ("F4", "&minus;1"), ("G5", "7")],
-            1,
-            "G major, one sharp. The same four values. The third is F sharp, "
-            "which the key already provides, so its alteration is 0 too.",
+        _figure(
+            engrave(
+                [
+                    ("G", 4, 0, ("0", "alt 0")),
+                    ("A", 4, 0, ("1", "alt 0")),
+                    ("F", 4, 1, ("&#8722;1", "alt 0")),
+                    ("G", 5, 0, ("7", "alt 0")),
+                ],
+                1,
+            ),
+            "G major, one sharp. The same four harmonic values. The third is F sharp, "
+            "which the key provides, so its alteration is 0 too.",
         )
     }
 
@@ -584,16 +606,18 @@ the note the key gives, +1 a semitone above it, &minus;1 a semitone below.</p>
 <p>It is measured against the key, not against the printed accidental:</p>
 
 {
-        render_staff(
-            [
-                ("F4", "&minus;1, alt 0"),
-                ("F4", "&minus;1, alt &minus;1"),
-                ("F4", "&minus;1, alt +1"),
-            ],
-            1,
-            "G major. The same harmonic value, three alterations: F sharp as "
-            "the key gives it, F natural a semitone below, F double sharp a "
-            "semitone above.",
+        _figure(
+            engrave(
+                [
+                    ("F", 4, 1, ("&#8722;1", "alt 0")),
+                    ("F", 4, 0, ("&#8722;1", "alt &#8722;1")),
+                    ("F", 4, 2, ("&#8722;1", "alt +1")),
+                ],
+                1,
+                show_acc=True,
+            ),
+            "G major. One harmonic value, three alterations: F sharp as the key gives it, "
+            "F natural a semitone below, F double sharp a semitone above.",
         )
     }
 

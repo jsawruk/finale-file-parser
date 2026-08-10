@@ -43,6 +43,11 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.8",
     "types-defusedxml>=0.7",
+    # Engraves the pitch examples in docs/formats/finale-formats.pdf. A
+    # build-time tool like the browser that prints the PDF -- not a dependency
+    # of the parser, and nothing it produces is linked into the library. The
+    # document still builds without it; the examples are simply omitted.
+    "verovio>=5",
 ]
 
 [tool.setuptools.packages.find]

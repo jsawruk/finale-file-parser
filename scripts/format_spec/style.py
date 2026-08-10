@@ -110,3 +110,10 @@ CSS += """
 .staff svg { display: block; }
 .staff .hexcap { margin-top: 2pt; }
 """
+
+CSS += """
+.score { margin: 12pt 0 14pt; break-inside: avoid; }
+/* Verovio emits a viewBox and no width, so max-width:100% would stretch the
+   staff to the column. Fix the height and let the width follow the aspect. */
+.score svg { height: 96pt; width: auto; max-width: 100%; display: block; }
+"""
