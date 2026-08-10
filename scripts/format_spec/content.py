@@ -175,6 +175,20 @@ def dcl_others_row() -> Struct:
             "three incidences and a page spec over two. The final row is zero-padded to "
             "fill it. Since the file never records that number, concatenating until the "
             "key changes is the reliable rule.",
+            "<strong>Worked example.</strong> A staff spec's transposition sits at offset "
+            "20 of the record. No row is 20 bytes long &mdash; each carries only 12 bytes "
+            "of data &mdash; so offset 20 exists only once the rows are joined:<br><br>"
+            "<code>&nbsp;&nbsp;row 0&nbsp;&nbsp;[cmper][tag][ 12 bytes ]&nbsp;&rarr;&nbsp;"
+            "payload offsets&nbsp; 0..11</code><br>"
+            "<code>&nbsp;&nbsp;row 1&nbsp;&nbsp;[cmper][tag][ 12 bytes ]&nbsp;&rarr;&nbsp;"
+            "payload offsets 12..23</code><br>"
+            "<code>&nbsp;&nbsp;row 2&nbsp;&nbsp;[cmper][tag][ 12 bytes ]&nbsp;&rarr;&nbsp;"
+            "payload offsets 24..35</code><br><br>"
+            "Offset 20 falls in <strong>row 1, eight bytes into that row's data</strong>. A "
+            "reader does not compute that. It concatenates the rows' data into one 36-byte "
+            "payload and reads offset 20 of it, exactly as it would for a 2011 record that "
+            "arrived in one piece. Each row's own <code>cmper</code> and tag are addressing, "
+            "not content, and are dropped before the join.",
         ],
     )
 
