@@ -5,6 +5,7 @@ Run:  python build.py  ->  finale-formats.html  ->  (Chrome) finale-formats.pdf
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -805,7 +806,28 @@ def render_pdf(html_path: Path, pdf_path: Path) -> bool:
         check=True,
         capture_output=True,
     )
+    _freeze_timestamps(pdf_path)
     return True
+
+
+_PDF_DATE = re.compile(rb"(/(?:CreationDate|ModDate) \(D:)\d{14}")
+_EPOCH = b"19700101000000"
+
+
+def _freeze_timestamps(pdf_path: Path) -> None:
+    """Blank the clock out of the PDF so an unchanged rebuild is byte-identical.
+
+    Everything else Chrome writes is already deterministic, so these two fields
+    are the whole difference between two builds of the same document -- and a
+    1.2 MB file that differs from itself every time means a rebuild always looks
+    like a change and always adds another blob to git history. The replacement
+    is the same length as what it overwrites, which keeps the byte offsets in
+    the cross-reference table valid. The epoch is the usual reproducible-build
+    stand-in: the date a reader shows for this file is not meant to mean
+    anything -- the commit that carries it is the real timestamp.
+    """
+    pdf = pdf_path.read_bytes()
+    pdf_path.write_bytes(_PDF_DATE.sub(rb"\g<1>" + _EPOCH, pdf))
 
 
 def main() -> int:
