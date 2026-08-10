@@ -36,9 +36,10 @@ def _figure(svg: str, caption: str, rows: tuple[str, ...] = ()) -> str:
     if rows:
         items = "".join(f"<span>{r}</span>" for r in rows)
         labels = f"<div class=scorekey>{items}</div>"
+    tail = f"<p class=hexcap>{caption}</p>" if caption else ""
     return (
         f"<div class=score><div class=scorerow>{labels}<div class=scoreart>{svg}</div>"
-        f"</div><p class=hexcap>{caption}</p></div>"
+        f"</div>{tail}</div>"
     )
 
 
@@ -589,7 +590,7 @@ numbers name different pitches in different keys:</p>
                 ],
                 0,
             ),
-            "C major.",
+            "",
             ("Harmonic value:", "Alteration:"),
         )
     }
@@ -605,8 +606,8 @@ numbers name different pitches in different keys:</p>
                 ],
                 1,
             ),
-            "G major, one sharp. The same four harmonic values. The third is F sharp, "
-            "which the key provides, so its alteration is 0 too.",
+            "The same four harmonic values in G major (one sharp). The third is F "
+            "sharp, which the key provides, so its alteration is 0 too.",
             ("Harmonic value:", "Alteration:"),
         )
     }
@@ -626,7 +627,6 @@ below, 14 two octaves above. Twelve bits give it a range of
             "C major. Ascending 0 to 10 on the treble, descending 0 to &minus;10 on "
             "the bass, both from the same note. Nothing marks the octave: past 7 the "
             "count simply continues.",
-            ("Harmonic value:",),
         )
     }
 
