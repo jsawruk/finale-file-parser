@@ -40,15 +40,28 @@ def meas_spec() -> Struct:
         caption="measSpec &mdash; one per measure, keyed by measure number. "
         "2011 tag 176; DCL tag <code>^MS</code>.",
         notes=[
-            "<strong>A key of 0 means &ldquo;the key already in force&rdquo;.</strong> "
-            "The field packs a mode in its high byte (0 major, 1 minor) and a signed count "
-            "of sharps or flats in its low byte, so 0 is <em>also</em> the encoding of C "
-            "major &mdash; major, no accidentals. The two readings are not in conflict: a "
-            "measure with 0 continues whatever key preceded it, and where nothing precedes "
-            "it, the key that has been in force since the start of the piece is C major. A "
-            "reader can treat 0 as inherit throughout and reach the right answer either "
-            "way; what it must not do is emit an explicit C major for every such measure, "
-            "which would override a key change that came earlier.",
+            "<strong>A key of 0 is C major.</strong> The field packs a mode in its high "
+            "byte (0 major, 1 minor) and a signed count of sharps or flats in its low "
+            "byte, so 0 is major with no accidentals. A <code>.musx</code> expresses the "
+            "same thing by <em>omitting</em> its key element: across 401 documents and "
+            "19,644 key elements, not one is written as zero.",
+            "<strong>Absence is not inheritance.</strong> A missing element reads "
+            "naturally as &ldquo;same as the measure before&rdquo;, and it is not. One "
+            "corpus document runs key=1 for measures 1&ndash;32, no element for "
+            "33&ndash;52, then key=1 again from 53. Opened in Finale, measure 33 begins a "
+            "new song with a natural cancelling the sharp and chords of C, G7 and F. It is "
+            "a key change to C major, not a continuation of G.",
+            "<strong>The corpus alone cannot settle this</strong>, which is worth knowing "
+            "before trying. The obvious test is to look for accidentals: music in C stored "
+            "under an inherited G would need a flat on every F. But <em>no absent-key run "
+            "anywhere in the corpus contains a single accidental</em> &mdash; every one is "
+            "purely diatonic, so both readings fit the notes equally well. What decided it "
+            "was rendering the page.",
+            "<strong>What a reader must not do</strong> is carry the previous key forward "
+            "across a measure that states none. That silently keeps a piece in the key it "
+            "started in through every passage returning to C. This project made exactly "
+            "that mistake: 18 passages, 741 measures and 11,421 entries were spelled a "
+            "step sharp, and every test passed either way.",
             "The barline style is the <strong>high nibble</strong> of that byte, whose "
             "low bits carry the repeat flags. Observed values: <strong>1</strong> an "
             "ordinary barline and <strong>2</strong> a double bar, agreeing with the "
