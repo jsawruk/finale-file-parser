@@ -255,8 +255,7 @@ def render_staff(notes: list[tuple[str, str]], sharps: int, caption: str) -> str
             row += _STEP * 2
         if mark:
             heads += (
-                f'<text x="{x - 17:.1f}" y="{y + 4:.1f}" font-size="12" '
-                f'fill="#222">{mark}</text>'
+                f'<text x="{x - 17:.1f}" y="{y + 4:.1f}" font-size="12" fill="#222">{mark}</text>'
             )
         labels += (
             f'<text x="{x:.1f}" y="{bottom + 26:.1f}" font-size="7.5" '
