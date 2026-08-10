@@ -117,3 +117,15 @@ CSS += """
    staff to the column. Fix the height and let the width follow the aspect. */
 .score svg { height: 96pt; width: auto; max-width: 100%; display: block; }
 """
+
+CSS += """
+.scorerow { display: flex; align-items: flex-end; gap: 5pt; }
+.scoreart { min-width: 0; }
+/* The two lyric rows sit at the foot of the engraving; the labels are set to
+   the same rhythm and bottom-aligned with them. */
+.scorekey {
+  display: flex; flex-direction: column; text-align: right;
+  font-size: 8pt; color: #444; padding-bottom: 3pt; white-space: nowrap;
+}
+.scorekey span { line-height: 15pt; }
+"""

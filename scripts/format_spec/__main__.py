@@ -23,11 +23,23 @@ S = content.ALL_STRUCTS
 SECTIONS: list[tuple[str, str]] = []
 
 
-def _figure(svg: str, caption: str) -> str:
-    """An engraved example, or nothing at all when Verovio is absent."""
+def _figure(svg: str, caption: str, rows: tuple[str, ...] = ()) -> str:
+    """An engraved example, or nothing at all when Verovio is absent.
+
+    `rows` labels the lyric lines under the staff. Verovio keeps a verse's name
+    as SVG metadata but does not draw it, so the labels are set beside the staff
+    and bottom-aligned with it.
+    """
     if not svg:
         return ""
-    return f"<div class=score>{svg}<p class=hexcap>{caption}</p></div>"
+    labels = ""
+    if rows:
+        items = "".join(f"<span>{r}</span>" for r in rows)
+        labels = f"<div class=scorekey>{items}</div>"
+    return (
+        f"<div class=score><div class=scorerow>{labels}<div class=scoreart>{svg}</div>"
+        f"</div><p class=hexcap>{caption}</p></div>"
+    )
 
 
 def section(title: str, body: str) -> None:
@@ -570,14 +582,15 @@ numbers name different pitches in different keys:</p>
         _figure(
             engrave(
                 [
-                    ("C", 4, 0, ("0", "alt 0")),
-                    ("D", 4, 0, ("1", "alt 0")),
-                    ("B", 3, 0, ("&#8722;1", "alt 0")),
-                    ("C", 5, 0, ("7", "alt 0")),
+                    ("C", 4, 0, ("0", "0")),
+                    ("D", 4, 0, ("1", "0")),
+                    ("B", 3, 0, ("&#8722;1", "0")),
+                    ("C", 5, 0, ("7", "0")),
                 ],
                 0,
             ),
-            "C major. Harmonic value on the upper line, alteration on the lower.",
+            "C major.",
+            ("Harmonic value:", "Alteration:"),
         )
     }
 
@@ -585,15 +598,16 @@ numbers name different pitches in different keys:</p>
         _figure(
             engrave(
                 [
-                    ("G", 4, 0, ("0", "alt 0")),
-                    ("A", 4, 0, ("1", "alt 0")),
-                    ("F", 4, 1, ("&#8722;1", "alt 0")),
-                    ("G", 5, 0, ("7", "alt 0")),
+                    ("G", 4, 0, ("0", "0")),
+                    ("A", 4, 0, ("1", "0")),
+                    ("F", 4, 1, ("&#8722;1", "0")),
+                    ("G", 5, 0, ("7", "0")),
                 ],
                 1,
             ),
             "G major, one sharp. The same four harmonic values. The third is F sharp, "
             "which the key provides, so its alteration is 0 too.",
+            ("Harmonic value:", "Alteration:"),
         )
     }
 
@@ -609,10 +623,10 @@ below, 14 two octaves above. Twelve bits give it a range of
 {
         _figure(
             engrave_xml(grand_staff()),
-            "C major. Ascending 0 to 7 on the treble, descending 0 to &minus;7 on the "
-            "bass. Both start from the same note, the tonic in the octave from middle C. "
-            "The upper row under each note is the harmonic value, the lower its "
-            "alteration.",
+            "C major. Ascending 0 to 10 on the treble, descending 0 to &minus;10 on "
+            "the bass, both from the same note. Nothing marks the octave: past 7 the "
+            "count simply continues.",
+            ("Harmonic value:",),
         )
     }
 
@@ -625,15 +639,16 @@ the note the key gives, +1 a semitone above it, &minus;1 a semitone below.</p>
         _figure(
             engrave(
                 [
-                    ("F", 4, 1, ("&#8722;1", "alt 0")),
-                    ("F", 4, 0, ("&#8722;1", "alt &#8722;1")),
-                    ("F", 4, 2, ("&#8722;1", "alt +1")),
+                    ("F", 4, 1, ("&#8722;1", "0")),
+                    ("F", 4, 0, ("&#8722;1", "&#8722;1")),
+                    ("F", 4, 2, ("&#8722;1", "+1")),
                 ],
                 1,
                 show_acc=True,
             ),
             "G major. One harmonic value, three alterations: F sharp as the key gives it, "
             "F natural a semitone below, F double sharp a semitone above.",
+            ("Harmonic value:", "Alteration:"),
         )
     }
 

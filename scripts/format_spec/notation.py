@@ -38,28 +38,23 @@ _ACCIDENTAL = {-2: "flat-flat", -1: "flat", 0: "natural", 1: "sharp", 2: "double
 def grand_staff(fifths: int = 0) -> str:
     """The full diatonic octave either side of the tonic, on a grand staff.
 
-    Ascending 0..7 on the treble and descending 0..-7 on the bass, both starting
-    from the same note: the tonic in the octave from middle C. Seeing the two
-    run in opposite directions from one pitch is the point -- the value is a
-    signed step count, and nothing else in the note record says which octave.
+    Ascending 0..10 on the treble and descending 0..-10 on the bass, both from
+    the same note: the tonic in the octave from middle C. The two directions
+    leaving one pitch is the point, and running past 7 shows that nothing
+    special happens at the octave -- the count simply continues.
     """
 
     def _row(h: int, staff: int) -> str:
         step, octave = _pitch_of(h)
-        lyr = (
-            f'<lyric number="1" name="Harmonic value"><syllabic>single</syllabic>'
-            f"<text>{h}</text></lyric>"
-            f'<lyric number="2" name="Alteration"><syllabic>single</syllabic>'
-            f"<text>0</text></lyric>"
-        )
+        lyr = f'<lyric number="1"><syllabic>single</syllabic><text>{h}</text></lyric>'
         return (
             f"<note><pitch><step>{step}</step><octave>{octave}</octave></pitch>"
             f"<duration>2</duration><type>half</type><staff>{staff}</staff>"
             f"<voice>{staff}</voice>{lyr}</note>"
         )
 
-    treble = "".join(_row(h, 1) for h in range(0, 8))
-    bass = "".join(_row(h, 2) for h in range(0, -8, -1))
+    treble = "".join(_row(h, 1) for h in range(0, 11))
+    bass = "".join(_row(h, 2) for h in range(0, -11, -1))
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<score-partwise version="4.0"><part-list><score-part id="P1">'
@@ -68,7 +63,7 @@ def grand_staff(fifths: int = 0) -> str:
         f"<staves>2</staves><key><fifths>{fifths}</fifths></key>"
         '<clef number="1"><sign>G</sign><line>2</line></clef>'
         '<clef number="2"><sign>F</sign><line>4</line></clef></attributes>'
-        f"{treble}<backup><duration>16</duration></backup>{bass}"
+        f"{treble}<backup><duration>22</duration></backup>{bass}"
         "</measure></part></score-partwise>"
     )
 
