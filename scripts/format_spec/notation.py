@@ -94,11 +94,32 @@ def _note_xml(
     )
 
 
+_FIGURE_SPACE = "\u2007"
+"""A space the width of a digit, so padding lines up under a centred number."""
+
+
+def _align(labels: tuple[str, ...]) -> tuple[str, ...]:
+    """Pad a note's labels to equal width, left, with digit-width spaces.
+
+    Verovio centres each label under its note, so a wider string is centred over
+    a narrower one and their digits come apart: over a bare 0, a -1 puts its 1 to
+    the right of the 0 below. Padding the shorter to the same width first means
+    the two centre identically.
+    """
+    if len(labels) < 2:
+        return labels
+    plain = [lab.replace("&#8722;", "-") for lab in labels]
+    width = max(len(t) for t in plain)
+    return tuple(
+        _FIGURE_SPACE * (width - len(t)) + lab for lab, t in zip(labels, plain, strict=True)
+    )
+
+
 def musicxml(
     notes: list[tuple[str, int, int, tuple[str, ...]]], fifths: int, show_acc: bool = False
 ) -> str:
     """A one-measure part in the given key, one whole note per entry."""
-    body = "".join(_note_xml(s, o, a, lab, show_acc) for s, o, a, lab in notes)
+    body = "".join(_note_xml(s, o, a, _align(lab), show_acc) for s, o, a, lab in notes)
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN"'
