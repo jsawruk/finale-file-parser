@@ -12,6 +12,8 @@ document still builds; the examples are simply omitted.
 
 from __future__ import annotations
 
+import re
+
 _STEPS = "CDEFGAB"
 
 # Real margins matter: at zero Verovio crowds the clef against the staff's
@@ -158,7 +160,7 @@ def engrave(
     tk.setOptions(_OPTIONS)
     if not tk.loadData(musicxml(notes, fifths, show_acc)):
         return ""
-    return tk.renderToSVG(1)
+    return _restyle(tk.renderToSVG(1))
 
 
 _LYRIC_STYLE = (
@@ -166,6 +168,14 @@ _LYRIC_STYLE = (
     " font-family: Charter, Georgia, 'Times New Roman', serif;"
     " font-size: 265px; }</style>"
 )
+
+_LYRIC_NUDGE = 105
+"""Internal units to shift a lyric right, to centre it under the notehead.
+
+Verovio sets a syllable from the note's left edge, which is where a word of
+lyrics belongs. A bare number reads as belonging to the note above it, so it
+wants the notehead's centre instead -- about half a notehead across.
+"""
 
 
 def _restyle(svg: str) -> str:
@@ -177,6 +187,11 @@ def _restyle(svg: str) -> str:
     note -- so the numbers stay where Verovio put them and only their typography
     is overridden, by a stylesheet inside the SVG.
     """
+
+    def _shift(match: re.Match[str]) -> str:
+        return f'{match.group(1)}{float(match.group(2)) + _LYRIC_NUDGE:.0f}"'
+
+    svg = re.sub(r'(<g[^>]*class="syl"[^>]*>\s*<text x=")([\d.]+)"', _shift, svg)
     at = svg.find(">", svg.find("<svg"))
     if at < 0:
         return svg
