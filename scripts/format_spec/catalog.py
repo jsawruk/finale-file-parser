@@ -510,8 +510,8 @@ ETF_ENTRY: list[tuple[str, str, str, str]] = [
     ("CH", "Chord", "chord symbol on the entry", "spec"),
     ("CN", "Notehead Mods", "per-note custom attributes", "spec"),
     ("ve", "Lyric: verse", "syllable offset into a raw text record", "spec"),
-    ("ch", "Lyric: chorus", "as ve", "spec"),
-    ("se", "Lyric: section", "as ve", "spec"),
+    ("ch", "Lyric: chorus", "syllable offset, as for a verse", "spec"),
+    ("se", "Lyric: section", "syllable offset, as for a verse", "spec"),
 ]
 
 _SOURCE = {
