@@ -194,3 +194,78 @@ def render_footnotes() -> str:
         return ""
     items = "".join(f"<li>{n}</li>" for n in FOOTNOTES)
     return f"<div class=notes><h4>References</h4><ol class=footnotes>{items}</ol></div>"
+
+
+# Treble staff geometry. Lines are five units apart in diatonic steps, so one
+# step is half a line-gap; F5 is the top line and E4 the bottom.
+_STAFF_TOP = 12.0
+_STEP = 4.0
+_TREBLE_TOP_STEP = 38  # diatonic index of F5 (5 * 7 + 3), counting C0 = 0
+
+_LETTERS = "CDEFGAB"
+
+
+def _diatonic(name: str) -> int:
+    """Diatonic index of a note like 'C4' or 'F#4', counting C0 as 0."""
+    letter = name[0].upper()
+    octave = int(name[-1])
+    return octave * 7 + _LETTERS.index(letter)
+
+
+def render_staff(notes: list[tuple[str, str]], sharps: int, caption: str) -> str:
+    """A short treble staff with `notes` as (pitch, label-under-the-note).
+
+    `sharps` is how many sharps the key signature carries. Drawn as plain SVG:
+    this project takes no notation dependency, and five lines with ellipses on
+    them is enough to show which pitch a number means.
+    """
+    left, gap, width = 62.0, 34.0, 0.0
+    width = left + gap * (len(notes) + 1)
+    lines = "".join(
+        f'<line x1="8" y1="{_STAFF_TOP + i * _STEP * 2:.1f}" x2="{width - 8:.1f}" '
+        f'y2="{_STAFF_TOP + i * _STEP * 2:.1f}" stroke="#222" stroke-width="0.9"/>'
+        for i in range(5)
+    )
+    # key signature sharps, in the usual F C G D A E B order, at their staff rows
+    sharp_rows = [_diatonic(p) for p in ("F5", "C5", "G5", "D5", "A4", "E5", "B4")]
+    keysig = "".join(
+        f'<text x="{26 + n * 7.5:.1f}" '
+        f'y="{_STAFF_TOP + (_TREBLE_TOP_STEP - sharp_rows[n]) * _STEP + 3:.1f}" '
+        f'font-size="13" fill="#222">&#9839;</text>'
+        for n in range(min(sharps, 7))
+    )
+    heads, labels, ledgers = "", "", ""
+    for i, (pitch, label) in enumerate(notes):
+        x = left + gap * (i + 1)
+        # an accidental written before the note, if the pitch names one
+        acc = {"#": "&#9839;", "n": "&#9838;", "x": "&#119082;", "b": "&#9837;"}
+        mark = acc.get(pitch[1]) if len(pitch) > 2 and pitch[1] in acc else None
+        y = _STAFF_TOP + (_TREBLE_TOP_STEP - _diatonic(pitch)) * _STEP
+        heads += (
+            f'<ellipse cx="{x:.1f}" cy="{y:.1f}" rx="5.2" ry="3.9" '
+            f'fill="#222" transform="rotate(-18 {x:.1f} {y:.1f})"/>'
+        )
+        bottom = _STAFF_TOP + 8 * _STEP
+        row = bottom + _STEP * 2
+        while row <= y + 0.1:  # ledger lines below the staff
+            ledgers += (
+                f'<line x1="{x - 9:.1f}" y1="{row:.1f}" x2="{x + 9:.1f}" '
+                f'y2="{row:.1f}" stroke="#222" stroke-width="0.9"/>'
+            )
+            row += _STEP * 2
+        if mark:
+            heads += (
+                f'<text x="{x - 17:.1f}" y="{y + 4:.1f}" font-size="12" '
+                f'fill="#222">{mark}</text>'
+            )
+        labels += (
+            f'<text x="{x:.1f}" y="{bottom + 26:.1f}" font-size="7.5" '
+            f'text-anchor="middle" fill="#444">{html.escape(html.unescape(label))}</text>'
+        )
+    return (
+        f'<div class=staff><svg viewBox="0 0 {width:.0f} 88" width="{width:.0f}" '
+        f'height="88" role="img">'
+        f'<text x="10" y="{_STAFF_TOP + 30:.1f}" font-size="38" fill="#222">&#119070;</text>'
+        f"{lines}{keysig}{ledgers}{heads}{labels}</svg>"
+        f"<p class=hexcap>{caption}</p></div>"
+    )

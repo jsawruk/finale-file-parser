@@ -40,14 +40,22 @@ def meas_spec() -> Struct:
         caption="measSpec &mdash; one per measure, keyed by measure number. "
         "2011 tag 176; DCL tag <code>^MS</code>.",
         notes=[
-            "<strong>A key of 0 means &ldquo;inherit&rdquo;, not C major.</strong> A "
-            ".musx omits the element entirely rather than writing zero. Emitting "
-            "<code>key=&quot;0&quot;</code> would silently turn every inheriting measure "
-            "into C major.",
-            "<strong>The barline nibble is the low byte of the u16 at +10, not the byte "
-            "at +10.</strong> ETF stores others data as two-byte values, so on a "
-            "big-endian file that byte is at +11. Reading +10 either way took the high "
-            "byte from all 37 big-endian DCL documents.",
+            "<strong>A key of 0 means &ldquo;the key already in force&rdquo;.</strong> "
+            "The field packs a mode in its high byte (0 major, 1 minor) and a signed count "
+            "of sharps or flats in its low byte, so 0 is <em>also</em> the encoding of C "
+            "major &mdash; major, no accidentals. The two readings are not in conflict: a "
+            "measure with 0 continues whatever key preceded it, and where nothing precedes "
+            "it, the key that has been in force since the start of the piece is C major. A "
+            "reader can treat 0 as inherit throughout and reach the right answer either "
+            "way; what it must not do is emit an explicit C major for every such measure, "
+            "which would override a key change that came earlier.",
+            "The barline style is the <strong>high nibble</strong> of that byte, whose "
+            "low bits carry the repeat flags. Observed values: <strong>1</strong> an "
+            "ordinary barline and <strong>2</strong> a double bar, agreeing with the "
+            "paired <code>.musx</code> on 3,960 ordinary measures and all 11 double bars. "
+            "<strong>3</strong> would be the obvious reading for a final barline and does "
+            "not occur once in 4,427 measures across 99 documents, so either no file here "
+            "ends with one or it is stored elsewhere; the corpus cannot say which.",
         ],
     )
 
@@ -116,6 +124,17 @@ def staff_spec() -> Struct:
         caption="staffSpec &mdash; one per staff, keyed by staff number. 2011 tag 231; "
         "DCL tag <code>^IS</code>. Only the transposition field is decoded.",
         notes=[
+            "<strong>Transposition is the written-to-sounding interval</strong>, as a "
+            "diatonic step count: a B-flat clarinet sounds a step below what is written, a "
+            "horn in F a fifth below. It is applied on top of the harmonic value a note "
+            "already carries, which is why a transposing part and a concert-pitch part "
+            "store the same numbers.",
+            "<strong>The octave is not in this field, and not anywhere else.</strong> "
+            "Searching every byte of every staffSpec across the paired documents found no "
+            "byte that separates staves transposing by an octave from staves transposing "
+            "by the same interval within one. Finale does not need it stored: the "
+            "instrument itself fixes the octave, and a reader without an instrument table "
+            "must supply that knowledge from outside the file.",
             "The staff's <em>name</em> is not here &mdash; it lives in the text pool, "
             "which is why a .mus converts with positional part names unless that pool is "
             "resolved.",
@@ -465,7 +484,7 @@ ETF_DETAILS: list[tuple[str, str, str, str]] = [
     ("MI", "MeasNumberSeparate", "(instrument, measure)", "spec"),
     ("ME", "Midi Expression", "(instrument, measure)", "spec"),
     ("hC", "Learned Chord", "(root, alternate bass)", "spec"),
-    ("Ex", "Slur detail", "two rows per slur, paired with Sx", "thesis"),
+    ("Ex", "Slur detail", "two rows per slur, paired with Sx", "cahill"),
     ("GT", "Fretboard index", "root as MIDI 60&ndash;71; 16 incidences each", "measured"),
     ("DF", "Percussion map", "(map id 1&ndash;26, MIDI note 0&ndash;127)", "measured"),
 ]
@@ -485,7 +504,7 @@ ETF_ENTRY: list[tuple[str, str, str, str]] = [
 _SOURCE = {
     "spec": "ETF&nbsp;spec",
     "lily": "LilyPond",
-    "thesis": "thesis",
+    "cahill": "Cahill",
     "measured": "measured",
 }
 
@@ -504,11 +523,11 @@ def render_etf_tags() -> str:
 <p>The 2001&ndash;2005 era uses ETF's two-character tags, and Coda documented
 many of them. The source column says which document named each one.</p>
 
-<div class=prov>Where the source is given as LilyPond, the name comes from that
-project's <em>prose notes</em> on the ETF format and from nothing else. No
-LilyPond source code was read. LilyPond is GPL-licensed and this project is MIT;
-a format fact taken from a description carries no licence where code does, and
-the distinction is kept deliberately.</div>
+<div class=prov>In this table, <strong>ETF spec</strong> is Coda's <em>Enigma
+Transportable File Specification</em> (reference 1); <strong>LilyPond</strong>
+is the LilyPond project's ETF format notes (reference 8); and
+<strong>Cahill</strong> is Cahill's thesis on Enigma and CPNView (reference 9).
+No LilyPond source code was read or used.</div>
 
 <div class=note><strong>Tag names are case sensitive.</strong> <code>^AC</code> is Tempo
 and <code>^ac</code> is performance data; <code>^CH</code> is a chord and
@@ -597,18 +616,18 @@ knows the possibility exists, not as an established part of the format.</p></div
 """
 
 
-NOTE_FLAGS: list[tuple[str, str]] = [
-    ("0x80000000", "legality; set on every real note"),
-    ("0x40000000", "tie start"),
-    ("0x20000000", "tie end"),
-    ("0x10000000", "cross-staff: the note is drawn on another staff"),
-    ("0x08000000", "upstem second"),
-    ("0x04000000", "downstem second"),
-    ("0x02000000", "on the upper stem, where stems are split"),
-    ("0x01000000", "show an accidental; recomputed while editing unless frozen"),
-    ("0x00800000", "parenthesize that accidental"),
-    ("0x001F0000", "mask: the note's id, 1&ndash;12, within its entry"),
-    ("0x00000002", "freeze the accidental bit in place"),
+NOTE_FLAGS: list[tuple[str, str, str]] = [
+    ("0x80000000", "SETBIT", "legality; set on every real note"),
+    ("0x40000000", "TSBIT", "tie start"),
+    ("0x20000000", "TEBIT", "tie end"),
+    ("0x10000000", "CROSSBIT", "cross-staff: the note is drawn on another staff"),
+    ("0x08000000", "UPSECBIT", "upstem second"),
+    ("0x04000000", "DWSECBIT", "downstem second"),
+    ("0x02000000", "UPSPBIT", "on the upper stem, where stems are split"),
+    ("0x01000000", "ACCIBIT", "show an accidental; recomputed while editing unless frozen"),
+    ("0x00800000", "PARENACCI", "parenthesize that accidental"),
+    ("0x001F0000", "TGFNID", "mask: the note's id, 1&ndash;12, within its entry"),
+    ("0x00000002", "FREEZEACCI", "freeze the accidental bit in place"),
 ]
 
 DURATIONS: list[tuple[int, str, int]] = [
@@ -632,9 +651,13 @@ DURATIONS: list[tuple[int, str, int]] = [
 
 
 def render_note_flags() -> str:
-    rows = "".join(f"<tr><td><code>{h}</code></td><td>{d}</td></tr>" for h, d in NOTE_FLAGS)
+    rows = "".join(
+        f"<tr><td><code>{h}</code></td><td><code>{n}</code></td><td>{d}</td></tr>"
+        for h, n, d in NOTE_FLAGS
+    )
     return (
-        f"<table><thead><tr><th>Bit</th><th>Meaning</th></tr></thead><tbody>{rows}</tbody></table>"
+        "<table><thead><tr><th>Bit</th><th>Coda's name</th><th>Meaning</th></tr>"
+        f"</thead><tbody>{rows}</tbody></table>"
     )
 
 

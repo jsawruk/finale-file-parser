@@ -14,7 +14,7 @@ from finale_file_parser.version import mus as MUSHDR
 
 from . import catalog, content
 from .catalog import render_durations, render_note_flags
-from .hexview import cite, render_footnotes, render_pie, render_struct
+from .hexview import cite, render_footnotes, render_pie, render_staff, render_struct
 from .style import CSS
 
 S = content.ALL_STRUCTS
@@ -555,20 +555,51 @@ pitch is altered against the key.</p>
 <h4>The harmonic value</h4>
 <p>The harmonic value is a diatonic step relative to the current key. 0 is the
 tonic; &minus;1 is a step below, while 7 is an octave up.</p>
-<p>In C major, 0 is middle C, 1 is the D above it, &minus;1 the B below, and 7
-the C an octave up. In G major the same numbers mean G, A, F&#9839; and the G an
-octave up &mdash; the value counts <em>steps of the key</em>, not semitones.
-This is why transposing a passage by changing its key signature moves every note
-with it and rewrites nothing.</p>
+<p>The value counts <em>steps of the key</em>, not semitones, so the same
+numbers name different pitches in different keys:</p>
+
+{
+        render_staff(
+            [("C4", "0"), ("D4", "1"), ("B3", "&minus;1"), ("C5", "7")],
+            0,
+            "C major. Harmonic value below each note; all four have alteration 0.",
+        )
+    }
+
+{
+        render_staff(
+            [("G4", "0"), ("A4", "1"), ("F4", "&minus;1"), ("G5", "7")],
+            1,
+            "G major, one sharp. The same four values. The third is F sharp, "
+            "which the key already provides, so its alteration is 0 too.",
+        )
+    }
+
+<p>This is why transposing a passage by changing its key signature moves every
+note with it and rewrites nothing: the stored numbers do not change.</p>
 
 <h4>The alteration</h4>
 <p>The alteration is how far the note departs from that diatonic step: 0 means
 the note the key gives, +1 a semitone above it, &minus;1 a semitone below.</p>
-<p>It is measured against the key, not against the printed accidental. In G
-major the seventh step is F&#9839;, so <strong>F&#9839; has an alteration of
-0</strong> &mdash; it is what the key already provides. An F natural in that key
-is <strong>&minus;1</strong>, a semitone below what the key gives, even though
-the natural is the sign the engraver prints.</p>
+<p>It is measured against the key, not against the printed accidental:</p>
+
+{
+        render_staff(
+            [
+                ("F4", "&minus;1, alt 0"),
+                ("F4", "&minus;1, alt &minus;1"),
+                ("F4", "&minus;1, alt +1"),
+            ],
+            1,
+            "G major. The same harmonic value, three alterations: F sharp as "
+            "the key gives it, F natural a semitone below, F double sharp a "
+            "semitone above.",
+        )
+    }
+
+<p>So in G major <strong>F&#9839; has an alteration of 0</strong> &mdash; the key
+already provides it &mdash; and an F natural is <strong>&minus;1</strong>, even
+though the natural is the sign the engraver prints.</p>
 
 <div class=warn><strong>The alteration is sign-and-magnitude, not two's
 complement.</strong> Bit 3 is a sign, and bits 2&ndash;0 a magnitude from 0 to 7.
@@ -608,7 +639,7 @@ section(
     """
 <p>A <code>.musx</code> is a ZIP archive. Unlike the two <code>.mus</code> eras
 it needs no bespoke container walking &mdash; a standard ZIP reader opens it &mdash;
-but its payload member is encrypted.</p>
+but its payload is encrypted.</p>
 
 <table>
 <thead><tr><th>Member</th><th>Contents</th></tr></thead>

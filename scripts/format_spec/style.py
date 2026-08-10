@@ -104,3 +104,9 @@ ul.chartkey { list-style: none; padding: 0; margin: 0; font-size: 9.5pt; }
 ul.chartkey li { margin: 4pt 0; }
 ul.chartkey .swatch { margin-right: 5pt; }
 """
+
+CSS += """
+.staff { margin: 10pt 0 12pt; break-inside: avoid; }
+.staff svg { display: block; }
+.staff .hexcap { margin-top: 2pt; }
+"""
