@@ -14,8 +14,69 @@ from __future__ import annotations
 
 _STEPS = "CDEFGAB"
 
+# Real margins matter: at zero Verovio crowds the clef against the staff's
+# left edge. adjustPage* then trims the page back to the content anyway.
+_OPTIONS = {
+    "scale": 30,
+    "adjustPageHeight": True,
+    "adjustPageWidth": True,
+    "header": "none",
+    "footer": "none",
+    "breaks": "none",
+    "pageMarginTop": 25,
+    "pageMarginBottom": 25,
+    "pageMarginLeft": 25,
+    "pageMarginRight": 25,
+    "svgViewBox": True,
+    "svgRemoveXlink": True,
+}
+
 
 _ACCIDENTAL = {-2: "flat-flat", -1: "flat", 0: "natural", 1: "sharp", 2: "double-sharp"}
+
+
+def grand_staff(fifths: int = 0) -> str:
+    """The full diatonic octave either side of the tonic, on a grand staff.
+
+    Ascending 0..7 on the treble and descending 0..-7 on the bass, both starting
+    from the same note: the tonic in the octave from middle C. Seeing the two
+    run in opposite directions from one pitch is the point -- the value is a
+    signed step count, and nothing else in the note record says which octave.
+    """
+
+    def _row(h: int, staff: int) -> str:
+        step, octave = _pitch_of(h)
+        lyr = (
+            f'<lyric number="1" name="Harmonic value"><syllabic>single</syllabic>'
+            f"<text>{h}</text></lyric>"
+            f'<lyric number="2" name="Alteration"><syllabic>single</syllabic>'
+            f"<text>0</text></lyric>"
+        )
+        return (
+            f"<note><pitch><step>{step}</step><octave>{octave}</octave></pitch>"
+            f"<duration>2</duration><type>half</type><staff>{staff}</staff>"
+            f"<voice>{staff}</voice>{lyr}</note>"
+        )
+
+    treble = "".join(_row(h, 1) for h in range(0, 8))
+    bass = "".join(_row(h, 2) for h in range(0, -8, -1))
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<score-partwise version="4.0"><part-list><score-part id="P1">'
+        "<part-name/></score-part></part-list>"
+        '<part id="P1"><measure number="1"><attributes><divisions>2</divisions>'
+        f"<staves>2</staves><key><fifths>{fifths}</fifths></key>"
+        '<clef number="1"><sign>G</sign><line>2</line></clef>'
+        '<clef number="2"><sign>F</sign><line>4</line></clef></attributes>'
+        f"{treble}<backup><duration>16</duration></backup>{bass}"
+        "</measure></part></score-partwise>"
+    )
+
+
+def _pitch_of(h: int, tonic: str = "C", octave: int = 4) -> tuple[str, int]:
+    """Step name and octave for harmonic value `h`, tonic in the middle-C octave."""
+    i = _STEPS.index(tonic) + h
+    return _STEPS[i % 7], octave + i // 7
 
 
 def _note_xml(
@@ -56,6 +117,19 @@ def musicxml(
     )
 
 
+def engrave_xml(xml: str) -> str:
+    """Render prepared MusicXML, or "" when Verovio is absent."""
+    try:
+        import verovio
+    except ImportError:  # pragma: no cover
+        return ""
+    tk = verovio.toolkit()
+    tk.setOptions(_OPTIONS)
+    if not tk.loadData(xml):
+        return ""
+    return tk.renderToSVG(1)
+
+
 def engrave(
     notes: list[tuple[str, int, int, tuple[str, ...]]], fifths: int, show_acc: bool = False
 ) -> str:
@@ -65,24 +139,7 @@ def engrave(
     except ImportError:  # pragma: no cover - the document still builds without it
         return ""
     tk = verovio.toolkit()
-    # Real margins matter: with them at zero Verovio crowds the clef against the
-    # staff's left edge. adjustPage* then trims the page back to the content.
-    tk.setOptions(
-        {
-            "scale": 30,
-            "adjustPageHeight": True,
-            "adjustPageWidth": True,
-            "header": "none",
-            "footer": "none",
-            "breaks": "none",
-            "pageMarginTop": 25,
-            "pageMarginBottom": 25,
-            "pageMarginLeft": 25,
-            "pageMarginRight": 25,
-            "svgViewBox": True,
-            "svgRemoveXlink": True,
-        }
-    )
+    tk.setOptions(_OPTIONS)
     if not tk.loadData(musicxml(notes, fifths, show_acc)):
         return ""
     return tk.renderToSVG(1)

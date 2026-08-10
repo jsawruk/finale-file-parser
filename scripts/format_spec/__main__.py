@@ -15,7 +15,7 @@ from finale_file_parser.version import mus as MUSHDR
 from . import catalog, content
 from .catalog import render_durations, render_note_flags
 from .hexview import cite, render_footnotes, render_pie, render_struct
-from .notation import engrave
+from .notation import engrave, engrave_xml, grand_staff
 from .style import CSS
 
 S = content.ALL_STRUCTS
@@ -599,6 +599,18 @@ numbers name different pitches in different keys:</p>
 
 <p>This is why transposing a passage by changing its key signature moves every
 note with it and rewrites nothing: the stored numbers do not change.</p>
+
+<h4>How octaves are handled</h4>
+<p>There is no octave field. The harmonic value is a signed step count, so an
+octave is simply seven steps: 7 is an octave above the tonic, &minus;7 an octave
+below, 14 two octaves above. Twelve bits give it a range of
+&minus;2048&hellip;2047, which is far more than any notation needs.</p>
+
+{_figure(engrave_xml(grand_staff()),
+         "C major. Ascending 0 to 7 on the treble, descending 0 to &minus;7 on the "
+         "bass. Both start from the same note, the tonic in the octave from middle C. "
+         "The upper row under each note is the harmonic value, the lower its "
+         "alteration.")}
 
 <h4>The alteration</h4>
 <p>The alteration is how far the note departs from that diatonic step: 0 means
