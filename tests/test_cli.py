@@ -154,7 +154,7 @@ def test_inspect_reports_a_score_that_does_not_build(
     from finale_file_parser.errors import FinaleFileError
 
     def load(path: Path) -> object:
-        raise FinaleFileError("entry 402 placed by more than one frame")
+        raise FinaleFileError("entry 402 placed twice at staff 3 measure 12 layer 1")
 
     monkeypatch.setattr(cli, "load_document", load)
     source = touch(tmp_path / "a.musx")

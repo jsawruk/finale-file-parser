@@ -59,12 +59,12 @@ def test_a_mirrored_span_reaches_both_parts() -> None:
     assert [e.duration for e in first] == [e.duration for e in second]
 
 
-def test_the_mirror_does_not_double_the_source_staff() -> None:
-    """Both staves get the music once, not the source staff twice.
+def test_each_placement_builds_into_its_own_staff() -> None:
+    """Each staff gets the music once, rather than one staff getting it twice.
 
     The failure this guards is a loop that appends every placement into the
-    first location's cell, which would leave P1 holding four events and P2
-    holding none.
+    cell of the *first* location — first in frame-walk order, which marks
+    nothing — leaving P1 holding four events and P2 holding none.
     """
     score = build_score(parse_enigma(MIRROR))
     assert len(_events(score, "P1")) == 2

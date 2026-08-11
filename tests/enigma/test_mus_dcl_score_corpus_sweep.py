@@ -231,13 +231,23 @@ DOCUMENTS_WHERE_A_MIRROR_REACHES_THE_SCORE = 1
 is placed twice. `Bach Concerto.MUS`, staves 4 and 14, 42 measures."""
 
 MIRRORED_ENTRIES = 239
-"""Entries across the corpus holding more than one location.
+"""Entries in this DCL cohort holding more than one location.
 
 **The pin that keeps mirroring honest.** A reader that quietly went back to one
 location per entry would still build 132 scores and still pass every count
-above -- the mirrored staff would simply come out empty, and no other number
-here would notice. This is what notices. Every one of the 239 holds exactly two
+above -- the second staff would simply come out empty, and no other number here
+would notice. This is what notices. Every one of the 239 holds exactly two
 locations; none holds three.
+
+**This cohort only** -- the sweep below walks the 2001-2005 (DCL) `.mus` and
+nothing else. The `.musx` corpus is covered by
+`tests/enigma/test_location_corpus_sweep.py`, which asserts the opposite shape:
+exactly one location per entry, because no corpus `.musx` shares an entry span.
+The 99 2011-era `.mus` are covered by neither -- no sweep resolves locations
+over that container, the paired sweeps running `locate_entries` on the `.musx`
+oracle rather than on the `.mus`. That gap is left open on purpose: the two
+readers hand the same document model to the same resolution code, so a mirror
+in a 2011 file would be read by the code these two sweeps already pin.
 """
 
 
