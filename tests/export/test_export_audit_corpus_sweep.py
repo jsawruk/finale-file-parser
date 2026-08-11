@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import collections
 import xml.etree.ElementTree as ET
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -33,7 +34,7 @@ from corpus_files import corpus_paths
 from defusedxml import ElementTree as DET
 
 from finale_file_parser.export.musicxml import to_musicxml
-from finale_file_parser.ir import Score
+from finale_file_parser.ir import Part, Score
 
 CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
@@ -54,7 +55,7 @@ records whose entry is a rest, against 16,591 on notes. Pinned so that a change
 in the count means the lyric-to-entry mapping moved, rather than going unnoticed.
 """
 
-MUS_EXPORTED = 230
+MUS_EXPORTED = 231
 """`.mus` documents that export. The same invariants are asserted on them: a
 reader-specific defect would otherwise hide behind the `.musx` path.
 
@@ -64,7 +65,35 @@ all. The Windows cohort had been outside this audit since it was written, and
 nothing failed to say so, because a sweep that walks fewer files simply reports
 a smaller number. Every one of the 99 documents that walk now brings in passes
 every invariant below unchanged. The last two arrived when a breve and a dotted
-whole stopped being refused as durations."""
+whole stopped being refused as durations.
+
+Was 230. `Bach Concerto.MUS` joined once a mirrored entry could be placed on
+every staff that shows it, rather than refused. See `MIRRORED_MEASURES`.
+"""
+
+MIRRORED_MEASURES = 42
+"""Measures of `Bach Concerto.MUS` that staves 4 and 14 both display.
+
+Asserted at the export level, not just at placement: this is the layer a user
+actually sees, and it is where a mirror that resolved but never got written
+would show up.
+"""
+
+
+_Contents = dict[int, list[tuple[tuple[tuple[str, int, int], ...], Fraction]]]
+
+
+def _by_measure(part: Part) -> _Contents:
+    """Measure number -> the pitches and durations it holds, spelling included."""
+    return {
+        m.number: [
+            (tuple((p.step, p.octave, p.alteration) for p in e.pitches), e.duration)
+            for v in m.voices
+            for e in v.events
+        ]
+        for m in part.measures
+    }
+
 
 _BARLINE_ORDER = ("bar-style", "ending", "repeat")
 
@@ -113,6 +142,19 @@ def test_the_mus_path_exports_and_holds_together(
     test_beams_close_within_their_measure_and_voice(mus_documents)
     test_barlines_are_well_formed(mus_documents)
     test_durations_are_positive_integers_against_a_declared_divisions(mus_documents)
+
+
+def test_a_mirrored_staff_exports_the_music_it_displays(
+    mus_scores: list[tuple[Path, Score]],
+) -> None:
+    """See `MIRRORED_MEASURES`."""
+    score = next(s for path, s in mus_scores if path.name == "Bach Concerto.MUS")
+    parts = {p.id: p for p in score.parts}
+    source, mirror = _by_measure(parts["P4"]), _by_measure(parts["P14"])
+    agreeing = [
+        number for number, events in source.items() if events and mirror.get(number) == events
+    ]
+    assert len(agreeing) >= MIRRORED_MEASURES
 
 
 def test_nothing_the_ir_holds_is_dropped_on_the_way_out(
