@@ -45,13 +45,31 @@ frame-walk order. One place claimed twice is still an error -- see
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from finale_file_parser.enigma.document import EnigmaDocument, Record
 from finale_file_parser.errors import FinaleFileError
 
 _FRAME_FIELDS = ("frame1", "frame2", "frame3", "frame4")
 _CHAIN_GUARD = 1_000_000
+
+_MAX_PLACEMENTS_PER_ENTRY = 64
+"""Total placements allowed, per entry in the pool.
+
+The allocation guard for the whole resolution. `_CHAIN_GUARD` bounds **one**
+walk; nothing bounds how many walks a file asks for, and a document is free to
+name one long frame chain from any number of `gfhold` records at distinct
+(staff, measure). Placing an entry once per claiming `gfhold` then costs
+`gfholds x entries` locations, every factor of it file-supplied.
+
+The bound is derived from the document rather than picked: a mirror places an
+entry once per staff that displays it, so an honest total scales with the entry
+pool, not with the number of records claiming it. Across the 632 corpus
+documents that resolve, the largest ratio of placements to entries is **1.044**
+(5,646 placements against 5,407 entries, 239 of them mirrored) and no entry is
+placed more than twice, so 64 per entry leaves a factor of 60 in hand. That
+headroom is deliberate: this is a hostile-input guard, not a tuning parameter.
+"""
 
 
 class MalformedScoreError(FinaleFileError):
@@ -63,7 +81,8 @@ class MalformedScoreError(FinaleFileError):
     `endEntry` present (an incidence with neither is a legitimate empty
     layer, not an error), an entry placed twice at the same staff, measure
     and layer (an entry in several *different* places is a mirror, and is
-    legal), or a `next`-chain that exceeds the guard (a cycle).
+    legal), a `next`-chain that exceeds the guard (a cycle), or more
+    placements in total than `_MAX_PLACEMENTS_PER_ENTRY` allows.
     """
 
 
@@ -92,6 +111,36 @@ class EntryLocation:
     """
 
 
+@dataclass
+class _Placements:
+    """The placements resolved so far, held under a total cap.
+
+    Both invariants that bound the result live here: one place may be claimed
+    only once, and the whole document may not produce more placements than its
+    entry pool justifies (see `_MAX_PLACEMENTS_PER_ENTRY`).
+    """
+
+    limit: int
+    by_entry: dict[int, list[EntryLocation]] = field(default_factory=dict)
+    total: int = 0
+
+    def add(self, place: EntryLocation) -> None:
+        here = self.by_entry.setdefault(place.entnum, [])
+        if place in here:
+            raise MalformedScoreError(
+                f"entry {place.entnum} placed twice at staff {place.staff} "
+                f"measure {place.measure} layer {place.layer}"
+            )
+        if self.total >= self.limit:
+            raise MalformedScoreError(
+                f"entry placements exceed {self.limit} "
+                f"({_MAX_PLACEMENTS_PER_ENTRY} per entry in the pool): frames claim entries "
+                "far more often than any mirror does"
+            )
+        here.append(place)
+        self.total += 1
+
+
 def locate_entries(doc: EnigmaDocument) -> dict[int, tuple[EntryLocation, ...]]:
     """Resolve every entry to the place(s) it sounds, and the effective raw key.
 
@@ -103,13 +152,14 @@ def locate_entries(doc: EnigmaDocument) -> dict[int, tuple[EntryLocation, ...]]:
         MalformedScoreError: an entry is not reachable from any frame, a
             frame points at a missing `frameSpec`, a `keySig.key` or
             `startEntry`/`endEntry` is not an integer, an entry is placed
-            twice at one (staff, measure, layer), or a `next`-chain exceeds
-            the guard.
+            twice at one (staff, measure, layer), a `next`-chain exceeds
+            the guard, or the placements in total exceed what the entry pool
+            allows (`_MAX_PLACEMENTS_PER_ENTRY`).
     """
     entries_by_num = {_int(e.attrs.get("entnum"), "entnum"): e for e in doc.entries.of_tag("entry")}
     key_by_measure = effective_keys(doc)
 
-    location: dict[int, list[EntryLocation]] = {}
+    placements = _Placements(limit=len(entries_by_num) * _MAX_PLACEMENTS_PER_ENTRY)
     for gfhold in doc.details.of_tag("gfhold"):
         # Score records only. A linked-part gfhold would place the same entries
         # a second time and trip the double-place check; the score placement is
@@ -136,15 +186,15 @@ def locate_entries(doc: EnigmaDocument) -> dict[int, tuple[EntryLocation, ...]]:
                 continue
             frame_cmper = _int(frame_value, field_name)
             _place_frame_entries(
-                doc, frame_cmper, staff, measure, layer, key_signature, entries_by_num, location
+                doc, frame_cmper, staff, measure, layer, key_signature, entries_by_num, placements
             )
 
-    orphans = set(entries_by_num) - set(location)
+    orphans = set(entries_by_num) - set(placements.by_entry)
     if orphans:
         raise MalformedScoreError(
             f"{len(orphans)} orphan entry(ies) not placed by any frame: {sorted(orphans)}"
         )
-    return {entnum: tuple(places) for entnum, places in location.items()}
+    return {entnum: tuple(places) for entnum, places in placements.by_entry.items()}
 
 
 def effective_keys(doc: EnigmaDocument) -> dict[int, int]:
@@ -197,7 +247,7 @@ def _place_frame_entries(
     layer: int,
     key_signature: int,
     entries_by_num: dict[int, Record],
-    location: dict[int, list[EntryLocation]],
+    placements: _Placements,
 ) -> None:
     # Every incidence sharing this cmper (a frame cmper can carry two, where the
     # first is empty and the second holds the entry chain — see module docstring),
@@ -222,7 +272,15 @@ def _place_frame_entries(
         if not isinstance(start, str) or not isinstance(end, str):
             raise MalformedScoreError(f"frameSpec {frame_cmper} startEntry/endEntry missing")
         _walk_entry_chain(
-            frame_cmper, start, end, staff, measure, layer, key_signature, entries_by_num, location
+            frame_cmper,
+            start,
+            end,
+            staff,
+            measure,
+            layer,
+            key_signature,
+            entries_by_num,
+            placements,
         )
 
 
@@ -235,7 +293,7 @@ def _walk_entry_chain(
     layer: int,
     key_signature: int,
     entries_by_num: dict[int, Record],
-    location: dict[int, list[EntryLocation]],
+    placements: _Placements,
 ) -> None:
     entnum = _int(start, "startEntry")
     end_entnum = _int(end, "endEntry")
@@ -252,18 +310,15 @@ def _walk_entry_chain(
             raise MalformedScoreError(
                 f"frameSpec {frame_cmper} chain references missing entry {entnum}"
             )
-        here = EntryLocation(
-            entnum=entnum,
-            staff=staff,
-            measure=measure,
-            layer=layer,
-            key_signature=key_signature,
-        )
-        if here in location.get(entnum, ()):
-            raise MalformedScoreError(
-                f"entry {entnum} placed twice at staff {staff} measure {measure} layer {layer}"
+        placements.add(
+            EntryLocation(
+                entnum=entnum,
+                staff=staff,
+                measure=measure,
+                layer=layer,
+                key_signature=key_signature,
             )
-        location.setdefault(entnum, []).append(here)
+        )
         if entnum == end_entnum:
             break
         entnum = _int(entry.attrs.get("next"), "next")

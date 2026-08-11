@@ -129,6 +129,36 @@ def test_the_same_place_claimed_twice_still_raises() -> None:
         locate_entries(parse_enigma(SAME_PLACE_TWICE))
 
 
+def test_many_gfholds_claiming_one_chain_hit_the_placement_cap() -> None:
+    """A hostile file cannot make resolution allocate gfholds x entries locations.
+
+    Every placement is legal on its own -- 100 staves, each with its own
+    `gfhold`, all naming the frame that spans the whole entry chain, so no place
+    is ever claimed twice. What bounds it is the total: `_CHAIN_GUARD` bounds a
+    single walk, and this is the guard on how many walks a document may pay for.
+    Three entries allow 192 placements; 100 staves ask for 300.
+    """
+    staves = 100
+    holds = "".join(
+        f'<gfhold cmper1="{staff}" cmper2="1"><frame1>10</frame1></gfhold>'
+        for staff in range(1, staves + 1)
+    )
+    doc = _doc(
+        _entries("1:2", "2:3", "3:0")
+        + """
+        <others>
+          <frameSpec cmper="10" inci="0">
+            <startEntry>1</startEntry><endEntry>3</endEntry>
+          </frameSpec>
+          <measSpec cmper="1"><keySig><key>0</key></keySig></measSpec>
+        </others>
+        """
+        + f"<details>{holds}</details>"
+    )
+    with pytest.raises(MalformedScoreError, match="entry placements exceed 192"):
+        locate_entries(parse_enigma(doc))
+
+
 def test_places_entries_in_staff_and_measure() -> None:
     loc = locate_entries(parse_enigma(BASIC))
     assert loc[1] == (EntryLocation(entnum=1, staff=1, measure=1, layer=1, key_signature=2),)
