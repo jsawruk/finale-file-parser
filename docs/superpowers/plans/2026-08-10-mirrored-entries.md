@@ -19,6 +19,7 @@
 - A count that *drops* means semantics changed, not coverage. Do not bump a pin downward without explaining why in its docstring.
 - **Every new test gets a mutation check**: delete or invert the thing it guards, confirm the test fails, restore. A test that passes against unfixed code is not evidence. Restore by editing the file back, never `git checkout <file>`.
 - This breaks a published API (`locate_entries` is in `finale_file_parser.__all__`, shipped in 0.2.0), so the version becomes **0.3.0**.
+- `mypy --strict` covers `src`, `tests` **and** `scripts` (`CODE = src tests scripts`). Test helpers need full annotations too — an unannotated `def` or an `object`-typed parameter whose attributes you then access will fail the gate.
 - Run the gate with `make check > /tmp/gate.log 2>&1; ec=$?` and test `$ec` on its own line. **Never pipe `make check` into `tail`** — the pipe makes the exit status `tail`'s and a failing gate looks passing.
 
 ---
@@ -312,6 +313,7 @@ from __future__ import annotations
 
 from finale_file_parser.enigma.document import parse_enigma
 from finale_file_parser.enigma.to_ir import build_score
+from finale_file_parser.ir import Event, Score
 
 NS = "http://www.makemusic.com/2012/finale"
 
@@ -344,7 +346,7 @@ MIRROR = f'''<finale version="18.0" xmlns="{NS}">
 </finale>'''.encode()
 
 
-def _events(score, part_id):
+def _events(score: Score, part_id: str) -> list[Event]:
     part = next(p for p in score.parts if p.id == part_id)
     return [e for m in part.measures for v in m.voices for e in v.events]
 
@@ -580,28 +582,37 @@ would show up.
 """
 
 
+_Contents = dict[int, list[tuple[tuple[tuple[str, int, int], ...], Fraction]]]
+
+
+def _by_measure(part: Part) -> _Contents:
+    """Measure number -> the pitches and durations it holds, spelling included."""
+    return {
+        m.number: [
+            (tuple((p.step, p.octave, p.alteration) for p in e.pitches), e.duration)
+            for v in m.voices
+            for e in v.events
+        ]
+        for m in part.measures
+    }
+
+
 def test_a_mirrored_staff_exports_the_music_it_displays(
     mus_scores: list[tuple[Path, Score]],
 ) -> None:
     """See `MIRRORED_MEASURES`."""
     score = next(s for path, s in mus_scores if path.name == "Bach Concerto.MUS")
     parts = {p.id: p for p in score.parts}
-    source, mirror = parts["P4"], parts["P14"]
-
-    def by_measure(part: object) -> dict[int, list[object]]:
-        return {
-            m.number: [
-                (tuple((p.step, p.octave, p.alteration) for p in e.pitches), e.duration)
-                for v in m.voices
-                for e in v.events
-            ]
-            for m in part.measures
-        }
-
-    a, b = by_measure(source), by_measure(mirror)
-    agreeing = [m for m in a if m in b and a[m] == b[m] and a[m]]
+    source, mirror = _by_measure(parts["P4"]), _by_measure(parts["P14"])
+    agreeing = [
+        number
+        for number, events in source.items()
+        if events and mirror.get(number) == events
+    ]
     assert len(agreeing) >= MIRRORED_MEASURES
 ```
+
+`mypy --strict` covers `tests` as well as `src` (`CODE = src tests scripts` in the Makefile), so every helper in these test files needs full annotations — an unannotated `def` or an `object`-typed parameter fails the gate. Add `from fractions import Fraction` and extend the existing `finale_file_parser.ir` import to `Part, Score`.
 
 This module has no `_dcl_files` helper — it works from the session-scoped `mus_scores` fixture in `tests/conftest.py:65`, which yields `(path, Score)` for every `.mus` that builds. `Bach Concerto.MUS` only appears in that fixture once Tasks 1–2 are done, so `next(...)` raising `StopIteration` means the earlier tasks regressed, not that the test is wrong. `Path` and `Score` are already imported in this module.
 
