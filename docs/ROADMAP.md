@@ -167,7 +167,7 @@ limit is verified by mutation, because no real corpus archive trips one.
      measurement, not memory. Re-derive before trusting: this file has been
      stale before. -->
 
-**631 of 639 corpus documents build** — `.musx` 401/401, 2011 `.mus` 99/99, DCL `.mus` 131/139.
+**632 of 639 corpus documents build** — `.musx` 401/401, 2011 `.mus` 99/99, DCL `.mus` 132/139.
 
 The previous list is done, and it is worth recording what it taught. Items 3, 4 and 5 were filed as
 documentation cleanup or verify-and-close; **all three contained live decoding bugs**:

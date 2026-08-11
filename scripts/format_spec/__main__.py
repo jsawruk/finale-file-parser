@@ -514,8 +514,10 @@ complications&rdquo;, and Finale shipped a Mirror Tool for creating them.</p>
 <p>A mirror is a staff that <em>displays another staff's music instead of
 holding its own copy</em>. An engraver reaches for one when two parts play the
 same thing &mdash; a doubled line, a cue, a piano reduction of what the winds
-are doing. Rather than duplicating the notes, the second staff is pointed at the
-first, so editing the original changes both.</p>
+are doing. Rather than duplicating the notes, the engraver points one staff at
+the other inside Finale's editor, a real act with a real direction. The file
+that act produces does not keep that direction: nothing in it records which
+staff was pointed at which.</p>
 
 <p>Stored, this means exactly what it sounds like: there is one set of entries,
 and two <code>gfhold</code> records name the same entry span. Nothing marks
