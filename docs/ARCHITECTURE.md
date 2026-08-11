@@ -38,8 +38,9 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
   and a capped inflate), `document.py` (`parse_enigma`, `EnigmaDocument`, `Pool`, `Record` — the
   uniform record/pool model), `music.py` (`read_entry`, `Entry`, `Note`, `Duration` — the first
   typed layer over the generic `entry`/`note` records), `location.py` (`locate_entries`,
-  `EntryLocation`, `MalformedScoreError` — the first cross-pool link resolution, placing every
-  entry in its staff/measure and computing the raw key signature in force), `key.py` (`decode_key`,
+  `EntryLocation`, `MalformedScoreError` — the first cross-pool link resolution, placing each entry
+  in every staff/measure that displays it and computing the raw key signature in force),
+  `key.py` (`decode_key`,
   `KeySignature`, `Mode`, `UnsupportedKeyError` — decodes the raw `keySig.key` integer into fifths,
   mode, and tonic). See "Known format facts — score.dat", "Known format facts — EnigmaXML
   structure", "Known format facts — entries and pitch", "Known format facts — score linkage", and
@@ -937,7 +938,8 @@ corpus reads through `read_entry` without raising.
 
 Full reference and derivation: `docs/superpowers/specs/2026-07-23-entry-location-design.md` and
 `docs/superpowers/plans/2026-07-23-entry-location.md`. Verified against all 401 corpus archives
-(`tests/enigma/test_location_corpus_sweep.py`): every entry in the corpus is located exactly once.
+(`tests/enigma/test_location_corpus_sweep.py`): every entry in those archives is located exactly
+once — no corpus `.musx` carries a mirror, which the legacy `.mus` cohort does (below).
 
 - **An entry names no staff, measure, or key of its own.** Reaching them needs a chain across three
   pools: a `details` `gfhold` (`cmper1` = staff, `cmper2` = measure) holds up to four frame fields
@@ -970,12 +972,26 @@ Full reference and derivation: `docs/superpowers/specs/2026-07-23-entry-location
   raw signature alone does **not** fix major vs. minor (relative major/minor share a signature);
   and a transposing instrument's written key differs from concert pitch — the raw value is
   whatever is written for that staff/part, not necessarily concert.
+- **An entry can be placed more than once, and that is legal — it is a *mirror*.** One staff
+  displaying another's music is stored as a single entry span with two `frameSpec` records naming
+  it and two `gfhold` records naming those frames. **Nothing in the file marks either placement as
+  the copy**: the two `gfhold` records are ordinary, and the only sign is that their frames resolve
+  to the same entries. Finale's editor has a direction — an engraver points one staff at another —
+  but the stored file does not keep it, so `locate_entries` returns the placements as peers in
+  frame-walk order and that order carries no meaning. `locate_entries` therefore returns
+  `dict[int, tuple[EntryLocation, ...]]`. The **same** `(staff, measure, layer)` claimed twice is a
+  different thing and is still malformed: several *distinct* places are a mirror, one place twice is
+  a broken link. Corpus: 239 entries across 42 measures of one 2001-2005 `.mus` hold two placements
+  each; none holds three. See `docs/DECISIONS.md`, "Mirror direction is not inferred".
 - **This is the first cross-pool link resolution** — earlier slices (keyed lookup, typed entries)
   only retrieve a record by its own identity; `locate_entries` is the first to follow what a
   `cmper` on one record *refers to* on another pool. `MalformedScoreError` (distinct from
   `MalformedEnigmaError`) covers a broken chain: an entry no frame places (an orphan), a frame
   pointing at a missing `frameSpec`, a non-integer `keySig.key`/`startEntry`/`endEntry`, an entry
-  placed by more than one frame, or a `next`-chain that exceeds a cycle guard.
+  placed twice at the same `(staff, measure, layer)`, a `next`-chain that exceeds a cycle guard, or
+  more placements than the entry pool allows (64 per entry, whole-document — the guard on a file
+  that names one long frame chain from many `gfhold` records, where the cycle guard bounds only a
+  single walk).
 
 ### Known format facts — key signatures
 

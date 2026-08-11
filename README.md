@@ -55,10 +55,9 @@ had — part names come out positional, for instance. What is and is not carried
 
 ## How well does it read a file?
 
-Of the 639 documents in the maintainer's test corpus, 631 build a score: 401 of 401 `.musx`, 99 of
-99 Finale 2011 `.mus`, and 131 of 139 Finale 2001–2005 `.mus`. The eight are the files rather than
-the reader — six are blank scores the parser refuses deliberately, one is a mirror, one an
-incomplete export.
+Of the 639 documents in the maintainer's test corpus, 632 build a score: 401 of 401 `.musx`, 99 of
+99 Finale 2011 `.mus`, and 132 of 139 Finale 2001–2005 `.mus`. The seven are the files rather than
+the reader — six are blank scores the parser refuses deliberately, one an incomplete export.
 
 That corpus is licensed material and is not in this repository, so those sweeps **do not run in
 CI** — they are skipped on any checkout without a corpus. CI verifies lint, formatting,

@@ -227,9 +227,10 @@ again, write down what a contributed file would have to contain.
       never reach is dead pool space and is discarded (88% of them provably duplicate live music),
       and a frame's entry pair sits in its last incidence, the leading one carrying a `startTime`.
 
-      Of the 8 that do not build, **6 are correctly refused** — blank scores, carrying staves and
-      measures but no music the frames reach. The other two are one entry two frames both claim, and
-      one `gfhold` placing entries in a measure that defines no key.
+      Of the 7 that do not build, **6 are correctly refused** — blank scores, carrying staves and
+      measures but no music the frames reach. The seventh is one `gfhold` placing entries in a
+      measure that defines no key. An entry two frames both claim is no longer among them: that is
+      a mirror, and it is read onto every staff that displays it.
 
       This cohort has **no paired `.musx`**, so the evidence is the ETF spec, internal
       cross-references, and a control against the 2011 cohort. See

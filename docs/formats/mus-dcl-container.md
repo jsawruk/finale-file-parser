@@ -204,11 +204,17 @@ puts them. Only the byte order and the framing differ.
 
 | | documents |
 | --- | --- |
-| an entry two frames both claim | 1 |
 | a gfhold placing entries in a measure that defines no key | 1 |
 | a breve or dotted whole, which `duration_from_edu` rejects | 2 |
 | no frame holds at all — a blank score | 3 |
 | frame holds that resolve to nothing, so the whole pool is unreachable | 3 |
+
+**An entry two frames both claim is no longer here.** That shape is a *mirror* — one staff
+displaying another's music, stored as one entry span that two `gfhold` records name — and it is
+now read rather than refused: the span is built into every staff that displays it. The file marks
+neither placement as the copy, so neither is treated as one. The one document it kept out builds
+now, which is why `EXPECTED_MALFORMED` fell from 2 to 1; see
+`tests/enigma/test_mus_dcl_score_corpus_sweep.py` and the mirror section of `scripts/format_spec`.
 
 The orphan cases are gone from this table: since dead pool slots are discarded at the container
 edge, `build_score` no longer sees them. **That deletion is exactly the kind that can hide a
