@@ -72,19 +72,25 @@ from finale_file_parser.report.ladder import CRASHED, OK, REFUSED
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
-DOCUMENTS_THAT_BUILD = 631
+DOCUMENTS_THAT_BUILD = 632
 """What the report thinks builds.
 
 Deliberately the same total the `.mus` and `.musx` sweeps pin between them:
 
 * **401 `.musx`** -- `tests/export/test_export_audit_corpus_sweep.py::EXPORTED`.
-* **131 of 139 2001-2005 (DCL) `.mus`** --
+* **132 of 139 2001-2005 (DCL) `.mus`** --
   `tests/enigma/test_mus_dcl_score_corpus_sweep.py::EXPECTED_SCORES`.
 * **99 2011-era `.mus`** -- `tests/export/test_export_audit_corpus_sweep.py`'s
-  `MUS_EXPORTED` (230, every `.mus` that exports) minus the 131 DCL documents
+  `MUS_EXPORTED` (231, every `.mus` that exports) minus the 132 DCL documents
   above; that sweep does not split the two cohorts apart itself.
 
-401 + 131 + 99 = 631. This asserts the two **agree**: the report must not
+401 + 132 + 99 = 632.
+
+Was 631. `Bach Concerto.MUS` joined once a mirror could place its entries on
+every staff that displays them rather than being refused, and both the DCL
+sweep's `EXPECTED_SCORES` and this total moved by that same one document.
+
+This asserts the two **agree**: the report must not
 develop its own opinion of what builds, because two independent counts of one
 thing drift. **If this fails, the fix is to find which side is wrong and say
 so -- never to move this constant to match whatever the report produced.** A
