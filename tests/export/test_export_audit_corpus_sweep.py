@@ -150,9 +150,11 @@ def test_a_mirrored_staff_exports_the_music_it_displays(
     """See `MIRRORED_MEASURES`."""
     score = next(s for path, s in mus_scores if path.name == "Bach Concerto.MUS")
     parts = {p.id: p for p in score.parts}
-    source, mirror = _by_measure(parts["P4"]), _by_measure(parts["P14"])
+    p4_content, p14_content = _by_measure(parts["P4"]), _by_measure(parts["P14"])
     agreeing = [
-        number for number, events in source.items() if events and mirror.get(number) == events
+        number
+        for number, events in p4_content.items()
+        if events and p14_content.get(number) == events
     ]
     assert len(agreeing) >= MIRRORED_MEASURES
 
