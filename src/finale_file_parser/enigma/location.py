@@ -34,6 +34,13 @@ resolution must use `all_with(tag, cmper)` (every incidence sharing that
 cmper) and walk whichever incidence(s) actually carry an entry chain, not
 just the default. Full corpus sweep:
 docs/superpowers/plans/2026-07-23-entry-location.md.
+
+An entry can be placed **more than once**. That is Finale's *mirror*: one staff
+displaying another's music, stored as one entry span with two `frameSpec`
+records naming it and two `gfhold` records naming those frames. Nothing marks
+either placement as the copy, so `locate_entries` returns them as peers, in
+frame-walk order. One place claimed twice is still an error -- see
+`MalformedScoreError`.
 """
 
 from __future__ import annotations
@@ -54,8 +61,9 @@ class MalformedScoreError(FinaleFileError):
     pointing at a missing `frameSpec`, a `keySig.key`/`startEntry` that is
     not an integer, a `frameSpec` incidence with only one of `startEntry`/
     `endEntry` present (an incidence with neither is a legitimate empty
-    layer, not an error), an entry placed by more than one frame, or a
-    `next`-chain that exceeds the guard (a cycle).
+    layer, not an error), an entry placed twice at the same staff, measure
+    and layer (an entry in several *different* places is a mirror, and is
+    legal), or a `next`-chain that exceeds the guard (a cycle).
     """
 
 
@@ -84,8 +92,8 @@ class EntryLocation:
     """
 
 
-def locate_entries(doc: EnigmaDocument) -> dict[int, EntryLocation]:
-    """Resolve every entry to its (staff, measure) and the effective raw key.
+def locate_entries(doc: EnigmaDocument) -> dict[int, tuple[EntryLocation, ...]]:
+    """Resolve every entry to the place(s) it sounds, and the effective raw key.
 
     Pure over the parsed document -- no I/O. Builds the whole index in one
     pass since the effective-key inheritance needs a full measure-order pass
@@ -94,13 +102,14 @@ def locate_entries(doc: EnigmaDocument) -> dict[int, EntryLocation]:
     Raises:
         MalformedScoreError: an entry is not reachable from any frame, a
             frame points at a missing `frameSpec`, a `keySig.key` or
-            `startEntry`/`endEntry` is not an integer, an entry is placed by
-            more than one frame, or a `next`-chain exceeds the guard.
+            `startEntry`/`endEntry` is not an integer, an entry is placed
+            twice at one (staff, measure, layer), or a `next`-chain exceeds
+            the guard.
     """
     entries_by_num = {_int(e.attrs.get("entnum"), "entnum"): e for e in doc.entries.of_tag("entry")}
     key_by_measure = effective_keys(doc)
 
-    location: dict[int, EntryLocation] = {}
+    location: dict[int, list[EntryLocation]] = {}
     for gfhold in doc.details.of_tag("gfhold"):
         # Score records only. A linked-part gfhold would place the same entries
         # a second time and trip the double-place check; the score placement is
@@ -135,7 +144,7 @@ def locate_entries(doc: EnigmaDocument) -> dict[int, EntryLocation]:
         raise MalformedScoreError(
             f"{len(orphans)} orphan entry(ies) not placed by any frame: {sorted(orphans)}"
         )
-    return location
+    return {entnum: tuple(places) for entnum, places in location.items()}
 
 
 def effective_keys(doc: EnigmaDocument) -> dict[int, int]:
@@ -188,7 +197,7 @@ def _place_frame_entries(
     layer: int,
     key_signature: int,
     entries_by_num: dict[int, Record],
-    location: dict[int, EntryLocation],
+    location: dict[int, list[EntryLocation]],
 ) -> None:
     # Every incidence sharing this cmper (a frame cmper can carry two, where the
     # first is empty and the second holds the entry chain — see module docstring),
@@ -226,7 +235,7 @@ def _walk_entry_chain(
     layer: int,
     key_signature: int,
     entries_by_num: dict[int, Record],
-    location: dict[int, EntryLocation],
+    location: dict[int, list[EntryLocation]],
 ) -> None:
     entnum = _int(start, "startEntry")
     end_entnum = _int(end, "endEntry")
@@ -243,15 +252,18 @@ def _walk_entry_chain(
             raise MalformedScoreError(
                 f"frameSpec {frame_cmper} chain references missing entry {entnum}"
             )
-        if entnum in location:
-            raise MalformedScoreError(f"entry {entnum} placed by more than one frame")
-        location[entnum] = EntryLocation(
+        here = EntryLocation(
             entnum=entnum,
             staff=staff,
             measure=measure,
             layer=layer,
             key_signature=key_signature,
         )
+        if here in location.get(entnum, ()):
+            raise MalformedScoreError(
+                f"entry {entnum} placed twice at staff {staff} measure {measure} layer {layer}"
+            )
+        location.setdefault(entnum, []).append(here)
         if entnum == end_entnum:
             break
         entnum = _int(entry.attrs.get("next"), "next")

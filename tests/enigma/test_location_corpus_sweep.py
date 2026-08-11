@@ -56,9 +56,15 @@ def test_every_corpus_entry_is_located_exactly_once() -> None:
             if "cmper" in record.attrs
         }
 
-        for location in locations.values():
-            assert isinstance(location.key_signature, int), path
-            assert location.staff in staff_cmpers, path
+        for places in locations.values():
+            # Every .musx entry is located exactly ONCE: 0 of 401 corpus
+            # archives carries a shared entry span, so no mirror reaches this
+            # container. Measured 2026-08-10 -- this assertion is what would
+            # notice if one ever did.
+            assert len(places) == 1, path
+            for location in places:
+                assert isinstance(location.key_signature, int), path
+                assert location.staff in staff_cmpers, path
 
         entries_located += len(locations)
 
@@ -87,10 +93,11 @@ def test_layers_are_recorded_and_multi_layer_measures_exist() -> None:
     for path in _archives()[:40]:
         document = parse_enigma(score_xml(path))
         located = locate_entries(document)
-        seen.update(where.layer for where in located.values())
+        seen.update(where.layer for places in located.values() for where in places)
         by_measure: dict[tuple[int, int], set[int]] = {}
-        for where in located.values():
-            by_measure.setdefault((where.staff, where.measure), set()).add(where.layer)
+        for places in located.values():
+            for where in places:
+                by_measure.setdefault((where.staff, where.measure), set()).add(where.layer)
         multi_layer_measures += sum(1 for layers in by_measure.values() if len(layers) > 1)
 
     assert seen, "no entries located"
