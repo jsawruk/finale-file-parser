@@ -70,7 +70,11 @@ def test_every_corpus_note_spells_and_preserves_scale_degree() -> None:
             if not placed:
                 continue
             # any placement will do: key comes from the measure, and a mirror's
-            # placements all sit in the same measure
+            # placements all sit in the same measure. The same is true of the
+            # staff used below for transposition, but for a different reason:
+            # this sweep checks concert pitch, which is invariant under the
+            # written-transposition round-trip, so it does not matter which of
+            # a mirror's staves supplies the transposition.
             concert_key = decode_key(placed[0].key_signature)
             staff_spec = doc.others.get("staffSpec", placed[0].staff)
             transposition = (

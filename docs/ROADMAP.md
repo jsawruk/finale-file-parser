@@ -188,16 +188,12 @@ The cheap-looking work has been the productive work. What remains:
    outside this corpus. Nine ids are known. Do not fit a formula to them. See
    `docs/formats/mus-staff-names.md`.
 
-2. **Mirrors.** One staff displaying another's music, said by pointing two `frameSpec` records at one
-   entry span. 5 DCL documents carry them; one carries 42 and is the only document that fails,
-   because only there do two `gfhold` records name the same span. Modelling this means an entry
-   having more than one location, which the IR does not have — a real design change, not a decode.
+2. **The last DCL failures, which are the files rather than the reader.** Six are blank scores
+   refused on purpose. One was a mirror and now reads. One has 36 `measSpec` records against
+   `gfhold` references reaching measure 111 — an incomplete file, and its sibling is named
+   `..._Temp`.
 
-3. **The last DCL failures, which are the files rather than the reader.** Six are blank scores
-   refused on purpose. One is a mirror (above). One has 36 `measSpec` records against `gfhold`
-   references reaching measure 111 — an incomplete file, and its sibling is named `..._Temp`.
-
-4. **Notation rendering.** The hex-viewer half of the desktop frontend shipped as `finale-parser
+3. **Notation rendering.** The hex-viewer half of the desktop frontend shipped as `finale-parser
    inspect --report`; rendering notation itself is much larger than anything above, and the CLI now
    serves the practical need for the rest.
 

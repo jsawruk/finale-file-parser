@@ -508,3 +508,21 @@ Consequence: the 2026-07-20 entry's "must not take a GUI dependency" constraint 
 construction, not by discipline — there is no GUI toolkit anywhere in the dependency graph. The
 open question on GUI framework and repo layout (see "Open questions" above) is **not** resolved by
 this; it narrows to apply only to notation rendering, the half that remains unbuilt.
+
+## Mirror direction is not inferred
+
+**Decided 2026-08-10.** A Finale mirror stores one entry span, two `frameSpec`
+records naming it, and two `gfhold` records naming those frames. Nothing marks
+either placement as the original and the other as the copy.
+
+`locate_entries` therefore returns the placements as **peers**, in frame-walk
+order, and the order carries no meaning. Direction could only be inferred — from
+the lower frame `cmper`, or from `gfhold` order — and neither is evidence.
+
+This costs nothing: a mirrored passage stays identifiable as an entry whose
+location tuple holds more than one member, so "is this staff independent music
+or a duplicate?" remains answerable without inventing an answer to "which came
+first?".
+
+**Reopen if** a field carrying mirror direction or a per-mirror transposition is
+identified, at which point the offset in `UNTRANSLATED` closes too.
