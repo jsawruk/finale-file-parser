@@ -33,6 +33,8 @@ import pytest
 from corpus_files import corpus_paths
 from defusedxml import ElementTree as DET
 
+from finale_file_parser.enigma.location import locate_entries
+from finale_file_parser.enigma.mus_document import read_mus_document
 from finale_file_parser.export.musicxml import to_musicxml
 from finale_file_parser.ir import Part, Score
 
@@ -72,10 +74,19 @@ every staff that shows it, rather than refused. See `MIRRORED_MEASURES`.
 """
 
 MIRRORED_MEASURES = 42
-"""Measures of `Bach Concerto.MUS` that staves 4 and 14 both display.
+"""Measures of `Bach Concerto.MUS` that hold a mirrored entry.
 
-Asserted at the export level, not just at placement: this is the layer a user
-actually sees, and it is where a mirror that resolved but never got written
+Derived, not eyeballed: the test asks `locate_entries` which entries hold more
+than one placement, takes the measures those placements fall in, and asserts
+that **every one of them** exports identical music -- same pitches, same
+spelling, same durations -- into both staves that display it. The two staves
+come from the placements as well, so nothing here has to name one of them.
+
+Guarding the derived set matters. Simply counting measures where the two staves
+happen to agree gives 61, because 19 more coincide without any mirror in them;
+against that number a fifth of the mirroring could stop being emitted and still
+pass. This is asserted at the export level, not just at placement, because that
+is the layer a user sees and where a mirror that resolved but was never written
 would show up.
 """
 
@@ -148,15 +159,26 @@ def test_a_mirrored_staff_exports_the_music_it_displays(
     mus_scores: list[tuple[Path, Score]],
 ) -> None:
     """See `MIRRORED_MEASURES`."""
-    score = next(s for path, s in mus_scores if path.name == "Bach Concerto.MUS")
-    parts = {p.id: p for p in score.parts}
-    p4_content, p14_content = _by_measure(parts["P4"]), _by_measure(parts["P14"])
-    agreeing = [
-        number
-        for number, events in p4_content.items()
-        if events and p14_content.get(number) == events
+    path, score = next(pair for pair in mus_scores if pair[0].name == "Bach Concerto.MUS")
+    placed_twice = [
+        place
+        for places in locate_entries(read_mus_document(path)).values()
+        if len(places) > 1
+        for place in places
     ]
-    assert len(agreeing) >= MIRRORED_MEASURES
+    staves = sorted({place.staff for place in placed_twice})
+    mirrored = {place.measure for place in placed_twice}
+    assert len(mirrored) == MIRRORED_MEASURES
+    assert len(staves) == 2, "the corpus mirror runs between exactly two staves"
+
+    parts = {p.id: p for p in score.parts}
+    displayed = [_by_measure(parts[f"P{staff}"]) for staff in staves]
+    agreeing = {
+        number
+        for number in mirrored
+        if displayed[0].get(number) and displayed[0][number] == displayed[1].get(number)
+    }
+    assert agreeing == mirrored
 
 
 def test_nothing_the_ir_holds_is_dropped_on_the_way_out(
