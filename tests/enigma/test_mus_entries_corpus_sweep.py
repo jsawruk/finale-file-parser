@@ -150,9 +150,12 @@ def test_entries_match_the_paired_musx() -> None:
             totals["count"] += len(got.notes) == len(want.notes)
             if len(got.notes) != len(want.notes):
                 continue
-            here = location.get(entnum)
+            places = location.get(entnum)
+            # one representative staff: this sweep measures entry decoding, and
+            # how many staves display an entry does not change what the entry
+            # holds -- the staff only supplies a transposition shift
             shift = harm_lev_octave_shift(
-                transposition_by_staff.get(here.staff, 0) if here is not None else 0
+                transposition_by_staff.get(places[0].staff, 0) if places else 0
             )
             for a, b in zip(got.notes, want.notes, strict=True):
                 totals["notes"] += 1

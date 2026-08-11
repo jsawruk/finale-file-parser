@@ -116,27 +116,31 @@ def build_score(document: EnigmaDocument) -> Score:
     # rather than document order.
     cells: dict[tuple[int, int], _Cell] = {}
     for entnum in chain.order:
-        here = location.get(entnum)
         record = records.get(entnum)
-        if here is None or record is None:
+        if record is None:
             continue
-        cell = cells.setdefault(
-            (here.staff, here.measure),
-            _Cell(events_by_layer=defaultdict(list), key_raw=here.key_signature),
-        )
-        cell.starts_beam[here.layer].append("beam" in record.fields)
-        cell.events_by_layer[here.layer].append(
-            _event(
-                record=record,
-                key_raw=here.key_signature,
-                transposition=transpositions.get(here.staff, _NO_TRANSPOSITION),
-                written_edu=chain.written_edu[entnum],
-                sounded_edu=sounded[entnum],
-                lyrics=lyrics.get(entnum, ()),
-                articulations=articulations.get(entnum, ()),
-                fingerings=fingerings.get(entnum, ()),
+        # An entry can sound in more than one place -- a mirror. Each placement
+        # builds its own event, because the staff decides the transposition and
+        # so the spelling: a mirror onto a transposing staff is not the same
+        # written note.
+        for here in location.get(entnum, ()):
+            cell = cells.setdefault(
+                (here.staff, here.measure),
+                _Cell(events_by_layer=defaultdict(list), key_raw=here.key_signature),
             )
-        )
+            cell.starts_beam[here.layer].append("beam" in record.fields)
+            cell.events_by_layer[here.layer].append(
+                _event(
+                    record=record,
+                    key_raw=here.key_signature,
+                    transposition=transpositions.get(here.staff, _NO_TRANSPOSITION),
+                    written_edu=chain.written_edu[entnum],
+                    sounded_edu=sounded[entnum],
+                    lyrics=lyrics.get(entnum, ()),
+                    articulations=articulations.get(entnum, ()),
+                    fingerings=fingerings.get(entnum, ()),
+                )
+            )
 
     for cell in cells.values():
         _apply_beams(cell)

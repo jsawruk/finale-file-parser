@@ -81,12 +81,13 @@ def test_scaling_makes_measures_balance() -> None:
         by_measure: dict[tuple[int, int, int], Fraction] = defaultdict(Fraction)
         written_by_measure: dict[tuple[int, int, int], int] = defaultdict(int)
         for entnum, duration in sounded.items():
-            here = location.get(entnum)
-            if here is None:
-                continue
-            key = (here.staff, here.measure, here.layer)
-            by_measure[key] += duration
-            written_by_measure[key] += chain.written_edu[entnum]
+            for here in location.get(entnum, ()):
+                # every placement, not just the first: a mirrored staff's measure
+                # genuinely holds this music, and skipping it would read as a
+                # measure that fails to fill its time signature
+                key = (here.staff, here.measure, here.layer)
+                by_measure[key] += duration
+                written_by_measure[key] += chain.written_edu[entnum]
 
         for key, total in by_measure.items():
             expected = capacity.get(key[1])
