@@ -33,6 +33,9 @@
 | `tests/enigma/test_location_corpus_sweep.py` | `.musx` sweep; asserts every entry is located. | 1 |
 | `src/finale_file_parser/enigma/to_ir.py` | Build the IR. Consumes the location map. | 2 |
 | `tests/enigma/test_mirrors.py` | **New.** Synthetic end-to-end: a mirror reaches both parts. | 2 |
+| `tests/enigma/test_tuplet_corpus_sweep.py` | Sums duration per (staff, measure, layer). **Must count every placement.** | 2 |
+| `tests/enigma/test_transposition_octave_corpus_sweep.py` | Checks each placement's staff transposition. | 2 |
+| `tests/enigma/test_pitch_corpus_sweep.py`, `test_key_corpus_sweep.py`, `test_mus_entries_corpus_sweep.py` | Read a placement's key or staff; one representative suffices. | 2 |
 | `tests/enigma/test_mus_dcl_score_corpus_sweep.py` | DCL coverage pins. | 3 |
 | `tests/export/test_export_audit_corpus_sweep.py` | Export-level corpus assertions. | 3 |
 | `src/finale_file_parser/enigma/mus_document.py` | `UNTRANSLATED` list. | 4 |
@@ -419,26 +422,75 @@ Note the `here is None` guard is gone: an absent entry yields an empty tuple and
 
 Run: `uv run pytest tests/enigma/test_mirrors.py -v`
 
-Expected: PASS. Then run the wider unit suite for regressions:
+Expected: PASS. Do **not** run the wider suite yet — the five sweeps in Step 5 still read the old shape and will fail until adapted.
 
-Run: `uv run pytest tests/enigma tests/export -x -q`
+- [ ] **Step 5: Adapt the five corpus sweeps that read a location**
 
-Expected: PASS.
+These consume `locate_entries` and stop typechecking under the new signature. **The right change differs per file — do not apply a blanket `[0]`.** Where an entry's placements can disagree, taking the first silently drops half a mirror.
 
-- [ ] **Step 5: Mutation-check**
+**`tests/enigma/test_tuplet_corpus_sweep.py:83-89` — must count every placement.** It sums each entry's duration into a `(staff, measure, layer)` bucket and checks the bucket fills its time signature. A mirrored staff's measure really does hold that music, so dropping a placement makes that measure look empty and drags `balanced_sounded` down. Replace:
 
-Change `for here in location.get(entnum, ()):` to `for here in location.get(entnum, ())[:1]:`. Run `uv run pytest tests/enigma/test_mirrors.py`. Expected: **FAILS** — `P2` holds no events. Restore by editing it back.
+```python
+        for entnum, duration in sounded.items():
+            for here in location.get(entnum, ()):
+                # every placement, not just the first: a mirrored staff's measure
+                # genuinely holds this music, and skipping it would read as a
+                # measure that fails to fill its time signature
+                key = (here.staff, here.measure, here.layer)
+                by_measure[key] += duration
+                written_by_measure[key] += chain.written_edu[entnum]
+```
 
-- [ ] **Step 6: Typecheck and commit**
+**`tests/enigma/test_transposition_octave_corpus_sweep.py:83-84` — every placement.** Each placement sits on a real staff whose transposition is worth checking. Change `for entnum, where in location.items():` to iterate the tuple:
+
+```python
+        for entnum, places in location.items():
+            for where in places:
+                interval = transposing.get(where.staff)
+```
+
+keeping the existing body and its `continue` guards unchanged beneath.
+
+**`tests/enigma/test_pitch_corpus_sweep.py:69-72` and `tests/enigma/test_key_corpus_sweep.py:67-68` — one representative is correct.** Both read only `key_signature`, which is derived from the measure, and every placement of an entry shares its measure. Take the first, and say why:
+
+```python
+            placed = location.get(entnum)
+            if not placed:
+                continue
+            # any placement will do: key comes from the measure, and a mirror's
+            # placements all sit in the same measure
+            concert_key = decode_key(placed[0].key_signature)
+```
+
+**`tests/enigma/test_mus_entries_corpus_sweep.py:153-155` — one representative.** This compares a `.mus` entry against its `.musx` twin; it measures entry *decoding*, and how many staves display an entry does not change what the entry holds. The staff only supplies a transposition shift. Use `places[0].staff` with a comment to that effect.
+
+**Expect some of these sweeps to change what they measure, and handle it carefully.** `locate_entries` used to *raise* on `Bach Concerto.MUS`; whatever these sweeps did with that exception, the document now resolves and its ~5,400 entries may enter their totals for the first time. So a moved number here is not automatically a bug.
+
+The rule: change a pinned constant only if you can say in its docstring *why* it moved, and only if it moved in the direction that explanation predicts. A count that **drops** is the dangerous case — it means the sweep is now measuring less than it did, which is the opposite of what this change should do. If any number drops, or moves for a reason you cannot name, **stop and report it to me rather than writing it down**. Include the old value, the new value, and what you think happened.
+
+- [ ] **Step 6: Mutation-check**
+
+Change `for here in location.get(entnum, ()):` in `to_ir.py` to `for here in location.get(entnum, ())[:1]:`. Run `uv run pytest tests/enigma/test_mirrors.py`. Expected: **FAILS** — `P2` holds no events. Restore by editing it back.
+
+- [ ] **Step 7: Run the suite, typecheck, and commit**
+
+Now the wider suite should be green, and `mypy --strict` should report **zero** errors across `src tests scripts` — Task 1 left `to_ir.py` and these five sweeps failing, and this task closes all of them.
 
 ```bash
-uv run ruff check src tests && uv run ruff format --check src tests && uv run mypy --strict src
-git add src/finale_file_parser/enigma/to_ir.py tests/enigma/test_mirrors.py
+uv run pytest tests/enigma tests/export -q > /tmp/t2.log 2>&1; ec=$?
+echo "pytest exit=$ec"; tail -5 /tmp/t2.log
+uv run ruff check src tests && uv run ruff format --check src tests && uv run mypy --strict src tests scripts
+git add -A
 git commit -m "feat: build a mirrored span into every staff that displays it
 
 MusicXML has no mirror concept, so the faithful rendering of what Finale
 draws is the notes on both staves. Each placement builds its own event
-because the staff decides the transposition, and so the spelling."
+because the staff decides the transposition, and so the spelling.
+
+Adapts the five corpus sweeps that read a placement. Where an entry's
+placements can disagree the sweep now visits all of them -- the tuplet sweep
+sums duration per staff, measure and layer, and skipping a mirrored staff
+would read as a measure that fails to fill its time signature."
 ```
 
 ---
