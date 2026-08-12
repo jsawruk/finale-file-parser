@@ -64,8 +64,10 @@ def test_every_corpus_key_signature_decodes() -> None:
 
         if sampled_locate_compositions < 5:
             locations = locate_entries(doc)
-            for location in list(locations.values())[:5]:
-                decode_key(location.key_signature)
+            for placed in list(locations.values())[:5]:
+                # any placement will do: key comes from the measure, and a
+                # mirror's placements all sit in the same measure
+                decode_key(placed[0].key_signature)
                 sampled_locate_compositions += 1
 
     assert archives_read == EXPECTED_ARCHIVES

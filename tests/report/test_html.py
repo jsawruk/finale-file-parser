@@ -50,10 +50,12 @@ def test_the_report_names_the_stage_that_failed() -> None:
     inspection = _inspection()
     inspection.stages = [
         Stage("detect version", OK, {"family": "mus"}),
-        Stage("build score", "refused", error="entry 39 placed by more than one frame"),
+        Stage(
+            "build score", "refused", error="entry 39 placed twice at staff 3 measure 12 layer 1"
+        ),
     ]
     html = render_html(inspection)
-    assert "entry 39 placed by more than one frame" in html
+    assert "entry 39 placed twice at staff 3 measure 12 layer 1" in html
     assert "build score" in html
 
 

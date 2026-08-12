@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from finale_file_parser.enigma.location import MalformedScoreError
+from finale_file_parser.enigma.location import MalformedScoreError, locate_entries
 from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.mus_document import read_mus_document
 from finale_file_parser.enigma.mus_entries import read_mus_entry_records
@@ -29,13 +29,18 @@ pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not pr
 LAST_DCL_YEAR = 2005
 EXPECTED_DOCUMENTS = 139
 
-EXPECTED_SCORES = 131
-"""Documents that build. Before this reader, none of the 139 did."""
+EXPECTED_SCORES = 132
+"""Documents that build. Before this reader, none of the 139 did.
 
-EXPECTED_PARTS = 410
-EXPECTED_MEASURES = 14107
-EXPECTED_EVENTS = 61851
-EXPECTED_PITCHES = 68530
+Was 131. The document that joined is `Bach Concerto.MUS`, whose 42 mirrored
+spans made it the last DCL failure attributable to the reader rather than to
+the file. See `MIRRORED_ENTRIES` below.
+"""
+
+EXPECTED_PARTS = 416
+EXPECTED_MEASURES = 15283
+EXPECTED_EVENTS = 67795
+EXPECTED_PITCHES = 73962
 """The shape of what comes out. A reader that built empty scores would still
 pass a "did it build" test; these are what stop that."""
 
@@ -68,11 +73,14 @@ again -- and nothing else in the suite would have noticed, because no sweep
 counted a DCL barline.
 """
 
-EXPECTED_MALFORMED = 2
-"""Documents `build_score` rejects: one entry that two frames both claim, and
-one `gfhold` placing entries in a measure that defines no key.
+EXPECTED_MALFORMED = 1
+"""Documents `build_score` rejects: one `gfhold` placing entries in a measure
+that defines no key.
 
-Pinned rather than tolerated: these are known, named gaps, and the number should
+Was 2. The other was an entry two frames both claimed -- a mirror, now read
+rather than refused.
+
+Pinned rather than tolerated: this is a known, named gap, and the number should
 fall, never rise. See `docs/formats/mus-dcl-container.md`.
 """
 
@@ -209,16 +217,37 @@ def test_the_cohort_draws_its_double_barlines() -> None:
 DOCUMENTS_WITH_MIRRORED_FRAMES = 5
 """Documents where two `frameSpec` records name the same entry span.
 
-That is Finale's **mirror**: one staff displays another's music, so both point at
-one passage. `docs/eeppd.txt` warns that "mirrors and voice 2 create
-complications", and this is the complication -- `locate_entries` maps an entry to
-one staff and measure, so a passage claimed twice is rejected.
+That is Finale's **mirror**: one staff displays another's music, so both point
+at one passage. `docs/eeppd.txt` warns that "mirrors and voice 2 create
+complications", and this was the complication.
 
-It is systematic rather than damage: one document carries 42 mirrored spans. Only
-one document actually fails on it, because only there do two `gfhold` records
-reference the same span; elsewhere the duplicate frame is never named. Pinned so
-that modelling mirrors shows up here, and so the count is not mistaken for
-corruption. See `mus_document.UNTRANSLATED`.
+In four of the five the duplicate frame is never named by a `gfhold`, so the
+mirror never reaches the score. Counted separately from the one that does
+because these four would read identically whether mirrors were modelled or not.
+"""
+
+DOCUMENTS_WHERE_A_MIRROR_REACHES_THE_SCORE = 1
+"""Documents where two `gfhold` records name a shared span, so an entry really
+is placed twice. `Bach Concerto.MUS`, staves 4 and 14, 42 measures."""
+
+MIRRORED_ENTRIES = 239
+"""Entries in this DCL cohort holding more than one location.
+
+**The pin that keeps mirroring honest.** A reader that quietly went back to one
+location per entry would still build 132 scores and still pass every count
+above -- the second staff would simply come out empty, and no other number here
+would notice. This is what notices. Every one of the 239 holds exactly two
+locations; none holds three.
+
+**This cohort only** -- the sweep below walks the 2001-2005 (DCL) `.mus` and
+nothing else. The `.musx` corpus is covered by
+`tests/enigma/test_location_corpus_sweep.py`, which asserts the opposite shape:
+exactly one location per entry, because no corpus `.musx` shares an entry span.
+The 99 2011-era `.mus` are covered by neither -- no sweep resolves locations
+over that container, the paired sweeps running `locate_entries` on the `.musx`
+oracle rather than on the `.mus`. That gap is left open on purpose: the two
+readers hand the same document model to the same resolution code, so a mirror
+in a 2011 file would be read by the code these two sweeps already pin.
 """
 
 
@@ -239,3 +268,28 @@ def test_mirrored_frames_are_a_known_and_counted_shape() -> None:
                 spans[(start, end)] += 1
         documents += any(count > 1 for count in spans.values())
     assert documents == DOCUMENTS_WITH_MIRRORED_FRAMES
+
+
+def test_a_mirror_places_its_entries_on_every_staff_that_shows_them() -> None:
+    """See `MIRRORED_ENTRIES`."""
+    documents = 0
+    mirrored = 0
+    for path in _dcl_files():
+        try:
+            document = read_mus_document(path)
+            locations = locate_entries(document)
+        except (CorruptScoreError, MalformedScoreError):
+            continue
+        here = [places for places in locations.values() if len(places) > 1]
+        if not here:
+            continue
+        documents += 1
+        mirrored += len(here)
+        for places in here:
+            # a mirror puts one entry in several places, never one place twice
+            assert len({(p.staff, p.measure, p.layer) for p in places}) == len(places), path
+            # and always within one measure -- the staves differ, the bar does not
+            assert len({p.measure for p in places}) == 1, path
+
+    assert documents == DOCUMENTS_WHERE_A_MIRROR_REACHES_THE_SCORE
+    assert mirrored == MIRRORED_ENTRIES

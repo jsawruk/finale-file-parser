@@ -167,7 +167,7 @@ limit is verified by mutation, because no real corpus archive trips one.
      measurement, not memory. Re-derive before trusting: this file has been
      stale before. -->
 
-**631 of 639 corpus documents build** — `.musx` 401/401, 2011 `.mus` 99/99, DCL `.mus` 131/139.
+**632 of 639 corpus documents build** — `.musx` 401/401, 2011 `.mus` 99/99, DCL `.mus` 132/139.
 
 The previous list is done, and it is worth recording what it taught. Items 3, 4 and 5 were filed as
 documentation cleanup or verify-and-close; **all three contained live decoding bugs**:
@@ -188,16 +188,12 @@ The cheap-looking work has been the productive work. What remains:
    outside this corpus. Nine ids are known. Do not fit a formula to them. See
    `docs/formats/mus-staff-names.md`.
 
-2. **Mirrors.** One staff displaying another's music, said by pointing two `frameSpec` records at one
-   entry span. 5 DCL documents carry them; one carries 42 and is the only document that fails,
-   because only there do two `gfhold` records name the same span. Modelling this means an entry
-   having more than one location, which the IR does not have — a real design change, not a decode.
+2. **The last DCL failures, which are the files rather than the reader.** Six are blank scores
+   refused on purpose. One was a mirror and now reads. One has 36 `measSpec` records against
+   `gfhold` references reaching measure 111 — an incomplete file, and its sibling is named
+   `..._Temp`.
 
-3. **The last DCL failures, which are the files rather than the reader.** Six are blank scores
-   refused on purpose. One is a mirror (above). One has 36 `measSpec` records against `gfhold`
-   references reaching measure 111 — an incomplete file, and its sibling is named `..._Temp`.
-
-4. **Notation rendering.** The hex-viewer half of the desktop frontend shipped as `finale-parser
+3. **Notation rendering.** The hex-viewer half of the desktop frontend shipped as `finale-parser
    inspect --report`; rendering notation itself is much larger than anything above, and the CLI now
    serves the practical need for the rest.
 
@@ -215,9 +211,12 @@ again, write down what a contributed file would have to contain.
       reads, and both the `others` and `details` pools walk generically from byte zero: their
       records are self-identifying (`tag`, `cmper`, `part`, `length`), so no oracle is needed. See
       `enigma/mus_others.py` and `enigma/mus_details.py`.
-      **93 of the 99 build a `Score`.** Of the 6 that do not, 4 name an entry the pool does not hold
-      — a dangling reference rather than a decode gap. Remaining: the per-tag payload layouts still
-      listed in `mus_document.UNTRANSLATED`.
+      **All 99 build a `Score`** — `MUS_EXPORTED` (231, every `.mus` that exports) in
+      `tests/export/test_export_audit_corpus_sweep.py`, less the 132 DCL documents below; that is
+      the split `tests/report/test_inspect_corpus_sweep.py::DOCUMENTS_THAT_BUILD` records, and
+      measured directly: 99 of 99, none refused. The 6 that once failed on a dangling entry
+      reference no longer do; which later fix closed that is not recorded here. Remaining: the
+      per-tag payload layouts still listed in `mus_document.UNTRANSLATED`.
 - [x] **2001–2005 (`DCL`-era) `.mus`** — **done for reading**, and this is 139 of the 238 `.mus`
       corpus. Four labelled pools per file, tiling exactly, 139/139, byte order (102 little-endian,
       37 big-endian) taken from the file. The entry pool reads — 71,801 entries over all 139
@@ -225,15 +224,20 @@ again, write down what a contributed file would have to contain.
       two-character tags; `MS`, `IS`, `FR` and `GF` are payload-confirmed, including the frame link
       (a `GF` record's frame array starts at +4 in a 2001 file and +6 in a 2005 one, told apart by
       the staff spec's incidence count) and all four layer slots.
-      **131 of the 139 build a `Score`** — 410 parts, 14,107 measures, 68,530 pitches — and export.
+      **132 of the 139 build a `Score`** — 416 parts, 15,283 measures, 67,795 events and 73,962
+      pitches — and export. Every figure is the pin of the same name in
+      `tests/enigma/test_mus_dcl_score_corpus_sweep.py` (`EXPECTED_SCORES`, `EXPECTED_PARTS`,
+      `EXPECTED_MEASURES`, `EXPECTED_EVENTS`, `EXPECTED_PITCHES`), so prose and sweep cannot drift
+      apart without the sweep failing.
 
       **The reader has no unexplained readings left.** Two guesses became rules: an entry the frames
       never reach is dead pool space and is discarded (88% of them provably duplicate live music),
       and a frame's entry pair sits in its last incidence, the leading one carrying a `startTime`.
 
-      Of the 8 that do not build, **6 are correctly refused** — blank scores, carrying staves and
-      measures but no music the frames reach. The other two are one entry two frames both claim, and
-      one `gfhold` placing entries in a measure that defines no key.
+      Of the 7 that do not build, **6 are correctly refused** — blank scores, carrying staves and
+      measures but no music the frames reach. The seventh is one `gfhold` placing entries in a
+      measure that defines no key. An entry two frames both claim is no longer among them: that is
+      a mirror, and it is read onto every staff that displays it.
 
       This cohort has **no paired `.musx`**, so the evidence is the ETF spec, internal
       cross-references, and a control against the 2011 cohort. See

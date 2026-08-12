@@ -80,21 +80,22 @@ def deltas() -> collections.Counter[tuple[int, int, int]]:
         location = locate_entries(document)
         theirs = {int(r.attrs["entnum"]): r for r in document.entries.of_tag("entry")}
         mine = {int(r.attrs["entnum"]): r for r in legacy.entries.of_tag("entry")}
-        for entnum, where in location.items():
-            interval = transposing.get(where.staff)
-            if interval is None or entnum not in theirs or entnum not in mine:
-                continue
-            a, b = read_entry(theirs[entnum]), read_entry(mine[entnum])
-            if len(a.notes) != len(b.notes):
-                continue
-            for note, legacy_note in zip(a.notes, b.notes, strict=True):
-                out[
-                    (
-                        interval,
-                        harm_lev_octave_shift(interval),
-                        note.harm_lev - legacy_note.harm_lev,
-                    )
-                ] += 1
+        for entnum, places in location.items():
+            for where in places:
+                interval = transposing.get(where.staff)
+                if interval is None or entnum not in theirs or entnum not in mine:
+                    continue
+                a, b = read_entry(theirs[entnum]), read_entry(mine[entnum])
+                if len(a.notes) != len(b.notes):
+                    continue
+                for note, legacy_note in zip(a.notes, b.notes, strict=True):
+                    out[
+                        (
+                            interval,
+                            harm_lev_octave_shift(interval),
+                            note.harm_lev - legacy_note.harm_lev,
+                        )
+                    ] += 1
     return out
 
 

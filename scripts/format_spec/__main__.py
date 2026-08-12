@@ -143,48 +143,25 @@ section(
 </tbody></table>
 
 <h4>Corpus coverage</h4>
-<p>The figures the parser is measured against, over 639 documents. 631 build a
+<p>The figures the parser is measured against, over 639 documents. 632 build a
 score.</p>
 {
         render_pie(
             [
                 (".musx, 401 of 401", 401, "#4a7fb5"),
                 ("2011 .mus, 99 of 99", 99, "#5da36a"),
-                ("DCL .mus, 131 of 139", 131, "#c9954a"),
-                ("Other", 8, "#b5534a"),
+                ("DCL .mus, 132 of 139", 132, "#c9954a"),
+                ("Other", 7, "#b5534a"),
             ]
         )
     }
 
-<h4>The other eight files</h4>
+<h4>The other seven files</h4>
 <dl>
 <dt>Six empty scores</dt>
 <dd>These files appear to be empty. They carry staves and measures, but no
 notes. The reader refuses them rather than returning an empty score, because an
 empty result is indistinguishable from a parse that went wrong.</dd>
-
-<dt>One mirror</dt>
-<dd><strong>Mirror</strong> is Coda's own term &mdash; their 1996
-documentation{CITE_MIRROR} warns that &ldquo;mirrors and voice 2 create
-complications&rdquo;, and Finale shipped a Mirror Tool for creating them.</p>
-
-<p>A mirror is a staff that <em>displays another staff's music instead of
-holding its own copy</em>. An engraver reaches for one when two parts play the
-same thing &mdash; a doubled line, a cue, a piano reduction of what the winds
-are doing. Rather than duplicating the notes, the second staff is pointed at the
-first, so editing the original changes both.</p>
-
-<p>Stored, this means exactly what it sounds like: there is one set of entries,
-and two <code>gfhold</code> records name the same entry span. Nothing marks
-either as the copy. To a reader walking the frame chain, the same entries simply
-turn up twice, in two different places in the score.</p>
-
-<p>Five DCL documents in the corpus contain mirrors; four read fine,
-because their mirrored spans are named once. The one that fails is the only
-document where <em>two</em> <code>gfhold</code> records name the same entry
-span, which would require a single entry to exist in two places at once. The
-intermediate representation gives an entry exactly one location, so supporting
-this is a design change rather than a decoding problem.</dd>
 
 <dt>One with a measure count mismatch</dt>
 <dd>A file has 36 measures declared in the <code>measSpec</code> records, but
@@ -526,16 +503,37 @@ forward &mdash; to resolve a tie, say &mdash; follows the chain instead.</p>
 
 <div class=note><strong>An entry reached by more than one frame.</strong> Two
 frames naming the same entry span is how a <em>mirror</em> is stored
-(&sect;2) &mdash; one staff displaying another's music. Nothing in the record
+(below) &mdash; one staff displaying another's music. Nothing in the record
 marks it as such: the two <code>gfhold</code> records are ordinary, and the only
 sign is that their frames resolve to the same entries.
 
-<p>The record decodes without difficulty; what is hard is representing it. An
-intermediate form that gives each entry one location cannot hold an entry that
-sounds in two places, so this implementation refuses such a document rather than
-place the notes wrongly. That is a limitation of the representation, not of the
-decoding, and one of the eight non-building corpus documents is a case of
-it.</p></div>
+<p><strong>Mirror</strong> is Coda's own term &mdash; their 1996
+documentation{CITE_MIRROR} warns that &ldquo;mirrors and voice 2 create
+complications&rdquo;, and Finale shipped a Mirror Tool for creating them.</p>
+
+<p>A mirror is a staff that <em>displays another staff's music instead of
+holding its own copy</em>. An engraver reaches for one when two parts play the
+same thing &mdash; a doubled line, a cue, a piano reduction of what the winds
+are doing. Rather than duplicating the notes, the engraver points one staff at
+the other inside Finale's editor, a real act with a real direction. The file
+that act produces does not keep that direction: nothing in it records which
+staff was pointed at which.</p>
+
+<p>Stored, this means exactly what it sounds like: there is one set of entries,
+and two <code>gfhold</code> records name the same entry span. Nothing marks
+either as the copy. To a reader walking the frame chain, the same entries simply
+turn up twice, in two different places in the score.</p>
+
+<p>Five DCL documents in the corpus contain mirrors. In four, the duplicate
+frame is never named by a <code>gfhold</code>, so the mirror never reaches the score.
+In the fifth, two <code>gfhold</code> records name the same span across 42
+measures, and the entries really are in two places at once.</p>
+
+<p>This reader places an entry once per <code>gfhold</code> that claims it, and
+builds the music onto every staff that displays it. Both placements are treated
+as peers: since nothing in the file marks either as the copy, nothing here
+guesses. MusicXML has no mirror of its own, so writing the notes onto both
+staves is what Finale's own display amounts to.</p></div>
 """
     + catalog.render_tag_tables(),
 )

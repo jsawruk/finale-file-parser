@@ -34,17 +34,51 @@ resolution must use `all_with(tag, cmper)` (every incidence sharing that
 cmper) and walk whichever incidence(s) actually carry an entry chain, not
 just the default. Full corpus sweep:
 docs/superpowers/plans/2026-07-23-entry-location.md.
+
+An entry can be placed **more than once**. That is Finale's *mirror*: one staff
+displaying another's music, stored as one entry span with two `frameSpec`
+records naming it and two `gfhold` records naming those frames. Nothing marks
+either placement as the copy, so `locate_entries` returns them as peers, in
+frame-walk order. One place claimed twice is still an error -- see
+`MalformedScoreError`.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from finale_file_parser.enigma.document import EnigmaDocument, Record
 from finale_file_parser.errors import FinaleFileError
 
 _FRAME_FIELDS = ("frame1", "frame2", "frame3", "frame4")
 _CHAIN_GUARD = 1_000_000
+
+_MAX_PLACEMENTS_PER_ENTRY = 64
+"""Places **one entry** may be placed in.
+
+The allocation guard for the whole resolution. `_CHAIN_GUARD` bounds **one**
+walk; nothing bounds how many walks a file asks for, and a document is free to
+name one long frame chain from any number of `gfhold` records at distinct
+(staff, measure). Placing an entry once per claiming `gfhold` then costs
+`gfholds x entries` locations, every factor of it file-supplied.
+
+Bounding each entry bounds the document with it: at most
+`64 x entries in the pool` locations in total, which is linear in the file. It
+is stated per entry rather than as that total **on purpose**. Every placement is
+checked against the ones already made for its entry (the same-place-twice rule),
+a linear scan, so a budget one entry could absorb whole makes resolution
+quadratic: 0.42 MB of crafted input took 3.4 s to refuse, 1.70 MB took 65.7 s,
+and 10 MB would have taken tens of minutes -- a hang, which is what the guard
+exists to prevent. Per entry, that scan can never exceed 64 elements.
+
+The size is derived from the document rather than picked: a mirror places an
+entry once per staff that displays it, so an honest count scales with the score,
+not with the number of records claiming it. Across the 632 corpus documents that
+resolve, **no entry is placed more than twice** (the largest ratio of placements
+to entries in one document is 1.044 -- 5,646 against 5,407, 239 mirrored), so 64
+leaves a factor of 32 in hand. That headroom is deliberate: this is a
+hostile-input guard, not a tuning parameter.
+"""
 
 
 class MalformedScoreError(FinaleFileError):
@@ -54,8 +88,10 @@ class MalformedScoreError(FinaleFileError):
     pointing at a missing `frameSpec`, a `keySig.key`/`startEntry` that is
     not an integer, a `frameSpec` incidence with only one of `startEntry`/
     `endEntry` present (an incidence with neither is a legitimate empty
-    layer, not an error), an entry placed by more than one frame, or a
-    `next`-chain that exceeds the guard (a cycle).
+    layer, not an error), an entry placed twice at the same staff, measure
+    and layer (an entry in several *different* places is a mirror, and is
+    legal), a `next`-chain that exceeds the guard (a cycle), or an entry
+    placed in more than `_MAX_PLACEMENTS_PER_ENTRY` places.
     """
 
 
@@ -84,8 +120,36 @@ class EntryLocation:
     """
 
 
-def locate_entries(doc: EnigmaDocument) -> dict[int, EntryLocation]:
-    """Resolve every entry to its (staff, measure) and the effective raw key.
+@dataclass
+class _Placements:
+    """The placements resolved so far, each entry's held under a cap.
+
+    Both invariants that bound the result live here: one place may be claimed
+    only once, and no entry may be placed in more than
+    `_MAX_PLACEMENTS_PER_ENTRY` places. There is deliberately **no** separate
+    whole-document total -- the per-entry cap already bounds the document at
+    `64 x entries`, and enforcing it per entry is what keeps each `add` cheap.
+    """
+
+    by_entry: dict[int, list[EntryLocation]] = field(default_factory=dict)
+
+    def add(self, place: EntryLocation) -> None:
+        here = self.by_entry.setdefault(place.entnum, [])
+        if len(here) >= _MAX_PLACEMENTS_PER_ENTRY:
+            raise MalformedScoreError(
+                f"entry {place.entnum} is placed in more than {_MAX_PLACEMENTS_PER_ENTRY} "
+                "places: frames claim it far more often than any mirror does"
+            )
+        if place in here:
+            raise MalformedScoreError(
+                f"entry {place.entnum} placed twice at staff {place.staff} "
+                f"measure {place.measure} layer {place.layer}"
+            )
+        here.append(place)
+
+
+def locate_entries(doc: EnigmaDocument) -> dict[int, tuple[EntryLocation, ...]]:
+    """Resolve every entry to the place(s) it sounds, and the effective raw key.
 
     Pure over the parsed document -- no I/O. Builds the whole index in one
     pass since the effective-key inheritance needs a full measure-order pass
@@ -94,13 +158,15 @@ def locate_entries(doc: EnigmaDocument) -> dict[int, EntryLocation]:
     Raises:
         MalformedScoreError: an entry is not reachable from any frame, a
             frame points at a missing `frameSpec`, a `keySig.key` or
-            `startEntry`/`endEntry` is not an integer, an entry is placed by
-            more than one frame, or a `next`-chain exceeds the guard.
+            `startEntry`/`endEntry` is not an integer, an entry is placed
+            twice at one (staff, measure, layer), a `next`-chain exceeds
+            the guard, or one entry is placed in more places than
+            `_MAX_PLACEMENTS_PER_ENTRY` allows.
     """
     entries_by_num = {_int(e.attrs.get("entnum"), "entnum"): e for e in doc.entries.of_tag("entry")}
     key_by_measure = effective_keys(doc)
 
-    location: dict[int, EntryLocation] = {}
+    placements = _Placements()
     for gfhold in doc.details.of_tag("gfhold"):
         # Score records only. A linked-part gfhold would place the same entries
         # a second time and trip the double-place check; the score placement is
@@ -127,15 +193,15 @@ def locate_entries(doc: EnigmaDocument) -> dict[int, EntryLocation]:
                 continue
             frame_cmper = _int(frame_value, field_name)
             _place_frame_entries(
-                doc, frame_cmper, staff, measure, layer, key_signature, entries_by_num, location
+                doc, frame_cmper, staff, measure, layer, key_signature, entries_by_num, placements
             )
 
-    orphans = set(entries_by_num) - set(location)
+    orphans = set(entries_by_num) - set(placements.by_entry)
     if orphans:
         raise MalformedScoreError(
             f"{len(orphans)} orphan entry(ies) not placed by any frame: {sorted(orphans)}"
         )
-    return location
+    return {entnum: tuple(places) for entnum, places in placements.by_entry.items()}
 
 
 def effective_keys(doc: EnigmaDocument) -> dict[int, int]:
@@ -188,7 +254,7 @@ def _place_frame_entries(
     layer: int,
     key_signature: int,
     entries_by_num: dict[int, Record],
-    location: dict[int, EntryLocation],
+    placements: _Placements,
 ) -> None:
     # Every incidence sharing this cmper (a frame cmper can carry two, where the
     # first is empty and the second holds the entry chain — see module docstring),
@@ -213,7 +279,15 @@ def _place_frame_entries(
         if not isinstance(start, str) or not isinstance(end, str):
             raise MalformedScoreError(f"frameSpec {frame_cmper} startEntry/endEntry missing")
         _walk_entry_chain(
-            frame_cmper, start, end, staff, measure, layer, key_signature, entries_by_num, location
+            frame_cmper,
+            start,
+            end,
+            staff,
+            measure,
+            layer,
+            key_signature,
+            entries_by_num,
+            placements,
         )
 
 
@@ -226,7 +300,7 @@ def _walk_entry_chain(
     layer: int,
     key_signature: int,
     entries_by_num: dict[int, Record],
-    location: dict[int, EntryLocation],
+    placements: _Placements,
 ) -> None:
     entnum = _int(start, "startEntry")
     end_entnum = _int(end, "endEntry")
@@ -243,14 +317,14 @@ def _walk_entry_chain(
             raise MalformedScoreError(
                 f"frameSpec {frame_cmper} chain references missing entry {entnum}"
             )
-        if entnum in location:
-            raise MalformedScoreError(f"entry {entnum} placed by more than one frame")
-        location[entnum] = EntryLocation(
-            entnum=entnum,
-            staff=staff,
-            measure=measure,
-            layer=layer,
-            key_signature=key_signature,
+        placements.add(
+            EntryLocation(
+                entnum=entnum,
+                staff=staff,
+                measure=measure,
+                layer=layer,
+                key_signature=key_signature,
+            )
         )
         if entnum == end_entnum:
             break

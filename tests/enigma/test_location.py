@@ -48,11 +48,126 @@ BASIC = _doc(
 )
 
 
+# A mirror: one entry span, two frameSpec records naming it, two gfholds naming
+# those frames. Staff 1 and staff 2 both display entries 1-2 in measure 1.
+# Nothing in the file marks either staff as the copy.
+MIRROR = _doc(
+    _entries("1:2", "2:0")
+    + """
+    <others>
+      <frameSpec cmper="10" inci="0">
+        <startEntry>1</startEntry><endEntry>2</endEntry>
+      </frameSpec>
+      <frameSpec cmper="20" inci="0">
+        <startEntry>1</startEntry><endEntry>2</endEntry>
+      </frameSpec>
+      <measSpec cmper="1"><keySig><key>3</key></keySig></measSpec>
+      <staffSpec cmper="1"><x>a</x></staffSpec>
+      <staffSpec cmper="2"><x>a</x></staffSpec>
+    </others>
+    <details>
+      <gfhold cmper1="1" cmper2="1"><frame1>10</frame1></gfhold>
+      <gfhold cmper1="2" cmper2="1"><frame1>20</frame1></gfhold>
+    </details>
+    """
+)
+
+# The same gfhold slot reaching one entry twice, via two frameSpec incidences
+# that both carry the span. Not a mirror -- a mirror puts the entry in two
+# DIFFERENT places. This is one place claimed twice, which is malformed.
+SAME_PLACE_TWICE = _doc(
+    _entries("1:0")
+    + """
+    <others>
+      <frameSpec cmper="10" inci="0">
+        <startEntry>1</startEntry><endEntry>1</endEntry>
+      </frameSpec>
+      <frameSpec cmper="10" inci="1">
+        <startEntry>1</startEntry><endEntry>1</endEntry>
+      </frameSpec>
+      <measSpec cmper="1"><keySig><key>0</key></keySig></measSpec>
+      <staffSpec cmper="1"><x>a</x></staffSpec>
+    </others>
+    <details>
+      <gfhold cmper1="1" cmper2="1"><frame1>10</frame1></gfhold>
+    </details>
+    """
+)
+
+
+def test_a_mirrored_entry_holds_one_location_per_staff() -> None:
+    """Finale's mirror: one staff displays another's music.
+
+    Both placements are peers. The file marks neither as the copy, so the
+    order of the tuple carries no meaning and this asserts on the set.
+    """
+    loc = locate_entries(parse_enigma(MIRROR))
+    assert len(loc[1]) == 2
+    assert {place.staff for place in loc[1]} == {1, 2}
+    assert {place.measure for place in loc[1]} == {1}
+    assert {place.key_signature for place in loc[1]} == {3}
+    assert {place.layer for place in loc[1]} == {1}
+    # the whole span mirrors, not just its first entry
+    assert {place.staff for place in loc[2]} == {1, 2}
+
+
+def test_an_unmirrored_entry_holds_exactly_one_location() -> None:
+    """The common case keeps the same shape: a one-element tuple, not a bare
+    location. Guards against a fix that special-cases mirrors."""
+    loc = locate_entries(parse_enigma(BASIC))
+    assert loc[1] == (EntryLocation(entnum=1, staff=1, measure=1, layer=1, key_signature=2),)
+    assert len(loc[3]) == 1
+
+
+def test_the_same_place_claimed_twice_still_raises() -> None:
+    """Distinct locations are a mirror; the same location twice is malformed.
+
+    Across 133 readable DCL documents no entry is ever placed twice at one
+    (staff, measure, layer), so nothing legitimate depends on tolerating it.
+    """
+    with pytest.raises(MalformedScoreError, match="placed twice at staff 1 measure 1 layer 1"):
+        locate_entries(parse_enigma(SAME_PLACE_TWICE))
+
+
+def test_many_gfholds_claiming_one_chain_hit_the_placement_cap() -> None:
+    """A hostile file cannot make resolution allocate gfholds x entries locations.
+
+    Every placement is legal on its own -- 100 staves, each with its own
+    `gfhold`, all naming the frame that spans the whole entry chain, so no place
+    is ever claimed twice. What stops it is the per-entry cap: `_CHAIN_GUARD`
+    bounds a single walk, and this is the guard on how many walks a document may
+    make the reader pay for. 100 staves place each of the three entries 100
+    times; 64 is the limit.
+
+    Per entry rather than per document, so that the cost of each placement stays
+    bounded too -- see `_MAX_PLACEMENTS_PER_ENTRY`.
+    """
+    staves = 100
+    holds = "".join(
+        f'<gfhold cmper1="{staff}" cmper2="1"><frame1>10</frame1></gfhold>'
+        for staff in range(1, staves + 1)
+    )
+    doc = _doc(
+        _entries("1:2", "2:3", "3:0")
+        + """
+        <others>
+          <frameSpec cmper="10" inci="0">
+            <startEntry>1</startEntry><endEntry>3</endEntry>
+          </frameSpec>
+          <measSpec cmper="1"><keySig><key>0</key></keySig></measSpec>
+        </others>
+        """
+        + f"<details>{holds}</details>"
+    )
+    with pytest.raises(MalformedScoreError, match="entry 1 is placed in more than 64 places"):
+        locate_entries(parse_enigma(doc))
+
+
 def test_places_entries_in_staff_and_measure() -> None:
     loc = locate_entries(parse_enigma(BASIC))
-    assert loc[1] == EntryLocation(entnum=1, staff=1, measure=1, layer=1, key_signature=2)
-    assert loc[2] == EntryLocation(entnum=2, staff=1, measure=1, layer=1, key_signature=2)
-    assert loc[3].measure == 2
+    assert loc[1] == (EntryLocation(entnum=1, staff=1, measure=1, layer=1, key_signature=2),)
+    assert loc[2] == (EntryLocation(entnum=2, staff=1, measure=1, layer=1, key_signature=2),)
+    assert loc[3][0].measure == 2
 
 
 def test_a_measure_without_a_keysig_is_c_major_not_the_previous_key() -> None:
@@ -65,7 +180,7 @@ def test_a_measure_without_a_keysig_is_c_major_not_the_previous_key() -> None:
     chords of C, G7 and F. Inheriting spelled twenty measures a step sharp.
     """
     loc = locate_entries(parse_enigma(BASIC))
-    assert loc[3].key_signature == 0
+    assert loc[3][0].key_signature == 0
 
 
 def test_a_key_returns_after_an_absent_measure() -> None:
@@ -96,7 +211,7 @@ def test_a_key_returns_after_an_absent_measure() -> None:
         """
     )
     loc = locate_entries(parse_enigma(doc))
-    assert [loc[n].key_signature for n in (1, 2, 3)] == [1, 0, 1]
+    assert [loc[n][0].key_signature for n in (1, 2, 3)] == [1, 0, 1]
 
 
 def test_first_measure_without_keysig_defaults_to_zero() -> None:
@@ -112,7 +227,7 @@ def test_first_measure_without_keysig_defaults_to_zero() -> None:
         <details><gfhold cmper1="1" cmper2="1"><frame1>10</frame1></gfhold></details>
         """
     )
-    assert locate_entries(parse_enigma(doc))[1].key_signature == 0
+    assert locate_entries(parse_enigma(doc))[1][0].key_signature == 0
 
 
 def test_raw_key_is_not_decoded() -> None:
@@ -128,7 +243,7 @@ def test_raw_key_is_not_decoded() -> None:
         <details><gfhold cmper1="1" cmper2="1"><frame1>10</frame1></gfhold></details>
         """
     )
-    assert locate_entries(parse_enigma(doc))[1].key_signature == 253  # verbatim, not -3
+    assert locate_entries(parse_enigma(doc))[1][0].key_signature == 253  # verbatim, not -3
 
 
 def test_layers_frame2_entries_are_located() -> None:
@@ -151,7 +266,7 @@ def test_layers_frame2_entries_are_located() -> None:
         """
     )
     loc = locate_entries(parse_enigma(doc))
-    assert loc[1].measure == 1 and loc[2].measure == 1  # both layers placed
+    assert loc[1][0].measure == 1 and loc[2][0].measure == 1  # both layers placed
 
 
 def test_orphan_entry_raises() -> None:
@@ -226,7 +341,7 @@ def test_frame_with_no_entries_is_skipped_not_malformed() -> None:
         """
     )
     loc = locate_entries(parse_enigma(doc))
-    assert loc[1].measure == 1
+    assert loc[1][0].measure == 1
     assert len(loc) == 1
 
 
@@ -253,7 +368,7 @@ def test_frame_cmper_with_a_second_empty_incidence_still_resolves() -> None:
         """
     )
     loc = locate_entries(parse_enigma(doc))
-    assert loc[1] == EntryLocation(entnum=1, staff=1, measure=1, layer=1, key_signature=0)
+    assert loc[1] == (EntryLocation(entnum=1, staff=1, measure=1, layer=1, key_signature=0),)
 
 
 def test_frame_with_only_start_entry_still_raises() -> None:
@@ -295,7 +410,7 @@ def test_empty_and_zero_frame_slots_are_skipped_not_errors() -> None:
         """
     )
     loc = locate_entries(parse_enigma(doc))
-    assert loc[1].measure == 1
+    assert loc[1][0].measure == 1
 
 
 def test_measure_with_entries_but_no_measspec_key_raises() -> None:
@@ -337,4 +452,4 @@ def test_part_variant_framespec_is_ignored() -> None:
     )
     # without the part filter, the part-variant frameSpec would double-place entry 1
     loc = locate_entries(parse_enigma(doc))
-    assert loc[1].measure == 1
+    assert loc[1][0].measure == 1

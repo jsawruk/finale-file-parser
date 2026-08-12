@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "finale-file-parser"
-version = "0.2.0"
+version = "0.3.0"
 description = "A parser for Finale music notation files (.mus/.musx)."
 readme = "README.md"
 requires-python = ">=3.12"
