@@ -989,9 +989,12 @@ once — no corpus `.musx` carries a mirror, which the legacy `.mus` cohort does
   `MalformedEnigmaError`) covers a broken chain: an entry no frame places (an orphan), a frame
   pointing at a missing `frameSpec`, a non-integer `keySig.key`/`startEntry`/`endEntry`, an entry
   placed twice at the same `(staff, measure, layer)`, a `next`-chain that exceeds a cycle guard, or
-  more placements than the entry pool allows (64 per entry, whole-document — the guard on a file
-  that names one long frame chain from many `gfhold` records, where the cycle guard bounds only a
-  single walk).
+  an entry placed in more than 64 places — the guard on a file that names one long frame chain from
+  many `gfhold` records, where the cycle guard bounds only a single walk. That cap is **per entry**,
+  which bounds the document at `64 × entries` and also keeps each placement cheap: a placement is
+  checked against the ones already made for its entry, so a budget one entry could absorb whole
+  would make resolution quadratic in the file's size (measured: 1.70 MB of crafted input took 65.7 s
+  to refuse under a whole-document total, 0.004 s per entry). The corpus maximum is 2.
 
 ### Known format facts — key signatures
 

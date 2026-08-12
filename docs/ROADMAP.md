@@ -211,9 +211,12 @@ again, write down what a contributed file would have to contain.
       reads, and both the `others` and `details` pools walk generically from byte zero: their
       records are self-identifying (`tag`, `cmper`, `part`, `length`), so no oracle is needed. See
       `enigma/mus_others.py` and `enigma/mus_details.py`.
-      **93 of the 99 build a `Score`.** Of the 6 that do not, 4 name an entry the pool does not hold
-      — a dangling reference rather than a decode gap. Remaining: the per-tag payload layouts still
-      listed in `mus_document.UNTRANSLATED`.
+      **All 99 build a `Score`** — `MUS_EXPORTED` (231, every `.mus` that exports) in
+      `tests/export/test_export_audit_corpus_sweep.py`, less the 132 DCL documents below; that is
+      the split `tests/report/test_inspect_corpus_sweep.py::DOCUMENTS_THAT_BUILD` records, and
+      measured directly: 99 of 99, none refused. The 6 that once failed on a dangling entry
+      reference no longer do; which later fix closed that is not recorded here. Remaining: the
+      per-tag payload layouts still listed in `mus_document.UNTRANSLATED`.
 - [x] **2001–2005 (`DCL`-era) `.mus`** — **done for reading**, and this is 139 of the 238 `.mus`
       corpus. Four labelled pools per file, tiling exactly, 139/139, byte order (102 little-endian,
       37 big-endian) taken from the file. The entry pool reads — 71,801 entries over all 139
@@ -221,7 +224,11 @@ again, write down what a contributed file would have to contain.
       two-character tags; `MS`, `IS`, `FR` and `GF` are payload-confirmed, including the frame link
       (a `GF` record's frame array starts at +4 in a 2001 file and +6 in a 2005 one, told apart by
       the staff spec's incidence count) and all four layer slots.
-      **131 of the 139 build a `Score`** — 410 parts, 14,107 measures, 68,530 pitches — and export.
+      **132 of the 139 build a `Score`** — 416 parts, 15,283 measures, 67,795 events and 73,962
+      pitches — and export. Every figure is the pin of the same name in
+      `tests/enigma/test_mus_dcl_score_corpus_sweep.py` (`EXPECTED_SCORES`, `EXPECTED_PARTS`,
+      `EXPECTED_MEASURES`, `EXPECTED_EVENTS`, `EXPECTED_PITCHES`), so prose and sweep cannot drift
+      apart without the sweep failing.
 
       **The reader has no unexplained readings left.** Two guesses became rules: an entry the frames
       never reach is dead pool space and is discarded (88% of them provably duplicate live music),
