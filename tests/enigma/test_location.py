@@ -134,9 +134,13 @@ def test_many_gfholds_claiming_one_chain_hit_the_placement_cap() -> None:
 
     Every placement is legal on its own -- 100 staves, each with its own
     `gfhold`, all naming the frame that spans the whole entry chain, so no place
-    is ever claimed twice. What bounds it is the total: `_CHAIN_GUARD` bounds a
-    single walk, and this is the guard on how many walks a document may pay for.
-    Three entries allow 192 placements; 100 staves ask for 300.
+    is ever claimed twice. What stops it is the per-entry cap: `_CHAIN_GUARD`
+    bounds a single walk, and this is the guard on how many walks a document may
+    make the reader pay for. 100 staves place each of the three entries 100
+    times; 64 is the limit.
+
+    Per entry rather than per document, so that the cost of each placement stays
+    bounded too -- see `_MAX_PLACEMENTS_PER_ENTRY`.
     """
     staves = 100
     holds = "".join(
@@ -155,7 +159,7 @@ def test_many_gfholds_claiming_one_chain_hit_the_placement_cap() -> None:
         """
         + f"<details>{holds}</details>"
     )
-    with pytest.raises(MalformedScoreError, match="entry placements exceed 192"):
+    with pytest.raises(MalformedScoreError, match="entry 1 is placed in more than 64 places"):
         locate_entries(parse_enigma(doc))
 
 

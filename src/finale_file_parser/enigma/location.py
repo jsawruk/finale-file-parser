@@ -54,7 +54,7 @@ _FRAME_FIELDS = ("frame1", "frame2", "frame3", "frame4")
 _CHAIN_GUARD = 1_000_000
 
 _MAX_PLACEMENTS_PER_ENTRY = 64
-"""Total placements allowed, per entry in the pool.
+"""Places **one entry** may be placed in.
 
 The allocation guard for the whole resolution. `_CHAIN_GUARD` bounds **one**
 walk; nothing bounds how many walks a file asks for, and a document is free to
@@ -62,13 +62,22 @@ name one long frame chain from any number of `gfhold` records at distinct
 (staff, measure). Placing an entry once per claiming `gfhold` then costs
 `gfholds x entries` locations, every factor of it file-supplied.
 
-The bound is derived from the document rather than picked: a mirror places an
-entry once per staff that displays it, so an honest total scales with the entry
-pool, not with the number of records claiming it. Across the 632 corpus
-documents that resolve, the largest ratio of placements to entries is **1.044**
-(5,646 placements against 5,407 entries, 239 of them mirrored) and no entry is
-placed more than twice, so 64 per entry leaves a factor of 60 in hand. That
-headroom is deliberate: this is a hostile-input guard, not a tuning parameter.
+Bounding each entry bounds the document with it: at most
+`64 x entries in the pool` locations in total, which is linear in the file. It
+is stated per entry rather than as that total **on purpose**. Every placement is
+checked against the ones already made for its entry (the same-place-twice rule),
+a linear scan, so a budget one entry could absorb whole makes resolution
+quadratic: 0.42 MB of crafted input took 3.4 s to refuse, 1.70 MB took 65.7 s,
+and 10 MB would have taken tens of minutes -- a hang, which is what the guard
+exists to prevent. Per entry, that scan can never exceed 64 elements.
+
+The size is derived from the document rather than picked: a mirror places an
+entry once per staff that displays it, so an honest count scales with the score,
+not with the number of records claiming it. Across the 632 corpus documents that
+resolve, **no entry is placed more than twice** (the largest ratio of placements
+to entries in one document is 1.044 -- 5,646 against 5,407, 239 mirrored), so 64
+leaves a factor of 32 in hand. That headroom is deliberate: this is a
+hostile-input guard, not a tuning parameter.
 """
 
 
@@ -81,8 +90,8 @@ class MalformedScoreError(FinaleFileError):
     `endEntry` present (an incidence with neither is a legitimate empty
     layer, not an error), an entry placed twice at the same staff, measure
     and layer (an entry in several *different* places is a mirror, and is
-    legal), a `next`-chain that exceeds the guard (a cycle), or more
-    placements in total than `_MAX_PLACEMENTS_PER_ENTRY` allows.
+    legal), a `next`-chain that exceeds the guard (a cycle), or an entry
+    placed in more than `_MAX_PLACEMENTS_PER_ENTRY` places.
     """
 
 
@@ -113,32 +122,30 @@ class EntryLocation:
 
 @dataclass
 class _Placements:
-    """The placements resolved so far, held under a total cap.
+    """The placements resolved so far, each entry's held under a cap.
 
     Both invariants that bound the result live here: one place may be claimed
-    only once, and the whole document may not produce more placements than its
-    entry pool justifies (see `_MAX_PLACEMENTS_PER_ENTRY`).
+    only once, and no entry may be placed in more than
+    `_MAX_PLACEMENTS_PER_ENTRY` places. There is deliberately **no** separate
+    whole-document total -- the per-entry cap already bounds the document at
+    `64 x entries`, and enforcing it per entry is what keeps each `add` cheap.
     """
 
-    limit: int
     by_entry: dict[int, list[EntryLocation]] = field(default_factory=dict)
-    total: int = 0
 
     def add(self, place: EntryLocation) -> None:
         here = self.by_entry.setdefault(place.entnum, [])
+        if len(here) >= _MAX_PLACEMENTS_PER_ENTRY:
+            raise MalformedScoreError(
+                f"entry {place.entnum} is placed in more than {_MAX_PLACEMENTS_PER_ENTRY} "
+                "places: frames claim it far more often than any mirror does"
+            )
         if place in here:
             raise MalformedScoreError(
                 f"entry {place.entnum} placed twice at staff {place.staff} "
                 f"measure {place.measure} layer {place.layer}"
             )
-        if self.total >= self.limit:
-            raise MalformedScoreError(
-                f"entry placements exceed {self.limit} "
-                f"({_MAX_PLACEMENTS_PER_ENTRY} per entry in the pool): frames claim entries "
-                "far more often than any mirror does"
-            )
         here.append(place)
-        self.total += 1
 
 
 def locate_entries(doc: EnigmaDocument) -> dict[int, tuple[EntryLocation, ...]]:
@@ -153,13 +160,13 @@ def locate_entries(doc: EnigmaDocument) -> dict[int, tuple[EntryLocation, ...]]:
             frame points at a missing `frameSpec`, a `keySig.key` or
             `startEntry`/`endEntry` is not an integer, an entry is placed
             twice at one (staff, measure, layer), a `next`-chain exceeds
-            the guard, or the placements in total exceed what the entry pool
-            allows (`_MAX_PLACEMENTS_PER_ENTRY`).
+            the guard, or one entry is placed in more places than
+            `_MAX_PLACEMENTS_PER_ENTRY` allows.
     """
     entries_by_num = {_int(e.attrs.get("entnum"), "entnum"): e for e in doc.entries.of_tag("entry")}
     key_by_measure = effective_keys(doc)
 
-    placements = _Placements(limit=len(entries_by_num) * _MAX_PLACEMENTS_PER_ENTRY)
+    placements = _Placements()
     for gfhold in doc.details.of_tag("gfhold"):
         # Score records only. A linked-part gfhold would place the same entries
         # a second time and trip the double-place check; the score placement is
