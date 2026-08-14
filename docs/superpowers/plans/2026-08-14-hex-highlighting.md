@@ -123,6 +123,11 @@ document shows plain hex where a 2011 one shows fields. Those tags likely
 exist; the catalogue does not record them. Fill from the ETF docs, do not
 invent.
 
-Records sharing a key render identically in the tree — several rows read
-`65534/0`. Only visible on a real corpus document; the synthetic fixture hid it.
-Distinguish them by incidence or position.
+~~Records sharing a key render identically in the tree — several rows read
+`65534/0`.~~ **Wrong, and worth recording as such.** Measured across all 137
+`.mus` documents: *zero* records share a key within a tag. What the tree
+actually showed was one options record under each of ~99 different tags, every
+one keyed by the `0xFFFE` sentinel — different records that merely looked alike
+while scanning. Fixed by naming the sentinel (`(document options)`) rather than
+by disambiguating rows that were never ambiguous. The corpus check is now
+pinned by `test_no_two_records_of_one_tag_share_a_key`.

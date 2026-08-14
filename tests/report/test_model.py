@@ -255,6 +255,48 @@ def test_the_budget_takes_the_layouts_with_the_records() -> None:
     assert inspection.layouts == {}
 
 
+def test_the_options_sentinel_is_shown_as_what_it_means_not_as_a_key() -> None:
+    """`0xFFFE` is not an address: it is what Enigma writes where a key would go
+    on a record that has nothing to be keyed by.
+
+    Shown as `cmper 65534` it reads like a very high measure number, and since a
+    document carries one such record under each of ~99 tags, a tree of them
+    reads as one row repeated when each is a different record.
+    """
+    from finale_file_parser.enigma.mus_others import OPTIONS_CMPER, MusOther
+
+    options = MusOther(tag=109, cmper=OPTIONS_CMPER, part=0, payload=b"\x01", extra=b"")
+    assert model._mus_other_entry(options)["key"] == "(document options, part 0)"
+
+    ordinary = MusOther(tag=176, cmper=3, part=0, payload=b"\x01", extra=b"")
+    assert model._mus_other_entry(ordinary)["key"] == "(cmper 3, part 0)"
+
+
+@pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
+def test_no_two_records_of_one_tag_share_a_key() -> None:
+    """A row that cannot be told from its neighbour is a row that cannot be
+    selected, so this is worth pinning rather than assuming.
+
+    It also records what an earlier reading of the tree got wrong: rows reading
+    `65534/0` under many different tags looked like duplicates and are not --
+    each is that tag's own options record. Within any one tag, keys are unique
+    across every `.mus` in the corpus.
+    """
+    collisions = []
+    for path in sorted(CORPUS.rglob("*.mus"))[:40]:
+        try:
+            records = model._mus_records(path)
+        except FinaleFileError:
+            continue
+        for pool, tags in records.items():
+            assert isinstance(tags, dict)
+            for tag, entries in tags.items():
+                keys = [e["key"] for e in entries]
+                if len(keys) != len(set(keys)):
+                    collisions.append(f"{path.name} {pool}/{tag}")
+    assert collisions == []
+
+
 def test_a_tag_is_named_with_the_evidence_behind_the_name() -> None:
     """`others / 176 / 1/0` names a record only to someone holding the
     catalogue. The report carries the name -- and never without the tier, since

@@ -23,7 +23,7 @@ from finale_file_parser.enigma.document import EnigmaDocument, Record, parse_eni
 from finale_file_parser.enigma.location import locate_entries
 from finale_file_parser.enigma.mus_details import MusDetailRecord, read_mus_details
 from finale_file_parser.enigma.mus_document import read_mus_document
-from finale_file_parser.enigma.mus_others import MusOther, read_mus_others
+from finale_file_parser.enigma.mus_others import OPTIONS_CMPER, MusOther, read_mus_others
 from finale_file_parser.enigma.mus_payload import (
     MusPool,
     read_mus_pools,
@@ -244,8 +244,30 @@ def _key(*parts: tuple[str, object]) -> str:
     slash means something different in `others` (cmper/part), in `details`
     (cmper1/cmper2/inci) and in a DCL row. Naming each number costs a little
     width and removes the need to know any of that.
+
+    A part with no name renders as its value alone, for the component that is
+    not a number at all -- see `_comparator`.
     """
-    return "(" + ", ".join(f"{name} {value}" for name, value in parts) + ")"
+    return "(" + ", ".join(f"{name} {value}".strip() for name, value in parts) + ")"
+
+
+def _comparator(name: str, value: int) -> tuple[str, object]:
+    """A record's leading comparator, or what it means when it is a sentinel.
+
+    `0xFFFE` is not an address. It is what Enigma writes where a key would go
+    on a record that has nothing to be keyed by -- a document-wide option (see
+    `mus_others.OPTIONS_CMPER`). Every occurrence across the corpus is in this
+    leading position: 3,771 in `others`, 828 in DCL rows, 180 in `details`
+    under `cmper1`, and never in a `cmper2`, `part` or `inci`.
+
+    Printing it as `cmper 65534` invites reading it as a very high measure or
+    staff number. Worse, a document carries one such record under each of
+    around 99 different tags, so a tree of them reads as the same row repeated
+    when in fact each is a different record.
+    """
+    if value == OPTIONS_CMPER:
+        return ("", "document options")
+    return (name, value)
 
 
 def _mus_other_entry(record: MusOther) -> dict[str, object]:
@@ -259,7 +281,7 @@ def _mus_other_entry(record: MusOther) -> dict[str, object]:
         depth=0,
     )
     return _record_entry(
-        key=_key(("cmper", record.cmper), ("part", record.part)),
+        key=_key(_comparator("cmper", record.cmper), ("part", record.part)),
         fields=fields,
         length=len(record.payload) + len(record.extra),
     )
@@ -277,7 +299,11 @@ def _mus_detail_entry(record: MusDetailRecord) -> dict[str, object]:
         depth=0,
     )
     return _record_entry(
-        key=_key(("cmper1", record.cmper1), ("cmper2", record.cmper2), ("inci", record.inci)),
+        key=_key(
+            _comparator("cmper1", record.cmper1),
+            ("cmper2", record.cmper2),
+            ("inci", record.inci),
+        ),
         fields=fields,
         length=len(record.payload) + len(record.extra),
     )
@@ -294,7 +320,7 @@ def _mus_row_entry(record: MusRowRecord) -> dict[str, object]:
         depth=0,
     )
     return _record_entry(
-        key=_key(("cmper", record.cmper), ("cmper2", record.cmper2)),
+        key=_key(_comparator("cmper", record.cmper), ("cmper2", record.cmper2)),
         fields=fields,
         length=len(record.payload),
     )
