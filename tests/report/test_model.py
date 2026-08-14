@@ -313,3 +313,44 @@ def test_a_record_is_keyed_by_every_identity_attribute_it_carries() -> None:
 
     anonymous = Record(tag="header", attrs={}, text="", fields={})
     assert _musx_key(anonymous, 7) == "7", "position is still the fallback when nothing names it"
+
+
+_MIRROR_XML = (
+    b'<finale version="18.0" xmlns="http://www.makemusic.com/2012/finale">'
+    b'<entries><entry entnum="1" prev="0" next="0"><numNotes>1</numNotes>'
+    b'<dura>1024</dura><isNote/><note id="1"><harmLev>0</harmLev>'
+    b"<harmAlt>0</harmAlt></note></entry></entries>"
+    b'<others><frameSpec cmper="10" inci="0"><startEntry>1</startEntry>'
+    b"<endEntry>1</endEntry></frameSpec>"
+    b'<frameSpec cmper="20" inci="0"><startEntry>1</startEntry>'
+    b"<endEntry>1</endEntry></frameSpec>"
+    b'<measSpec cmper="1"><keySig><key>0</key></keySig><beats>4</beats>'
+    b"<divbeat>1024</divbeat></measSpec>"
+    b'<staffSpec cmper="1"><x>a</x></staffSpec><staffSpec cmper="2"><x>a</x></staffSpec></others>'
+    b'<details><gfhold cmper1="1" cmper2="1"><frame1>10</frame1></gfhold>'
+    b'<gfhold cmper1="2" cmper2="1"><frame1>20</frame1></gfhold></details></finale>'
+)
+
+
+def test_a_mirrored_cell_names_the_other_staves_from_both_sides() -> None:
+    """One entry span, two `gfhold` records naming it: a mirror.
+
+    The annotation is symmetric on purpose. The file marks neither placement as
+    the copy, so staff 1 is told about staff 2 and staff 2 about staff 1, and
+    nothing anywhere calls one of them the original.
+    """
+    from finale_file_parser.enigma.document import parse_enigma
+    from finale_file_parser.report.model import _mirrored_cells
+
+    cells = _mirrored_cells(parse_enigma(_MIRROR_XML))
+    assert cells == {(1, 1, 1): [2], (2, 1, 1): [1]}
+
+
+def test_an_unmirrored_document_reports_no_cells() -> None:
+    """The overwhelming majority: one corpus document in 639 has a mirror that
+    reaches a score, so the empty result is the path that must stay cheap."""
+    from finale_file_parser.enigma.document import parse_enigma
+    from finale_file_parser.report.model import _mirrored_cells
+
+    plain = _MIRROR_XML.replace(b'<gfhold cmper1="2" cmper2="1"><frame1>20</frame1></gfhold>', b"")
+    assert _mirrored_cells(parse_enigma(plain)) == {}

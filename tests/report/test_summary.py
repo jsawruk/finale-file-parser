@@ -90,3 +90,46 @@ def test_document_summary_names_the_untranslated_gaps() -> None:
     summary = summarise_document(_document())
     assert isinstance(summary["untranslated"], list)
     assert summary["untranslated"], "UNTRANSLATED must be surfaced"
+
+
+def test_the_music_tree_keeps_layers_apart() -> None:
+    """Staff, measure, layer, event -- the shape the music has, rather than the
+    shape the file stores.
+
+    Layers stay separate because each independently fills the measure: flatten
+    them and a two-layer bar looks like it holds twice its time signature.
+    """
+    from finale_file_parser.report.summary import music_tree
+
+    tree = music_tree(_score())
+    assert [part["id"] for part in tree["parts"]] == ["P1"]
+    part = tree["parts"][0]
+    assert part["staff"] == 1, "the staff number is recovered from the part id"
+    assert [m["number"] for m in part["measures"]] == [1]
+    voice = part["measures"][0]["voices"][0]
+    assert voice["number"] == 1
+    assert voice["events"] == [
+        {"duration": "1/4", "pitches": ["C4"], "rest": False, "tie": None, "grace": False}
+    ]
+    assert voice["mirrors"] == [], "nothing mirrors here, and the field says so rather than absent"
+
+
+def test_a_mirrored_layer_names_the_other_staves_without_naming_an_original() -> None:
+    """A mirror is one staff displaying another's music. The file marks neither
+    placement as the copy, so the tree states only which other staves show the
+    same entries -- symmetric, and true from either side."""
+    from finale_file_parser.report.summary import music_tree
+
+    tree = music_tree(_score(), {(1, 1, 1): [2]})
+    assert tree["parts"][0]["measures"][0]["voices"][0]["mirrors"] == [2]
+
+
+def test_a_pitch_spells_its_alteration_rather_than_folding_it_in() -> None:
+    """`F#4`, not the semitone. Someone chasing a spelling bug needs to see
+    which of step and alteration came out wrong."""
+    from finale_file_parser.report.summary import _pitch
+
+    assert _pitch(Pitch("F", 4, 1)) == "F#4"
+    assert _pitch(Pitch("B", 3, -1)) == "Bb3"
+    assert _pitch(Pitch("C", 4, 0)) == "C4"
+    assert _pitch(Pitch("C", 4, 2)) == "Cx4"

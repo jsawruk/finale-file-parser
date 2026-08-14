@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from finale_file_parser.enigma.document import EnigmaDocument, Record, parse_enigma
+from finale_file_parser.enigma.location import locate_entries
 from finale_file_parser.enigma.mus_details import MusDetailRecord, read_mus_details
 from finale_file_parser.enigma.mus_document import read_mus_document
 from finale_file_parser.enigma.mus_others import MusOther, read_mus_others
@@ -36,7 +37,9 @@ from finale_file_parser.export.musicxml import to_musicxml
 from finale_file_parser.report.ladder import Ladder, Stage
 from finale_file_parser.report.summary import (
     DocumentSummary,
+    MusicTree,
     ScoreSummary,
+    music_tree,
     summarise_document,
     summarise_score,
 )
@@ -84,6 +87,7 @@ class Inspection:
     file: dict[str, str]
     stages: list[Stage] = field(default_factory=list)
     score: ScoreSummary | None = None
+    music: MusicTree | None = None
     document: DocumentSummary | None = None
     records: dict[str, object] = field(default_factory=dict)
     raw: dict[str, object] = field(default_factory=dict)
@@ -432,6 +436,7 @@ def _weight(inspection: Inspection) -> int:
                 "file": inspection.file,
                 "stages": [asdict(s) for s in inspection.stages],
                 "score": inspection.score,
+                "music": inspection.music,
                 "document": inspection.document,
                 "records": inspection.records,
                 "raw": inspection.raw,
@@ -445,7 +450,9 @@ def apply_budget(inspection: Inspection, limit: int = MAX_JSON_BYTES) -> None:
     """Drop `raw` first, then `records`, naming what went in `notes`.
 
     Score and document summaries are never dropped: they are small, and they
-    are the part a reader needs most.
+    are the part a reader needs most. The music tree goes last of the three that
+    can be dropped: it is a re-derivable view of a score that is itself still
+    reported, where `raw` and `records` are the primary evidence.
     """
     if _weight(inspection) <= limit:
         return
@@ -457,6 +464,11 @@ def apply_budget(inspection: Inspection, limit: int = MAX_JSON_BYTES) -> None:
     if inspection.records:
         inspection.records = {}
         inspection.notes.append(f"records omitted: the report exceeded its {limit} byte budget")
+    if _weight(inspection) <= limit:
+        return
+    if inspection.music:
+        inspection.music = None
+        inspection.notes.append(f"music tree omitted: the report exceeded its {limit} byte budget")
 
 
 def _finish(ladder: Ladder, document: EnigmaDocument | None, inspection: Inspection) -> None:
@@ -472,11 +484,44 @@ def _finish(ladder: Ladder, document: EnigmaDocument | None, inspection: Inspect
         ladder.run("export MusicXML", _unreachable)
         return
     inspection.score = summarise_score(score)
+    inspection.music = music_tree(score, _mirrored_cells(document))
     ladder.run(
         "export MusicXML",
         lambda: to_musicxml(score),
         lambda data: {"bytes": str(len(data))},
     )
+
+
+def _mirrored_cells(document: EnigmaDocument) -> dict[tuple[int, int, int], list[int]]:
+    """Which `(staff, measure, layer)` cells hold entries that sound elsewhere too.
+
+    A Finale *mirror* is one staff displaying another's music: the file stores
+    one entry span that two `gfhold` records both name, and marks neither as the
+    copy. `locate_entries` returns the placements as peers, so a mirrored entry
+    simply has more than one of them.
+
+    Each cell maps to the *other* staves showing the same entries -- a plain
+    statement of fact that names no original. Empty for the overwhelming
+    majority of documents: one corpus document in 639 has a mirror that reaches
+    a score.
+
+    Never raises. `build_score` has already resolved this document by the time
+    this runs, so a failure here would be a surprise, and a surprise in an
+    annotation must not cost the report the score it already has.
+    """
+    try:
+        located = locate_entries(document)
+    except FinaleFileError:  # pragma: no cover - build_score resolved it moments ago
+        return {}
+    cells: dict[tuple[int, int, int], set[int]] = {}
+    for places in located.values():
+        if len(places) < 2:
+            continue
+        staves = {place.staff for place in places}
+        for place in places:
+            here = cells.setdefault((place.staff, place.measure, place.layer), set())
+            here.update(staves - {place.staff})
+    return {cell: sorted(others) for cell, others in cells.items()}
 
 
 def _unreachable() -> None:

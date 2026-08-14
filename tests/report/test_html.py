@@ -136,3 +136,41 @@ def test_a_fully_degenerate_inspection_still_renders_well_formed_markup() -> Non
     html = render_html(inspection)
     assert html
     DET.fromstring(html[html.index("<html") :])
+
+
+def test_the_records_pane_is_a_tree_not_a_wall_of_json() -> None:
+    """A 979 KB report rendered as one `<pre>` of JSON is technically complete
+    and practically unreadable. Pools, tags and records nest, so a reader opens
+    what they want rather than scrolling past everything they do not."""
+    records = {"details": {"gfhold": [{"key": "3/12", "fields": {"frame1": "11"}, "length": None}]}}
+    html = render_html(_inspection(records=records))
+    assert "JSON.stringify(data.records" not in html, "the flat dump is gone"
+    assert "function tree(" in html, "and a nesting renderer replaced it"
+
+
+def test_the_music_pane_exists_beside_the_storage_one() -> None:
+    """The file has two hierarchies and they are different shapes: pool ->
+    record -> field is what is stored, staff -> measure -> layer -> event is
+    what it means. The report shows both rather than making one stand in."""
+    html = render_html(_inspection())
+    panes = re.findall(r'data-pane="(\w+)"', html)
+    assert panes == ["score", "music", "document", "records", "bytes"]
+    assert '<section id="music">' in html
+
+
+def test_the_music_pane_says_so_when_no_score_was_built() -> None:
+    """`music` is None whenever the ladder stopped before `build score`, and the
+    pane must explain that rather than render an empty tree that reads like a
+    document with no notes in it."""
+    html = render_html(_inspection(music=None))
+    assert "stopped before a score was built" in html
+
+
+def test_a_hostile_field_name_cannot_break_out_of_the_tree() -> None:
+    """The tree is built from DOM nodes with textContent, not innerHTML, so a
+    record whose field name came out of a hostile file is inert."""
+    hostile = "<img src=x onerror=alert(1)>"
+    records = {"others": {"x": [{"key": "1", "fields": {hostile: hostile}, "length": None}]}}
+    html = render_html(_inspection(records=records))
+    assert "<img src=x" not in html, "escaped inside the JSON island"
+    assert "innerHTML = '<pre>'" not in html

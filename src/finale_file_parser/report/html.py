@@ -61,6 +61,16 @@ section.shown { display: block; }
 table { border-collapse: collapse; }
 td, th { border: 1px solid #ddd; padding: 0.15rem 0.5rem; text-align: left; }
 .empty { color: #c33; }
+details.node { margin-left: 1rem; }
+details.node > summary { cursor: pointer; padding: 0.1rem 0; }
+details.node > summary::marker { color: #999; }
+.count { color: #666; font-weight: normal; }
+.leaf { margin-left: 1rem; color: #333; }
+.leaf .name { color: #666; }
+.mirror { color: #a60; }
+.rest { color: #999; font-style: italic; }
+.bar { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-left: 1rem; }
+.bar .ev { border: 1px solid #eee; padding: 0 0.3rem; }
 """
 
 _SCRIPT = """
@@ -118,7 +128,115 @@ function renderRecords() {
     el.innerHTML = '<p>Not available — ' + esc(reason) + '</p>';
     return;
   }
-  el.innerHTML = '<pre>' + esc(JSON.stringify(data.records, null, 2)) + '</pre>';
+  el.innerHTML = '';
+  const pools = Object.entries(data.records)
+    .filter(([, tags]) => Object.keys(tags).length !== 0);
+  if (pools.length === 0) { el.innerHTML = '<p>No records.</p>'; return; }
+  for (const [pool, tags] of pools) {
+    const total = Object.values(tags).reduce((n, rs) => n + rs.length, 0);
+    const node = tree(pool, Object.keys(tags).length + ' tags, ' + group(total) + ' records');
+    for (const [tag, records] of Object.entries(tags)) {
+      const tagNode = tree(tag, group(records.length) + '');
+      for (const rec of records) {
+        const recNode = tree(rec.key, rec.length === null ? '' : group(rec.length) + ' bytes');
+        recNode.appendChild(fields(rec.fields));
+        tagNode.appendChild(recNode);
+      }
+      node.appendChild(tagNode);
+    }
+    el.appendChild(node);
+  }
+}
+// Both trees are built from DOM nodes rather than an innerHTML string: every
+// key, tag and value goes in as text, so there is no second escaper to get
+// wrong on a record whose field names came out of a hostile file.
+function tree(label, count) {
+  const node = document.createElement('details');
+  node.className = 'node';
+  const summary = document.createElement('summary');
+  summary.textContent = label;
+  if (count) {
+    const badge = document.createElement('span');
+    badge.className = 'count';
+    badge.textContent = '  ' + count;
+    summary.appendChild(badge);
+  }
+  node.appendChild(summary);
+  return node;
+}
+function fields(value) {
+  const box = document.createElement('div');
+  if (value === null || typeof value !== 'object') {
+    box.className = 'leaf';
+    box.textContent = String(value);
+    return box;
+  }
+  for (const [k, v] of Object.entries(value)) {
+    if (v !== null && typeof v === 'object') {
+      const child = tree(k, Array.isArray(v) ? v.length + ' items' : '');
+      child.appendChild(fields(v));
+      box.appendChild(child);
+    } else {
+      const leaf = document.createElement('div');
+      leaf.className = 'leaf';
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = k + ': ';
+      leaf.appendChild(name);
+      leaf.appendChild(document.createTextNode(String(v)));
+      box.appendChild(leaf);
+    }
+  }
+  return box;
+}
+function renderMusic() {
+  const el = document.getElementById('music');
+  if (!data.music) {
+    el.innerHTML = '<p>Not available — the pipeline stopped before a score was built.</p>';
+    return;
+  }
+  el.innerHTML = '';
+  for (const part of data.music.parts) {
+    const label = part.id + (part.name ? ' — ' + part.name : '');
+    const partNode = tree(label, group(part.measures.length) + ' measures');
+    for (const measure of part.measures) {
+      const events = measure.voices.reduce((n, v) => n + v.events.length, 0);
+      const mirrored = measure.voices.some(v => v.mirrors.length !== 0);
+      const measureNode = tree(
+        'measure ' + measure.number,
+        (events === 0 ? 'empty' : group(events) + ' events') + (mirrored ? ' · mirrored' : ''));
+      for (const voice of measure.voices) {
+        const voiceNode = tree('layer ' + voice.number, voiceLabel(voice));
+        if (voice.mirrors.length !== 0) { voiceNode.classList.add('mirror'); }
+        voiceNode.appendChild(bar(voice.events));
+        measureNode.appendChild(voiceNode);
+      }
+      partNode.appendChild(measureNode);
+    }
+    el.appendChild(partNode);
+  }
+}
+function voiceLabel(voice) {
+  const n = group(voice.events.length) + ' events';
+  if (voice.mirrors.length === 0) { return n; }
+  // Not "copied from": the file names no original, so this states the fact
+  // both staves agree on -- the same entries sound in both places.
+  return n + ' · the same entries also sound on staff ' + voice.mirrors.join(', ');
+}
+function bar(events) {
+  const box = document.createElement('div');
+  box.className = 'bar';
+  for (const event of events) {
+    const cell = document.createElement('span');
+    cell.className = 'ev';
+    let text = event.rest ? 'rest' : event.pitches.join(' ');
+    if (event.grace) { text = 'grace ' + text; }
+    if (event.tie) { text += ' (tie ' + event.tie + ')'; }
+    cell.textContent = text + '  ' + event.duration;
+    if (event.rest) { cell.classList.add('rest'); }
+    box.appendChild(cell);
+  }
+  return box;
 }
 // A pool is embedded whole, so the only limit here is how much hex is worth
 // putting on screen at once: one 4 KB page, with the rest a click away rather
@@ -224,6 +342,7 @@ function renderBytes() {
   }
 }
 renderScore();
+renderMusic();
 renderJson('document', data.document);
 renderRecords();
 renderBytes();
@@ -293,6 +412,7 @@ def render_html(inspection: Inspection) -> str:
             "file": inspection.file,
             "stages": [asdict(s) for s in inspection.stages],
             "score": inspection.score,
+            "music": inspection.music,
             "document": inspection.document,
             "records": inspection.records,
             "raw": inspection.raw,
@@ -307,10 +427,12 @@ def render_html(inspection: Inspection) -> str:
         f'<h1>{name}</h1><p class="meta">{meta}</p>'
         f"{_ladder(inspection)}{notes}"
         '<nav><button data-pane="score">score</button>'
+        '<button data-pane="music">music</button>'
         '<button data-pane="document">document</button>'
         '<button data-pane="records">records</button>'
         '<button data-pane="bytes">bytes</button></nav>'
-        '<section id="score"></section><section id="document"></section>'
+        '<section id="score"></section><section id="music"></section>'
+        '<section id="document"></section>'
         '<section id="records"></section><section id="bytes"></section>'
         f'<script id="inspection" type="application/json">{payload}</script>'
         f"<script>//<![CDATA[\n{_SCRIPT}\n//]]></script>"
