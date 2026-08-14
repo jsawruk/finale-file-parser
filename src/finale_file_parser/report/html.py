@@ -72,6 +72,17 @@ details.node > summary::marker { color: #999; }
 .rest { color: #999; font-style: italic; }
 .bar { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-left: 1rem; }
 .bar .ev { border: 1px solid #eee; padding: 0 0.3rem; }
+.split { display: flex; gap: 1.5rem; align-items: flex-start; }
+.split .tree { flex: 1 1 40%; min-width: 0; }
+.split .detail { flex: 1 1 60%; min-width: 0; position: sticky; top: 1rem;
+                 border-left: 1px solid #ddd; padding-left: 1rem; }
+.rec { cursor: pointer; margin-left: 2rem; padding: 0.05rem 0.3rem; }
+.rec:hover { background: #f2f2f2; }
+.rec.on { background: #e8eef6; font-weight: bold; }
+.hex { white-space: pre; font-size: 13px; line-height: 1.35; overflow-x: auto; }
+.hex .off { color: #999; }
+.hex .txt { color: #666; }
+.no-bytes { color: #666; max-width: 34rem; }
 """
 
 _SCRIPT = """
@@ -152,20 +163,116 @@ function renderRecords() {
   const pools = Object.entries(data.records)
     .filter(([, tags]) => Object.keys(tags).length !== 0);
   if (pools.length === 0) { el.innerHTML = '<p class="stopped">No records.</p>'; return; }
+
+  const split = document.createElement('div');
+  split.className = 'split';
+  const left = document.createElement('div');
+  left.className = 'tree';
+  const right = document.createElement('div');
+  right.className = 'detail';
+  right.innerHTML = '<p class="stopped">Select a record.</p>';
+
   for (const [pool, tags] of pools) {
     const total = Object.values(tags).reduce((n, rs) => n + rs.length, 0);
     const node = tree(pool, Object.keys(tags).length + ' tags, ' + group(total) + ' records');
     for (const [tag, records] of Object.entries(tags)) {
       const tagNode = tree(tag, group(records.length) + '');
       for (const rec of records) {
-        const recNode = tree(rec.key, rec.length === null ? '' : group(rec.length) + ' bytes');
-        recNode.appendChild(fields(rec.fields));
-        tagNode.appendChild(recNode);
+        // A leaf, not another expander. The fields used to nest a third level
+        // down, which made clicking a record look like it did nothing much;
+        // they are the right-hand panel's job now.
+        const row = document.createElement('div');
+        row.className = 'rec';
+        const size = rec.length === null ? '' : '  ' + group(rec.length) + ' bytes';
+        row.textContent = rec.key + size;
+        row.addEventListener('click', () => {
+          for (const other of left.querySelectorAll('.rec.on')) { other.classList.remove('on'); }
+          row.classList.add('on');
+          showRecord(right, pool, tag, rec);
+        });
+        tagNode.appendChild(row);
       }
       node.appendChild(tagNode);
     }
-    el.appendChild(node);
+    left.appendChild(node);
   }
+  split.appendChild(left);
+  split.appendChild(right);
+  el.appendChild(split);
+}
+// This script is a Python string literal, so a backslash-n here would be a real
+// newline inside a JS string literal, which will not parse. Build it instead.
+const NEWLINE = String.fromCharCode(10);
+function hexRows(bin) {
+  const rows = [];
+  for (let base = 0; base < bin.length; base += 16) {
+    const bytes = [];
+    let text = '';
+    for (let i = base; i < base + 16; i++) {
+      if (i < bin.length) {
+        const b = bin.charCodeAt(i);
+        bytes.push(b.toString(16).padStart(2, '0'));
+        text += (b >= 32 && b < 127) ? bin[i] : '.';
+      } else {
+        bytes.push('  ');
+      }
+    }
+    rows.push({off: base.toString(16).padStart(8, '0'), hex: bytes.join(' '), txt: text});
+  }
+  return rows;
+}
+function hexBlock(bin) {
+  const box = document.createElement('div');
+  box.className = 'hex';
+  for (const row of hexRows(bin)) {
+    const off = document.createElement('span');
+    off.className = 'off';
+    off.textContent = row.off + '  ';
+    const txt = document.createElement('span');
+    txt.className = 'txt';
+    txt.textContent = '  ' + row.txt;
+    box.appendChild(off);
+    box.appendChild(document.createTextNode(row.hex));
+    box.appendChild(txt);
+    box.appendChild(document.createTextNode(NEWLINE));
+  }
+  return box;
+}
+// `payload` and `extra` ARE the bytes shown above, so listing them again as
+// decoded values would just repeat the hex in base64.
+const BYTE_FIELDS = ['payload', 'extra'];
+function showRecord(right, pool, tag, rec) {
+  right.innerHTML = '';
+  const heading = document.createElement('h3');
+  heading.textContent = pool + ' / ' + tag + ' ' + rec.key;
+  right.appendChild(heading);
+
+  let raw = '';
+  for (const name of BYTE_FIELDS) {
+    const value = rec.fields && rec.fields[name];
+    if (typeof value === 'string' && value !== '') { raw += atob(value); }
+  }
+  if (raw === '') {
+    const note = document.createElement('p');
+    note.className = 'no-bytes';
+    // True of every .musx record: EnigmaXML arrives as XML, so a record has no
+    // undecoded form to show. Saying so beats an empty box that reads like a
+    // reader that lost the bytes.
+    note.textContent = 'No raw bytes: this record was read from XML, so its ' +
+                       'fields below are the source form rather than a decoding of it.';
+    right.appendChild(note);
+  } else {
+    right.appendChild(hexBlock(raw));
+    const caption = document.createElement('p');
+    caption.className = 'txt';
+    caption.textContent = 'decodes as';
+    right.appendChild(caption);
+  }
+  const rest = {};
+  for (const [k, v] of Object.entries(rec.fields || {})) {
+    if (!BYTE_FIELDS.includes(k)) { rest[k] = v; }
+  }
+  right.appendChild(fields(rest));
 }
 // Both trees are built from DOM nodes rather than an innerHTML string: every
 // key, tag and value goes in as text, so there is no second escaper to get

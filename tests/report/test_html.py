@@ -219,3 +219,41 @@ def test_the_document_dump_is_replaced_by_the_gaps_it_carried() -> None:
     )
     assert "renderUntranslated" in html
     assert "JSON.stringify(value, null, 2)" not in html, "the document dump is gone"
+
+
+def test_a_record_row_is_a_leaf_that_selects_rather_than_a_third_expander() -> None:
+    """Clicking a record used to open one more level of nesting, which read as
+    doing very little. A record is a leaf now, and clicking it fills the panel
+    beside the tree."""
+    records = {"others": {"measSpec": [{"key": "1", "fields": {"beats": "4"}, "length": 12}]}}
+    html = render_html(_inspection(records=records))
+    assert "class = 'rec'" in html or "className = 'rec'" in html
+    assert "function showRecord(" in html
+    assert 'class="split"' in html or "className = 'split'" in html
+
+
+def test_the_bytes_a_record_carries_are_shown_as_hex_and_not_repeated_as_fields() -> None:
+    """`payload` and `extra` are the bytes in the hex block, so listing them
+    again underneath would just repeat the same bytes in base64."""
+    html = render_html(_inspection())
+    assert "function hexBlock(" in html and "function hexRows(" in html
+    assert "BYTE_FIELDS = ['payload', 'extra']" in html
+    assert "atob(value)" in html
+
+
+def test_a_record_with_no_bytes_says_why_rather_than_showing_an_empty_box() -> None:
+    """Every `.musx` record: EnigmaXML arrives as XML, so a record has no
+    undecoded form. An empty hex pane would read like a reader that lost the
+    bytes, which is the opposite of what happened."""
+    html = render_html(_inspection())
+    assert "read from XML" in html
+    assert "source form rather than a decoding" in html
+
+
+def test_the_hex_view_builds_its_newline_rather_than_escaping_one() -> None:
+    """The script is a Python string literal, so a backslash-n would become a
+    real newline inside a JS string literal and fail to parse. The old byte
+    pane hit this; the per-record one must not reintroduce it."""
+    html = render_html(_inspection())
+    script = html[html.index("//<![CDATA[") :]
+    assert "String.fromCharCode(10)" in script
