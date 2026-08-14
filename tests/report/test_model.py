@@ -136,7 +136,7 @@ def test_inspecting_a_file_that_is_not_finale_at_all_still_returns(
     path.write_bytes(b"\x00\x01\x02")
     inspection = model.inspect_document(path)
     assert inspection.stages
-    assert inspection.score is None
+    assert inspection.stats is None
 
 
 def test_inspecting_a_directory_still_returns() -> None:
@@ -146,7 +146,7 @@ def test_inspecting_a_directory_still_returns() -> None:
     assert inspection.stages[0].name == "read file"
     assert inspection.stages[0].status == REFUSED
     assert {s.status for s in inspection.stages[1:]} == {SKIPPED}
-    assert inspection.score is None
+    assert inspection.stats is None
 
 
 def test_inspecting_a_nonexistent_path_still_returns(tmp_path: Path) -> None:
@@ -155,7 +155,7 @@ def test_inspecting_a_nonexistent_path_still_returns(tmp_path: Path) -> None:
     assert inspection.stages[0].name == "read file"
     assert inspection.stages[0].status == REFUSED
     assert {s.status for s in inspection.stages[1:]} == {SKIPPED}
-    assert inspection.score is None
+    assert inspection.stats is None
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="chmod permission bits are POSIX-only")
@@ -173,7 +173,7 @@ def test_inspecting_an_unreadable_file_still_returns(tmp_path: Path) -> None:
     assert inspection.stages[0].name == "read file"
     assert inspection.stages[0].status == REFUSED
     assert {s.status for s in inspection.stages[1:]} == {SKIPPED}
-    assert inspection.score is None
+    assert inspection.stats is None
 
 
 class _FakeVersion:
@@ -215,33 +215,37 @@ def test_raw_bytes_are_base64_not_hex() -> None:
     assert base64.b64decode(encode_raw(b"\x00\xff\x10")) == b"\x00\xff\x10"
 
 
-def test_the_budget_drops_raw_before_records() -> None:
-    """Score and document summaries are never truncated; raw goes first."""
+def test_the_budget_drops_records_before_the_music_tree() -> None:
+    """Stats and document summaries are never truncated.
+
+    Of the two payloads that can go, `records` goes first: it is far the
+    largest, and the music tree is the view a reader most likely opened the
+    report to see.
+    """
     from finale_file_parser.report.model import Inspection, apply_budget
 
     inspection = Inspection(file={"name": "x", "size": "0", "sha256": ""})
-    inspection.score = {
+    inspection.stats = {
         "parts": [],
         "totals": {"parts": 1, "measures": 0, "events": 0, "pitches": 0},
     }
-    inspection.raw = {"others": "A" * 2000}
-    inspection.records = {"others": {"measSpec": [{"key": "1"}]}}
+    inspection.records = {"others": {"measSpec": [{"key": "A" * 2000}]}}
+    inspection.music = {"parts": []}
 
     apply_budget(inspection, limit=500)
-    assert inspection.raw == {}
-    assert inspection.score is not None
-    assert any("raw" in note for note in inspection.notes)
+    assert inspection.records == {}
+    assert inspection.stats is not None
+    assert any("records" in note for note in inspection.notes)
 
 
 @pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
-def test_a_real_mus_file_gets_raw_bytes_and_records() -> None:
-    """End-to-end: the wiring populates both lower depths from a real file,
-    and what it produces is actually JSON -- the shape `apply_budget` and a
-    renderer both depend on."""
+def test_a_real_mus_file_gets_records() -> None:
+    """End-to-end: the wiring populates the records depth from a real file, and
+    what it produces is actually JSON -- the shape `apply_budget` and a renderer
+    both depend on."""
     path = next(CORPUS.rglob("*.mus"))
     inspection = model.inspect_document(path)
 
-    assert inspection.raw
     assert inspection.records
     for _pool_name, by_tag in inspection.records.items():
         assert isinstance(by_tag, dict)
@@ -254,18 +258,15 @@ def test_a_real_mus_file_gets_raw_bytes_and_records() -> None:
                 assert isinstance(entry["key"], str)
 
     # Round-trips through JSON without error: no bytes, no dataclasses left over.
-    json.dumps(inspection.raw)
     json.dumps(inspection.records)
 
 
 @pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
-def test_a_real_musx_file_gets_records_but_no_raw() -> None:
-    """A `.musx` has no undecoded byte pools to embed -- only EnigmaXML's own
-    records, which are already the rawest view there is."""
+def test_a_real_musx_file_gets_records() -> None:
+    """EnigmaXML's own records are already the rawest view a `.musx` has."""
     path = next(CORPUS.rglob("*.musx"))
     inspection = model.inspect_document(path)
 
-    assert inspection.raw == {}
     assert inspection.records
     assert set(inspection.records) == {
         "header",

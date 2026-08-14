@@ -45,7 +45,9 @@ def _text(value: str) -> str:
 
 _STYLE = """
 body { font: 14px/1.5 ui-monospace, monospace; margin: 2rem; max-width: 70rem; }
-h1 { font-size: 1.2rem; margin-bottom: 0; }
+h1 { font-size: 1.2rem; margin-bottom: 0.6rem; }
+h2 { font-size: 1rem; margin: 1.2rem 0 0.3rem; }
+h3 { font-size: 0.95rem; font-weight: normal; color: #444; margin: 0.8rem 0 0.2rem; }
 .meta { color: #666; margin-top: 0.2rem; }
 ol.ladder { list-style: none; padding: 0; }
 ol.ladder li { padding: 0.3rem 0.6rem; border-left: 4px solid #ccc; margin: 0.2rem 0; }
@@ -54,13 +56,12 @@ li.refused { border-color: #c81; }
 li.crashed { border-color: #c33; font-weight: bold; }
 li.skipped { border-color: #ddd; color: #999; }
 nav button { font: inherit; margin-right: 0.4rem; }
-.controls button, .controls input { font: inherit; margin-right: 0.4rem; }
-.range { color: #666; }
 section { display: none; }
 section.shown { display: block; }
 table { border-collapse: collapse; }
 td, th { border: 1px solid #ddd; padding: 0.15rem 0.5rem; text-align: left; }
 .empty { color: #c33; }
+.stopped { color: #666; }
 details.node { margin-left: 1rem; }
 details.node > summary { cursor: pointer; padding: 0.1rem 0; }
 details.node > summary::marker { color: #999; }
@@ -86,12 +87,12 @@ for (const b of document.querySelectorAll('nav button')) {
 function esc(t) {
   return String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 }
-function renderScore() {
-  const el = document.getElementById('score');
-  if (!data.score) { el.innerHTML = '<p>No score was built.</p>'; return; }
+function renderStats() {
+  const el = document.getElementById('stats');
+  if (!data.stats) { el.innerHTML = stopped('stats'); return; }
   let out = '';
-  for (const part of data.score.parts) {
-    out += '<h2>' + esc(part.id) + ' — ' + esc(part.name) + '</h2><table>' +
+  for (const part of data.stats.parts) {
+    out += '<h3>' + esc(part.id) + ' — ' + esc(part.name) + '</h3><table>' +
            '<tr><th>measure</th><th>time</th><th>clef</th><th>key</th>' +
            '<th>events</th><th>pitches</th></tr>';
     for (const m of part.measures) {
@@ -109,6 +110,17 @@ function renderJson(id, value) {
     value ? '<pre>' + esc(JSON.stringify(value, null, 2)) + '</pre>'
           : '<p>Not available — the pipeline stopped before this stage.</p>';
 }
+// The ladder used to sit above every pane, so an empty pane explained itself.
+// It lives under Debug now, so a pane that has nothing to show has to say why
+// and where to look -- otherwise a file that failed to parse opens on a blank
+// Music tab and reads like a document with no music in it.
+function stopped(what) {
+  const bad = (data.stages || []).find(s => s.status === 'refused' || s.status === 'crashed');
+  const why = bad ? 'the pipeline stopped at "' + bad.name + '" (' + bad.status + ')'
+                  : 'the pipeline did not reach it';
+  return '<p class="stopped">No ' + what + ' — ' + esc(why) +
+         '. See the Debug tab for the full ladder.</p>';
+}
 function findStage(name) {
   return (data.stages || []).find(s => s.name === name) || null;
 }
@@ -120,18 +132,13 @@ function renderRecords() {
   const el = document.getElementById('records');
   const stage = findStage('read records');
   if (!stage || stage.status !== 'ok') {
-    let reason = 'the pipeline stopped before this stage';
-    if (stage) {
-      reason = stage.name + ': ' + stage.status;
-      if (stage.error) { reason += ' (' + stage.error + ')'; }
-    }
-    el.innerHTML = '<p>Not available — ' + esc(reason) + '</p>';
+    el.innerHTML = stopped('records');
     return;
   }
   el.innerHTML = '';
   const pools = Object.entries(data.records)
     .filter(([, tags]) => Object.keys(tags).length !== 0);
-  if (pools.length === 0) { el.innerHTML = '<p>No records.</p>'; return; }
+  if (pools.length === 0) { el.innerHTML = '<p class="stopped">No records.</p>'; return; }
   for (const [pool, tags] of pools) {
     const total = Object.values(tags).reduce((n, rs) => n + rs.length, 0);
     const node = tree(pool, Object.keys(tags).length + ' tags, ' + group(total) + ' records');
@@ -191,10 +198,7 @@ function fields(value) {
 }
 function renderMusic() {
   const el = document.getElementById('music');
-  if (!data.music) {
-    el.innerHTML = '<p>Not available — the pipeline stopped before a score was built.</p>';
-    return;
-  }
+  if (!data.music) { el.innerHTML = stopped('music'); return; }
   el.innerHTML = '';
   for (const part of data.music.parts) {
     const label = part.id + (part.name ? ' — ' + part.name : '');
@@ -238,16 +242,6 @@ function bar(events) {
   }
   return box;
 }
-// A pool is embedded whole, so the only limit here is how much hex is worth
-// putting on screen at once: one 4 KB page, with the rest a click away rather
-// than silently absent. The old loop stopped at 4096 bytes of a 269 KB pool
-// and said nothing about the other 98%.
-const PAGE_BYTES = 4096;
-
-// This script is a Python string literal, so a backslash here would have to
-// survive two layers of escaping. Nothing below uses one.
-const NEWLINE = String.fromCharCode(10);
-
 function group(n) {
   let rest = String(n);
   let out = '';
@@ -258,95 +252,17 @@ function group(n) {
   }
   return out;
 }
-function hexDump(bin, start, stop) {
-  const lines = [];
-  let line = '';
-  for (let i = start; i !== stop; i++) {
-    if (i % 16 === 0) { line = i.toString(16).padStart(8, '0') + '  '; }
-    line += bin.charCodeAt(i).toString(16).padStart(2, '0') + ' ';
-    if (i % 16 === 15) { lines.push(line); }
-  }
-  if (stop % 16 !== 0) { lines.push(line); }
-  return lines.join(NEWLINE);
-}
 function control(label, onClick) {
   const button = document.createElement('button');
   button.textContent = label;
   button.addEventListener('click', onClick);
   return button;
 }
-function bytePool(name, bin) {
-  // Built as DOM nodes rather than an innerHTML string: the pool name and the
-  // hex both go in as text, so there is no second escaper to get wrong, and no
-  // markup of this pane's own to keep well-formed.
-  const heading = document.createElement('h2');
-  heading.textContent = name;
-  const controls = document.createElement('p');
-  controls.className = 'controls';
-  const range = document.createElement('span');
-  range.className = 'range';
-  const dump = document.createElement('pre');
-  const lastPage = Math.max(0, Math.ceil(bin.length / PAGE_BYTES) - 1);
-  let page = 0;
-
-  function draw() {
-    const start = page * PAGE_BYTES;
-    const stop = Math.min(start + PAGE_BYTES, bin.length);
-    dump.textContent = hexDump(bin, start, stop);
-    // Always on screen: which slice this is, and how much there is in total.
-    range.textContent = (bin.length === 0)
-      ? 'empty pool'
-      : 'bytes ' + group(start) + '–' + group(stop - 1) + ' of ' + group(bin.length);
-    previous.disabled = (page === 0);
-    next.disabled = (page === lastPage);
-  }
-  function step(by) {
-    return function () {
-      page = Math.min(lastPage, Math.max(0, page + by));
-      draw();
-    };
-  }
-
-  const previous = control('previous', step(-1));
-  const next = control('next', step(1));
-  const wanted = document.createElement('input');
-  wanted.size = 8;
-  wanted.placeholder = 'offset';
-  const go = control('go', function () {
-    const offset = parseInt(wanted.value, 10);
-    if (!isNaN(offset)) {
-      page = Math.min(lastPage, Math.max(0, Math.floor(offset / PAGE_BYTES)));
-      draw();
-    }
-  });
-
-  controls.appendChild(previous);
-  controls.appendChild(next);
-  controls.appendChild(wanted);
-  controls.appendChild(go);
-  controls.appendChild(range);
-  const box = document.createElement('div');
-  box.appendChild(heading);
-  box.appendChild(controls);
-  box.appendChild(dump);
-  draw();
-  return box;
-}
-function renderBytes() {
-  const el = document.getElementById('bytes');
-  el.textContent = '';
-  const pools = Object.entries(data.raw || {});
-  if (!pools.length) { el.textContent = 'No raw bytes were embedded.'; return; }
-  for (const [name, b64] of pools) {
-    el.appendChild(bytePool(name, atob(b64)));
-  }
-}
-renderScore();
+renderStats();
 renderMusic();
 renderJson('document', data.document);
 renderRecords();
-renderBytes();
-show('score');
+show('music');
 """
 
 
@@ -411,11 +327,10 @@ def render_html(inspection: Inspection) -> str:
         {
             "file": inspection.file,
             "stages": [asdict(s) for s in inspection.stages],
-            "score": inspection.score,
+            "stats": inspection.stats,
             "music": inspection.music,
             "document": inspection.document,
             "records": inspection.records,
-            "raw": inspection.raw,
             "notes": inspection.notes,
         }
     )
@@ -424,16 +339,19 @@ def render_html(inspection: Inspection) -> str:
         '<html lang="en"><head><meta charset="utf-8"/>'
         f"<title>{name} — inspection</title>"
         f"<style>{_STYLE}</style></head><body>"
-        f'<h1>{name}</h1><p class="meta">{meta}</p>'
-        f"{_ladder(inspection)}{notes}"
-        '<nav><button data-pane="score">score</button>'
-        '<button data-pane="music">music</button>'
-        '<button data-pane="document">document</button>'
-        '<button data-pane="records">records</button>'
-        '<button data-pane="bytes">bytes</button></nav>'
-        '<section id="score"></section><section id="music"></section>'
-        '<section id="document"></section>'
-        '<section id="records"></section><section id="bytes"></section>'
+        f"<h1>{name}</h1>"
+        '<nav><button data-pane="music">Music</button>'
+        '<button data-pane="records">Records</button>'
+        '<button data-pane="debug">Debug</button></nav>'
+        '<section id="music"></section><section id="records"></section>'
+        '<section id="debug">'
+        "<h2>Pipeline</h2>"
+        f"{_ladder(inspection)}"
+        "<h2>File</h2>"
+        f'<p class="meta">{meta}</p>{notes}'
+        '<h2>Stats</h2><div id="stats"></div>'
+        '<h2>Document</h2><div id="document"></div>'
+        "</section>"
         f'<script id="inspection" type="application/json">{payload}</script>'
         f"<script>//<![CDATA[\n{_SCRIPT}\n//]]></script>"
         "</body></html>"

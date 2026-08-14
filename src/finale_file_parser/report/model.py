@@ -22,10 +22,6 @@ from finale_file_parser.enigma.mus_details import MusDetailRecord, read_mus_deta
 from finale_file_parser.enigma.mus_document import read_mus_document
 from finale_file_parser.enigma.mus_others import MusOther, read_mus_others
 from finale_file_parser.enigma.mus_payload import (
-    POOL_DETAILS,
-    POOL_ENTRIES,
-    POOL_OTHERS,
-    POOL_TEXT,
     MusPool,
     read_mus_pools,
 )
@@ -60,18 +56,6 @@ _MUSX_POOLS = ("header", "mappings", "options", "others", "details", "entries", 
 imported from `report.summary`: that module's `_POOLS` is a private detail of
 the count-only summary, not a shared constant."""
 
-_MUS_POOL_NAMES = ("others", "details", "entries", "text")
-"""The roles a `.mus` container's four pools play, in the order it writes them
--- `enigma.mus_payload`'s own docstring: kind 15/16/17/18 for a labelled DCL
-container, and the same order by structure alone for an unlabelled zlib one."""
-
-_MUS_POOL_KINDS = {
-    POOL_OTHERS: "others",
-    POOL_DETAILS: "details",
-    POOL_ENTRIES: "entries",
-    POOL_TEXT: "text",
-}
-
 MAX_JSON_BYTES = 16 * 1024 * 1024
 """Budget for the embedded JSON. The largest corpus payload is ~500 KB, so no
 real document approaches this; it exists to stop a pathological file."""
@@ -86,11 +70,10 @@ class Inspection:
 
     file: dict[str, str]
     stages: list[Stage] = field(default_factory=list)
-    score: ScoreSummary | None = None
+    stats: ScoreSummary | None = None
     music: MusicTree | None = None
     document: DocumentSummary | None = None
     records: dict[str, object] = field(default_factory=dict)
-    raw: dict[str, object] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     """Anything the report had to leave out, and why."""
 
@@ -170,14 +153,6 @@ def inspect_document(path: str | os.PathLike[str]) -> Inspection:
 def _mus_stages(ladder: Ladder, target: Path, inspection: Inspection) -> None:
     pools = ladder.run("decode payload", lambda: read_mus_pools(target), _pools_detail)
     if pools is not None:
-        raw = ladder.run(
-            "read raw bytes",
-            lambda: _mus_raw(pools),
-            lambda r: {"pools": str(len(r))},
-            halt=False,
-        )
-        if raw is not None:
-            inspection.raw = raw
         records = ladder.run(
             "read records",
             lambda: _mus_records(target),
@@ -205,27 +180,6 @@ def _musx_stages(ladder: Ladder, target: Path, inspection: Inspection) -> None:
         if records is not None:
             inspection.records = records
     _finish(ladder, document, inspection)
-
-
-def _pool_name(pool: MusPool, index: int) -> str:
-    """A DCL container labels its pools by kind; a zlib one does not, so fall
-    back to the fixed order `enigma.mus_payload` documents its four streams
-    playing by structure alone."""
-    if pool.kind is not None and pool.kind in _MUS_POOL_KINDS:
-        return _MUS_POOL_KINDS[pool.kind]
-    return _MUS_POOL_NAMES[index] if index < len(_MUS_POOL_NAMES) else f"pool{index}"
-
-
-def _mus_raw(pools: tuple[MusPool, ...]) -> dict[str, object]:
-    """Every decoded pool, base64, keyed by the role it plays.
-
-    Independent of whether the pools decode into records below: a payload that
-    fails every record walk is still worth looking at as bytes. Pure, and
-    raises nothing of its own -- `_mus_stages` runs it through `Ladder.run`
-    regardless, so a change here that starts raising is still caught rather
-    than assumed away.
-    """
-    return {_pool_name(pool, index): encode_raw(pool.data) for index, pool in enumerate(pools)}
 
 
 def _record_entry(key: str, fields: object, length: int | None) -> dict[str, object]:
@@ -435,11 +389,10 @@ def _weight(inspection: Inspection) -> int:
             {
                 "file": inspection.file,
                 "stages": [asdict(s) for s in inspection.stages],
-                "score": inspection.score,
+                "stats": inspection.stats,
                 "music": inspection.music,
                 "document": inspection.document,
                 "records": inspection.records,
-                "raw": inspection.raw,
                 "notes": inspection.notes,
             }
         )
@@ -447,18 +400,14 @@ def _weight(inspection: Inspection) -> int:
 
 
 def apply_budget(inspection: Inspection, limit: int = MAX_JSON_BYTES) -> None:
-    """Drop `raw` first, then `records`, naming what went in `notes`.
+    """Drop `records` first, then the music tree, naming what went in `notes`.
 
-    Score and document summaries are never dropped: they are small, and they
-    are the part a reader needs most. The music tree goes last of the three that
-    can be dropped: it is a re-derivable view of a score that is itself still
-    reported, where `raw` and `records` are the primary evidence.
+    The stats and document summaries are never dropped: they are small, and they
+    are the part a reader needs most. Of the two that can go, `records` goes
+    first: it is the primary evidence, but it is also far the largest, and the
+    music tree is the view a reader is most likely to have opened the report
+    for.
     """
-    if _weight(inspection) <= limit:
-        return
-    if inspection.raw:
-        inspection.raw = {}
-        inspection.notes.append(f"raw bytes omitted: the report exceeded its {limit} byte budget")
     if _weight(inspection) <= limit:
         return
     if inspection.records:
@@ -483,7 +432,7 @@ def _finish(ladder: Ladder, document: EnigmaDocument | None, inspection: Inspect
     if score is None:
         ladder.run("export MusicXML", _unreachable)
         return
-    inspection.score = summarise_score(score)
+    inspection.stats = summarise_score(score)
     inspection.music = music_tree(score, _mirrored_cells(document))
     ladder.run(
         "export MusicXML",

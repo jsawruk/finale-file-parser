@@ -9,7 +9,7 @@ from defusedxml import ElementTree as DET
 
 from finale_file_parser.report.html import render_html
 from finale_file_parser.report.ladder import OK, Stage
-from finale_file_parser.report.model import Inspection, encode_raw
+from finale_file_parser.report.model import Inspection
 
 
 def _inspection(**kwargs: object) -> Inspection:
@@ -24,17 +24,17 @@ def test_a_title_containing_a_script_tag_cannot_break_out() -> None:
     """Document text goes into the page and the input is untrusted by
     definition. `</script>` inside the embedded JSON would end the block."""
     hostile = '</script><script>alert("x")</script>'
-    html = render_html(_inspection(score={"parts": [{"id": "P1", "name": hostile}]}))
+    html = render_html(_inspection(stats={"parts": [{"id": "P1", "name": hostile}]}))
     assert "</script><script>alert" not in html
     assert "\\u003c/script" in html
 
 
 def test_the_report_embeds_its_data_as_json() -> None:
-    html = render_html(_inspection(score={"totals": {"parts": 3}}))
+    html = render_html(_inspection(stats={"totals": {"parts": 3}}))
     match = re.search(r'<script id="inspection" type="application/json">(.*?)</script>', html, re.S)
     assert match is not None
     payload = json.loads(match.group(1).replace("<\\/", "</"))
-    assert payload["score"]["totals"]["parts"] == 3
+    assert payload["stats"]["totals"]["parts"] == 3
 
 
 def test_the_report_is_well_formed_markup() -> None:
@@ -72,7 +72,7 @@ def test_a_cdata_terminator_in_document_text_does_not_break_xml() -> None:
     routes onto the page: a part name (through `_embed`'s JSON payload) and a
     stage error (through `_ladder`'s own `html.escape`, which already handles
     this correctly and must not regress)."""
-    inspection = _inspection(score={"parts": [{"id": "P1", "name": "]]>hi"}]})
+    inspection = _inspection(stats={"parts": [{"id": "P1", "name": "]]>hi"}]})
     inspection.stages = [
         Stage("detect version", OK, {"family": "mus"}),
         Stage("build score", "refused", error="broken at offset ]]>boom"),
@@ -81,24 +81,21 @@ def test_a_cdata_terminator_in_document_text_does_not_break_xml() -> None:
     DET.fromstring(html[html.index("<html") :])
 
 
-def test_the_bytes_pane_can_reach_every_byte_of_a_pool() -> None:
-    """The whole pool is embedded -- 269 KB of `others` in one corpus document
-    -- but the pane used to render its first 4096 bytes and say nothing about
-    the remaining 98%. The hex window is still one page; the page now moves, and
-    names where in the pool it is."""
-    pool = bytes(range(256)) * 40  # 10,240 bytes: more than two 4 KB pages
-    html = render_html(_inspection(raw={"others": encode_raw(pool)}))
-    script = html[html.index("//<![CDATA[") :]
+def test_there_is_no_byte_pane_and_no_raw_payload() -> None:
+    """The pool hex viewer is gone, and so is the `raw` payload behind it.
 
-    assert "Math.min(bin.length, 4096)" not in script, "the silent 4 KB cut is back"
-    assert "PAGE_BYTES = 4096" in script
-    assert "'previous'" in script and "'next'" in script
-    assert "'bytes ' + group(start)" in script
-    assert "' of ' + group(bin.length)" in script
-    # Base64 carries none of `<`, `>` or `&`, so `_embed` leaves it untouched:
-    # the page holds the entire pool, not only the bytes first shown.
-    assert encode_raw(pool) in html
-    DET.fromstring(html[html.index("<html") :])
+    Measured before removing it, across all 639 corpus documents: there is not
+    one where the byte pane is the only content. All 7 documents that fail still
+    carry a records tree, 401 `.musx` documents never had a byte pane at all,
+    and for a `.mus` the same bytes are already in the records tree attached to
+    the record they belong to -- which the undifferentiated pool dump could not
+    tell you. Dropping it took 33% off one report's payload.
+
+    Pinned so the pane cannot come back without that evidence being revisited.
+    """
+    html = render_html(_inspection())
+    assert "hexDump" not in html and "bytePool" not in html
+    assert '"raw"' not in html, "the payload no longer carries undecoded pools"
 
 
 def test_a_filename_that_is_not_valid_utf8_can_still_be_written_out() -> None:
@@ -154,16 +151,22 @@ def test_the_music_pane_exists_beside_the_storage_one() -> None:
     what it means. The report shows both rather than making one stand in."""
     html = render_html(_inspection())
     panes = re.findall(r'data-pane="(\w+)"', html)
-    assert panes == ["score", "music", "document", "records", "bytes"]
+    assert panes == ["music", "records", "debug"]
     assert '<section id="music">' in html
 
 
 def test_the_music_pane_says_so_when_no_score_was_built() -> None:
-    """`music` is None whenever the ladder stopped before `build score`, and the
-    pane must explain that rather than render an empty tree that reads like a
-    document with no notes in it."""
+    """`music` is None whenever the ladder stopped before `build score`.
+
+    The ladder used to sit above every pane, so an empty pane explained itself.
+    It is behind the Debug tab now, so a pane with nothing to show has to name
+    the stage that stopped and point at where the detail lives -- otherwise a
+    file that failed to parse opens on a blank Music tab and reads like a
+    document with no notes in it.
+    """
     html = render_html(_inspection(music=None))
-    assert "stopped before a score was built" in html
+    assert "See the Debug tab for the full ladder" in html, "and says where to look"
+    assert "function stopped(" in html
 
 
 def test_a_hostile_field_name_cannot_break_out_of_the_tree() -> None:
