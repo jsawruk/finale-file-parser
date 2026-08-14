@@ -177,3 +177,45 @@ def test_a_hostile_field_name_cannot_break_out_of_the_tree() -> None:
     html = render_html(_inspection(records=records))
     assert "<img src=x" not in html, "escaped inside the JSON island"
     assert "innerHTML = '<pre>'" not in html
+
+
+def test_the_debug_tab_reads_file_then_pipeline_then_stats() -> None:
+    """File first because it says which file this is, pipeline next because it
+    says whether reading it worked, then the detail."""
+    html = render_html(_inspection())
+    headings = re.findall(r"<h2>([^<]+)</h2>", html)
+    assert headings == ["File", "Pipeline", "Stats", "Not translated"]
+
+
+def test_a_stage_carries_a_mark_for_how_it_went() -> None:
+    """Reading a ladder for the one row that failed is faster with a mark than
+    with a class name. Refused and crashed share the cross -- both mean no
+    result -- and the row styling still distinguishes whose fault it was."""
+    from finale_file_parser.report.ladder import CRASHED, REFUSED, SKIPPED
+
+    inspection = _inspection()
+    inspection.stages = [
+        Stage("read file", OK, {}),
+        Stage("decode payload", REFUSED, {}, "no frame holds"),
+        Stage("read records", CRASHED, {}, "IndexError"),
+        Stage("build score", SKIPPED, {}),
+    ]
+    html = render_html(inspection)
+    assert '<li class="ok">✅ read file' in html
+    assert '<li class="refused">❌ decode payload' in html
+    assert '<li class="crashed">❌ read records' in html
+    assert '<li class="skipped">· build score' in html
+
+
+def test_the_document_dump_is_replaced_by_the_gaps_it_carried() -> None:
+    """The old Document pane held three things. Its per-pool counts were
+    identical to the ones the Records tree already shows -- measured across 40
+    `.musx` documents, identical in all 40 -- and its `version` was the family
+    string the ladder reports a line above. Only the untranslated list was
+    unique, so only it survived.
+    """
+    html = render_html(
+        _inspection(document={"version": "18.0", "pools": {}, "untranslated": ["x"]})
+    )
+    assert "renderUntranslated" in html
+    assert "JSON.stringify(value, null, 2)" not in html, "the document dump is gone"

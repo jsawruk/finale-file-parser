@@ -105,10 +105,23 @@ function renderStats() {
   }
   el.innerHTML = out;
 }
-function renderJson(id, value) {
-  document.getElementById(id).innerHTML =
-    value ? '<pre>' + esc(JSON.stringify(value, null, 2)) + '</pre>'
-          : '<p>Not available — the pipeline stopped before this stage.</p>';
+// What this reader knowingly does not carry out of a file. The rest of the old
+// Document summary is gone: its per-pool counts were identical to the ones the
+// Records tree already shows on its own summaries -- measured across 40 .musx
+// documents, identical in all 40 -- and its "version" was the family string the
+// ladder reports one line above.
+function renderUntranslated() {
+  const el = document.getElementById('untranslated');
+  const gaps = (data.document && data.document.untranslated) || [];
+  if (gaps.length === 0) { el.innerHTML = stopped('list of gaps'); return; }
+  const list = document.createElement('ul');
+  for (const gap of gaps) {
+    const item = document.createElement('li');
+    item.textContent = gap;
+    list.appendChild(item);
+  }
+  el.innerHTML = '';
+  el.appendChild(list);
 }
 // The ladder used to sit above every pane, so an empty pane explained itself.
 // It lives under Debug now, so a pane that has nothing to show has to say why
@@ -260,7 +273,7 @@ function control(label, onClick) {
 }
 renderStats();
 renderMusic();
-renderJson('document', data.document);
+renderUntranslated();
 renderRecords();
 show('music');
 """
@@ -286,6 +299,17 @@ def _embed(data: object) -> str:
     )
 
 
+_MARK = {"ok": "\u2705", "refused": "\u274c", "crashed": "\u274c", "skipped": "\u00b7"}
+"""A mark per stage status.
+
+Refused and crashed share the cross because both mean "no result here"; what
+separates them is whose fault it is -- the file declining to be read, or this
+reader hitting a bug -- and the row's own styling already carries that. Skipped
+gets a middle dot rather than a cross: nothing went wrong, the ladder simply
+never reached it.
+"""
+
+
 def _ladder(inspection: Inspection) -> str:
     """The stage ladder as an always-visible `<ol>`: what was tried, in order,
     and how far it got. Shown unconditionally -- unlike the four panes below,
@@ -299,7 +323,7 @@ def _ladder(inspection: Inspection) -> str:
             text += " <span>" + _text(detail) + "</span>"
         if stage.error:
             text += " — " + _text(stage.error)
-        rows.append(f'<li class="{_text(stage.status)}">{text}</li>')
+        rows.append(f'<li class="{_text(stage.status)}">{_MARK[stage.status]} {text}</li>')
     return '<ol class="ladder">' + "".join(rows) + "</ol>"
 
 
@@ -319,9 +343,7 @@ def render_html(inspection: Inspection) -> str:
     entities and break the well-formedness this page is meant to keep.
     """
     name = _text(inspection.file.get("name", "document"))
-    meta = _text(
-        f"{inspection.file.get('size', '?')} bytes · sha256 {inspection.file.get('sha256', '')}"
-    )
+    meta = _text(f"{inspection.file.get('size', '?')} bytes")
     notes = "".join(f"<p>{_text(n)}</p>" for n in inspection.notes)
     payload = _embed(
         {
@@ -345,12 +367,12 @@ def render_html(inspection: Inspection) -> str:
         '<button data-pane="debug">Debug</button></nav>'
         '<section id="music"></section><section id="records"></section>'
         '<section id="debug">'
-        "<h2>Pipeline</h2>"
-        f"{_ladder(inspection)}"
         "<h2>File</h2>"
         f'<p class="meta">{meta}</p>{notes}'
+        "<h2>Pipeline</h2>"
+        f"{_ladder(inspection)}"
         '<h2>Stats</h2><div id="stats"></div>'
-        '<h2>Document</h2><div id="document"></div>'
+        '<h2>Not translated</h2><div id="untranslated"></div>'
         "</section>"
         f'<script id="inspection" type="application/json">{payload}</script>'
         f"<script>//<![CDATA[\n{_SCRIPT}\n//]]></script>"

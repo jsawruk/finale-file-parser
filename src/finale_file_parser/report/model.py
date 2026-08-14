@@ -9,7 +9,6 @@ lies about the parser is worse than no tool.
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 import os
 from collections.abc import Iterable
@@ -89,11 +88,7 @@ def _identity(path: Path) -> dict[str, str]:
         data = path.read_bytes()
     except OSError as error:
         raise FinaleFileError(f"cannot read {path}: {error}") from error
-    return {
-        "name": path.name,
-        "size": str(len(data)),
-        "sha256": hashlib.sha256(data).hexdigest(),
-    }
+    return {"name": path.name, "size": str(len(data))}
 
 
 def _no_paths(text: str, path: Path) -> str:

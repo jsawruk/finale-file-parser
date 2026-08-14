@@ -64,7 +64,9 @@ def test_the_error_does_not_carry_an_absolute_path(
 
 
 def test_file_identity_is_recorded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """So two people can confirm they are looking at the same file."""
+    """Name and size. The sha256 that used to sit beside them is gone: it was
+    read as saying something about how the file was decoded, when it was only
+    ever a hash of the bytes on disk."""
     path = _file(tmp_path)
     monkeypatch.setattr(model, "detect_version", lambda p: _FakeVersion())
     monkeypatch.setattr(
@@ -73,7 +75,7 @@ def test_file_identity_is_recorded(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     inspection = model.inspect_document(path)
     assert inspection.file["name"] == "score.mus"
     assert inspection.file["size"] == str(len(b"not really a mus file"))
-    assert len(inspection.file["sha256"]) == 64
+    assert "sha256" not in inspection.file
 
 
 def test_a_reader_bug_is_reported_as_a_crash(
