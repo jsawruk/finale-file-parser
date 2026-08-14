@@ -33,6 +33,7 @@ from finale_file_parser.enigma.score import score_xml
 from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.errors import FinaleFileError
 from finale_file_parser.export.musicxml import to_musicxml
+from finale_file_parser.formats.layouts import Layout, layout_for
 from finale_file_parser.report.ladder import Ladder, Stage
 from finale_file_parser.report.summary import (
     DocumentSummary,
@@ -77,6 +78,16 @@ class Inspection:
     music: MusicTree | None = None
     document: DocumentSummary | None = None
     records: dict[str, object] = field(default_factory=dict)
+    layouts: dict[str, object] = field(default_factory=dict)
+    """The payload layout of each record tag present, where one is known.
+
+    Held per tag rather than per record: every `measSpec` in a document has the
+    same layout, and one corpus document carries thousands of them. Attaching
+    the spans to each record would have repeated an identical list of five
+    fields several thousand times, against a report budget this branch has
+    already tripped once.
+    """
+
     notes: list[str] = field(default_factory=list)
     """Anything the report had to leave out, and why."""
 
@@ -160,6 +171,7 @@ def _mus_stages(ladder: Ladder, target: Path, inspection: Inspection) -> None:
         )
         if records is not None:
             inspection.records = records
+            inspection.layouts = _layouts_present(records)
     document = ladder.run("build document", lambda: read_mus_document(target))
     _finish(ladder, document, inspection)
 
@@ -300,6 +312,56 @@ def _mus_records(target: Path) -> dict[str, object]:
     records["others"] = _group_by_tag((r.tag, _mus_row_entry(r)) for r in rows.others.values())
     records["details"] = _group_by_tag((r.tag, _mus_row_entry(r)) for r in rows.details.values())
     return records
+
+
+def _layout_entry(layout: Layout) -> dict[str, object]:
+    """One layout, flattened for the report.
+
+    Offsets and sizes only -- no decoded values. The bytes are already in the
+    record; a reader of this JSON holds both and can decode one from the other,
+    whereas writing the values here would state the payload twice.
+    """
+    return {
+        "record": layout.record,
+        "struct": layout.name,
+        "stride": layout.stride,
+        "fields": [
+            {
+                "offset": f.offset,
+                "size": f.size,
+                "name": f.name,
+                "type": f.type_,
+                "note": f.note,
+            }
+            for f in layout.fields
+        ],
+    }
+
+
+def _layouts_present(records: dict[str, object]) -> dict[str, object]:
+    """The layout of every tag in `records` that has one, by pool and tag.
+
+    Two of the nine known layouts are left out, and the omission is the point.
+    A `frameSpec` keeps its entry pair in its *last* incidence and a `gfhold`
+    puts its frame slots at an era-dependent base, so for both of them the
+    reader works out where a field sits from the record in front of it. Laying
+    the nominal offsets over those bytes would tint the wrong ones and decode
+    numbers that look entirely reasonable -- the failure this format is most
+    generous with. Showing plain, untinted hex says "not decoded", which is
+    true; showing the wrong span says something false.
+    """
+    present: dict[str, object] = {}
+    for pool, tags in records.items():
+        if not isinstance(tags, dict):
+            continue
+        found: dict[str, object] = {}
+        for tag in tags:
+            layout = layout_for(pool, str(tag))
+            if layout is not None and not layout.era_dependent:
+                found[str(tag)] = _layout_entry(layout)
+        if found:
+            present[pool] = found
+    return present
 
 
 _IDENTITY_ATTRS = ("cmper", "cmper1", "cmper2", "entnum", "number", "type", "inci", "part")
@@ -461,6 +523,7 @@ def _weight(inspection: Inspection) -> int:
                 "music": inspection.music,
                 "document": inspection.document,
                 "records": inspection.records,
+                "layouts": inspection.layouts,
                 "notes": inspection.notes,
             }
         )
@@ -480,6 +543,9 @@ def apply_budget(inspection: Inspection, limit: int = MAX_JSON_BYTES) -> None:
         return
     if inspection.records:
         inspection.records = {}
+        # The layouts describe records that are no longer here, so they go with
+        # them rather than being left behind describing nothing.
+        inspection.layouts = {}
         inspection.notes.append(f"records omitted: the report exceeded its {limit} byte budget")
     if _weight(inspection) <= limit:
         return

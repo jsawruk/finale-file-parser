@@ -240,6 +240,79 @@ def test_the_budget_drops_records_before_the_music_tree() -> None:
     assert any("records" in note for note in inspection.notes)
 
 
+def test_the_budget_takes_the_layouts_with_the_records() -> None:
+    """A layout describes a record. With the records gone it describes nothing,
+    and a renderer holding one would key a hex view to bytes that are not
+    there."""
+    from finale_file_parser.report.model import Inspection, apply_budget
+
+    inspection = Inspection(file={"name": "x", "size": "0"})
+    inspection.records = {"others": {"176": [{"key": "A" * 2000}]}}
+    inspection.layouts = {"others": {"176": {"record": "measSpec", "fields": []}}}
+
+    apply_budget(inspection, limit=500)
+    assert inspection.records == {}
+    assert inspection.layouts == {}
+
+
+def test_a_layout_is_offered_for_a_tag_whose_payload_is_decoded() -> None:
+    records: dict[str, object] = {"others": {"176": [], "124": []}}
+    layouts = model._layouts_present(records)
+
+    assert set(layouts) == {"others"}
+    by_tag = layouts["others"]
+    assert isinstance(by_tag, dict)
+    # 176 is measSpec, whose payload this project decodes; 124 is channelPlayData,
+    # which it does not. A tag with no layout must be absent rather than empty:
+    # the renderer distinguishes "no layout" from "a layout with no fields".
+    assert set(by_tag) == {"176"}
+    entry = by_tag["176"]
+    assert isinstance(entry, dict)
+    assert entry["record"] == "measSpec"
+    assert [f["name"] for f in entry["fields"]] == [
+        "width",
+        "key",
+        "beats",
+        "divbeat",
+        "flags",
+    ]
+
+
+def test_a_layout_carries_spans_and_not_values() -> None:
+    """The bytes are already in the record. Writing decoded values here would
+    state the payload a second time, in a report with a size budget."""
+    layouts = model._layouts_present({"others": {"176": []}})
+    by_tag = layouts["others"]
+    assert isinstance(by_tag, dict)
+    entry = by_tag["176"]
+    assert isinstance(entry, dict)
+
+    for span in entry["fields"]:
+        assert set(span) == {"offset", "size", "name", "type", "note"}
+
+
+def test_the_dcl_spelling_of_a_tag_finds_the_same_layout() -> None:
+    """A 2001-2005 document keys its records by two characters, not a number."""
+    numeric = model._layouts_present({"others": {"176": []}})["others"]
+    dcl = model._layouts_present({"others": {"MS": []}})["others"]
+    assert isinstance(numeric, dict)
+    assert isinstance(dcl, dict)
+    assert numeric["176"] == dcl["MS"]
+
+
+def test_no_layout_is_offered_where_the_reader_computes_the_offsets() -> None:
+    """`frameSpec` keeps its entry pair in its last incidence and `gfhold` puts
+    its frame slots at an era-dependent base, so neither has one fixed layout to
+    lay over a record's bytes.
+
+    Tinting them at their nominal offsets would decode entry numbers that look
+    entirely plausible and are wrong. Plain hex says "not decoded", which is
+    true; a wrong span says something false.
+    """
+    assert model._layouts_present({"others": {"146": [], "FR": []}}) == {}
+    assert model._layouts_present({"details": {"1044": [], "GF": []}}) == {}
+
+
 @pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 def test_a_real_mus_file_gets_records() -> None:
     """End-to-end: the wiring populates the records depth from a real file, and

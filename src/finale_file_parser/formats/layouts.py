@@ -65,6 +65,16 @@ class Layout:
     """Non-zero when the payload is an array of fixed-size slots, each laid out
     by `fields`. Zero when the payload is a single structure."""
 
+    era_dependent: bool = False
+    """True when these offsets hold for one era or record shape only.
+
+    Such a layout still describes the record -- the specification draws it, and
+    it is the shape a reader starts from -- but it must not be laid over the
+    bytes of an arbitrary record, because the reader does not read that record
+    at these offsets. Every consumer that points a layout at real bytes has to
+    skip these, or establish the era first and shift the offsets to match.
+    """
+
     def field_at(self, index: int) -> tuple[int, Field] | None:
         """The field covering byte `index`, with its position in `fields`.
 
@@ -93,9 +103,15 @@ MEAS_SPEC = Layout(
 )
 
 # The lead-in is 6 bytes for 2005 and 4 for 2001, so `startEntry` and
-# `endEntry` move with the era. This layout states the 2005 shape. Reading a
-# 2001 frameSpec at this base yields entry numbers that look plausible and are
-# wrong, so a consumer that cannot establish the era must not apply it.
+# `endEntry` move with the era. This layout states the 2005 shape.
+#
+# The readers go further still: `mus_document._frame_span` takes the entry pair
+# from the record's LAST incidence, at `(incidences - 1) * 12`, in both eras --
+# so where the pair sits depends on the individual record's length, not only on
+# the era. That is why this layout is `era_dependent`: it is the shape to start
+# from, not a ruler to lay over a record's bytes. Doing so yields entry numbers
+# that look plausible and are wrong, which is the worst error this format
+# offers.
 FRAME_SPEC_BASE_2005 = 6
 
 FRAME_SPEC = Layout(
@@ -109,8 +125,13 @@ FRAME_SPEC = Layout(
         Field(FRAME_SPEC_BASE_2005, 4, "startEntry", "uint32", "first entry number in this frame"),
         Field(FRAME_SPEC_BASE_2005 + 4, 4, "endEntry", "uint32", "last entry number, inclusive"),
     ),
+    era_dependent=True,
 )
 
+# The frame slots start at the same era base as a frameSpec's lead-in -- 6 for
+# 2005, 4 for 2001 -- and `mus_document._rows_details` reads them at
+# `base + 2 * layer`, with the base established per document from whether the
+# first staffSpec carries three incidences. `clefID` at +0 does not move.
 GF_HOLD = Layout(
     name="GfHold",
     record="gfhold",
@@ -119,9 +140,10 @@ GF_HOLD = Layout(
     pool="details",
     fields=(
         Field(0, 2, "clefID", "uint16", "clef in force for this measure"),
-        Field(6, 2, "frame1", "uint16", "layer 1 frame id; 0 = layer empty"),
-        Field(8, 2, "frame2", "uint16", "layer 2 frame id"),
+        Field(FRAME_SPEC_BASE_2005, 2, "frame1", "uint16", "layer 1 frame id; 0 = layer empty"),
+        Field(FRAME_SPEC_BASE_2005 + 2, 2, "frame2", "uint16", "layer 2 frame id"),
     ),
+    era_dependent=True,
 )
 
 STAFF_SPEC = Layout(

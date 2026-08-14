@@ -464,6 +464,7 @@ def render_html(inspection: Inspection) -> str:
             "music": inspection.music,
             "document": inspection.document,
             "records": inspection.records,
+            "layouts": inspection.layouts,
             "notes": inspection.notes,
         }
     )
