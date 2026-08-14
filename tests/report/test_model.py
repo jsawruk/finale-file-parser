@@ -277,3 +277,39 @@ def test_a_real_musx_file_gets_records_but_no_raw() -> None:
         "texts",
     }
     json.dumps(inspection.records)
+
+
+def test_a_record_is_keyed_by_every_identity_attribute_it_carries() -> None:
+    """A `gfhold` says which staff and measure it places music into, and it says
+    it in `cmper1`/`cmper2` -- not `cmper`.
+
+    Keying only on `cmper`/`inci`/`part` found nothing on such a record and fell
+    back to its position in the array, so the report showed `frame1` without the
+    staff and measure it belonged to. Worse, a record carrying `cmper1`, `cmper2`
+    AND `inci` got a key of just the `inci`, which reads like an identity while
+    naming the wrong thing. 2,263 of one corpus archive's 5,880 records were
+    keyed this way. The `.mus` path never had the bug: `_mus_detail_entry` has
+    always keyed on `cmper1/cmper2/inci`, and this brings `.musx` into line.
+    """
+    from finale_file_parser.enigma.document import Record
+    from finale_file_parser.report.model import _musx_key
+
+    gfhold = Record(tag="gfhold", attrs={"cmper1": "3", "cmper2": "12"}, text="", fields={})
+    assert _musx_key(gfhold, 7) == "3/12"
+
+    with_inci = Record(
+        tag="crossChord", attrs={"cmper1": "3", "cmper2": "12", "inci": "1"}, text="", fields={}
+    )
+    assert _musx_key(with_inci, 7) == "3/12/1"
+
+    entry = Record(tag="entry", attrs={"entnum": "41", "next": "42"}, text="", fields={})
+    assert _musx_key(entry, 7) == "41", "`next` is a link, not identity"
+
+    text = Record(tag="expression", attrs={"number": "5"}, text="", fields={})
+    assert _musx_key(text, 7) == "5"
+
+    ordinary = Record(tag="measSpec", attrs={"cmper": "2", "inci": "0"}, text="", fields={})
+    assert _musx_key(ordinary, 7) == "2/0", "unchanged for records that were already right"
+
+    anonymous = Record(tag="header", attrs={}, text="", fields={})
+    assert _musx_key(anonymous, 7) == "7", "position is still the fallback when nothing names it"

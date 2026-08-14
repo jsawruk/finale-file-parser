@@ -345,11 +345,31 @@ def _mus_records(target: Path) -> dict[str, object]:
     return records
 
 
+_IDENTITY_ATTRS = ("cmper", "cmper1", "cmper2", "entnum", "number", "type", "inci", "part")
+"""Every attribute that names *which* record this is, widest key first.
+
+Not every record is keyed the same way. `measSpec` uses `cmper`; `gfhold` uses
+`cmper1`/`cmper2` (staff and measure); a details record can hang off an
+`entnum`; a text is numbered. `inci` and `part` qualify whichever of those came
+before, so they sort last -- which makes a details key read `cmper1/cmper2/inci`,
+the same shape `_mus_detail_entry` has always produced for the `.mus` path.
+
+Ordered rather than taken from `record.attrs` so the key does not change when a
+reader happens to emit attributes in a different order.
+"""
+
+
 def _musx_key(record: Record, index: int) -> str:
-    """A record's identity for the report: its own identity attributes where
-    it carries any, falling back to its position for the singleton pools
-    (`header`, `mappings`) that carry none."""
-    parts = [record.attrs[name] for name in ("cmper", "inci", "part") if name in record.attrs]
+    """A record's identity for the report: every identity attribute it carries,
+    falling back to its position when it carries none.
+
+    The fallback is for genuinely anonymous records -- the singleton `header`
+    and `mappings` pools. It used to catch far more than that: keying on only
+    `cmper`/`inci`/`part` missed `cmper1`/`cmper2`/`entnum`/`number`/`type`
+    entirely, so 2,263 of one corpus archive's 5,880 records were labelled by
+    array position or, where an `inci` was present, by the `inci` alone.
+    """
+    parts = [record.attrs[name] for name in _IDENTITY_ATTRS if name in record.attrs]
     return "/".join(parts) if parts else str(index)
 
 
