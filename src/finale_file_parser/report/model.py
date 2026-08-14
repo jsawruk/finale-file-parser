@@ -403,25 +403,27 @@ def _record_source(xml: bytes) -> dict[str, list[str]]:
         name = pool.tag.rsplit("}", 1)[-1]
         if name not in _MUSX_POOLS:
             continue
-        out[name] = [
-            _dedent(_NS_DECL.sub("", _NS_PREFIX.sub("", ET.tostring(child, encoding="unicode"))))
-            for child in pool
-        ]
+        out[name] = [_fragment(child) for child in pool]
     return out
 
 
-def _dedent(fragment: str) -> str:
-    """Strip the file's own indentation, keeping the fragment's shape.
+def _fragment(element: ET.Element) -> str:
+    """One record's XML, indented two spaces a level.
 
-    A record sits several levels deep in EnigmaXML, and `tostring` keeps every
-    one of those leading spaces on every line. Across the largest corpus
-    document that is 21% of all the XML the report would carry, and it says
-    nothing about the record -- only about where it sat in the file.
+    The elements, attributes and values are the file's own -- this serialises
+    the source element, it does not rebuild one from the parse. Only the
+    whitespace between them is this report's, and it has to be: EnigmaXML is
+    written both pretty-printed and compact, so left verbatim the same record
+    would render as an indented block from one file and as a single unreadable
+    line from another. Re-indenting makes the two look the same, which is what
+    someone comparing them needs.
+
+    `ET.indent` only touches elements that have children, so a record whose text
+    is its content -- a text pool's markup, say -- keeps that text exactly.
     """
-    lines = fragment.strip().splitlines()
-    depths = [len(line) - len(line.lstrip()) for line in lines[1:] if line.strip()]
-    cut = min(depths) if depths else 0
-    return "\n".join([lines[0]] + [line[cut:] for line in lines[1:]]) if lines else ""
+    ET.indent(element, space="  ")
+    serialised = ET.tostring(element, encoding="unicode")
+    return _NS_DECL.sub("", _NS_PREFIX.sub("", serialised)).strip()
 
 
 def encode_raw(data: bytes) -> str:

@@ -360,3 +360,33 @@ def test_an_unmirrored_document_reports_no_cells() -> None:
 
     plain = _MIRROR_XML.replace(b'<gfhold cmper1="2" cmper2="1"><frame1>20</frame1></gfhold>', b"")
     assert _mirrored_cells(parse_enigma(plain)) == {}
+
+
+def test_a_record_fragment_is_indented_however_the_file_wrote_it() -> None:
+    """EnigmaXML is written both pretty-printed and compact. Left verbatim the
+    same record would render as an indented block from one file and as a single
+    unreadable line from another, so the whitespace between elements is this
+    report's while the elements, attributes and values stay the file's.
+    """
+    from finale_file_parser.report.model import _record_source
+
+    compact = (
+        b'<finale xmlns="http://www.makemusic.com/2012/finale">'
+        b'<others><frameSpec cmper="11" inci="0">'
+        b"<startEntry>1</startEntry><endEntry>4</endEntry>"
+        b"</frameSpec></others></finale>"
+    )
+    spaced = (
+        b'<finale xmlns="http://www.makemusic.com/2012/finale">\n'
+        b'  <others>\n        <frameSpec cmper="11" inci="0">\n'
+        b"          <startEntry>1</startEntry>\n          <endEntry>4</endEntry>\n"
+        b"        </frameSpec>\n  </others>\n</finale>"
+    )
+    expected = (
+        '<frameSpec cmper="11" inci="0">\n'
+        "  <startEntry>1</startEntry>\n"
+        "  <endEntry>4</endEntry>\n"
+        "</frameSpec>"
+    )
+    assert _record_source(compact)["others"][0] == expected
+    assert _record_source(spaced)["others"][0] == expected, "the file's own depth is not carried"
