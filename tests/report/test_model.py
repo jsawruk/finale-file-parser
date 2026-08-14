@@ -300,6 +300,21 @@ def test_the_dcl_spelling_of_a_tag_finds_the_same_layout() -> None:
     assert numeric["176"] == dcl["MS"]
 
 
+@pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
+def test_the_byte_order_travels_with_the_report() -> None:
+    """Not a constant, and not cosmetic: the corpus holds big-endian `.mus`
+    documents, where reading a measSpec width little-endian turns 360 EVPU into
+    26,625 -- a number, not an error. The renderer decodes with this, so it has
+    to be the order the reader used.
+    """
+    orders = set()
+    for path in sorted(CORPUS.rglob("*.mus"))[:40]:
+        inspection = model.inspect_document(path)
+        assert inspection.byte_order in {"little", "big"}
+        orders.add(inspection.byte_order)
+    assert "big" in orders, "a corpus that cannot exercise the order proves nothing"
+
+
 def test_no_layout_is_offered_where_the_reader_computes_the_offsets() -> None:
     """`frameSpec` keeps its entry pair in its last incidence and `gfhold` puts
     its frame slots at an era-dependent base, so neither has one fixed layout to

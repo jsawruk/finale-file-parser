@@ -12,6 +12,7 @@ import json
 import re
 from dataclasses import asdict
 
+from finale_file_parser.formats.layouts import PALETTE
 from finale_file_parser.report.model import Inspection
 
 __all__ = ["render_html"]
@@ -83,9 +84,16 @@ details.node > summary::marker { color: #999; }
 .hex .off { color: #999; }
 .hex .txt { color: #666; }
 .no-bytes { color: #666; max-width: 34rem; }
+.swatch { display: inline-block; width: 0.9rem; height: 0.9rem; border: 1px solid #ccc; }
 """
 
-_SCRIPT = """
+_SCRIPT = (
+    f"""
+// Generated from the library's palette rather than restated here, so a field
+// is the same colour in this report as in the specification document.
+const PALETTE = {json.dumps(list(PALETTE))};
+"""
+    + """
 const data = JSON.parse(document.getElementById('inspection').textContent);
 function show(name) {
   for (const s of document.querySelectorAll('section')) {
@@ -220,22 +228,118 @@ function hexRows(bin) {
   }
   return rows;
 }
-function hexBlock(bin) {
+// Which field, if any, claims each byte. A layout describes the payload only,
+// so `limit` stops the tint at the payload's end -- past it lie the record's
+// `extra` bytes, which the layout says nothing about. A strided layout
+// describes one slot and the payload repeats it, so the spans repeat too.
+function tintMap(layout, limit) {
+  const map = [];
+  if (!layout) { return map; }
+  const stride = layout.stride || 0;
+  const slots = stride ? Math.ceil(limit / stride) : 1;
+  for (let slot = 0; slot < slots; slot++) {
+    const base = slot * stride;
+    layout.fields.forEach((f, i) => {
+      for (let b = 0; b < f.size; b++) {
+        const at = base + f.offset + b;
+        if (at < limit) { map[at] = i; }
+      }
+    });
+  }
+  return map;
+}
+function tinted(text, field) {
+  const span = document.createElement('span');
+  span.textContent = text;
+  if (field !== undefined) {
+    span.style.background = PALETTE[field % PALETTE.length];
+  }
+  return span;
+}
+// One span per byte rather than one per row: a field is tinted where it sits,
+// including a field that straddles a row boundary.
+function hexBlock(bin, map) {
+  const tint = map || [];
   const box = document.createElement('div');
   box.className = 'hex';
-  for (const row of hexRows(bin)) {
+  for (let base = 0; base < bin.length; base += 16) {
     const off = document.createElement('span');
     off.className = 'off';
-    off.textContent = row.off + '  ';
-    const txt = document.createElement('span');
-    txt.className = 'txt';
-    txt.textContent = '  ' + row.txt;
+    off.textContent = base.toString(16).padStart(8, '0') + '  ';
     box.appendChild(off);
-    box.appendChild(document.createTextNode(row.hex));
-    box.appendChild(txt);
+    for (let i = base; i < base + 16; i++) {
+      if (i >= bin.length) {
+        box.appendChild(document.createTextNode('   '));
+        continue;
+      }
+      const b = bin.charCodeAt(i);
+      box.appendChild(tinted(b.toString(16).padStart(2, '0'), tint[i]));
+      box.appendChild(document.createTextNode(' '));
+    }
+    const gap = document.createElement('span');
+    gap.className = 'txt';
+    gap.textContent = ' ';
+    box.appendChild(gap);
+    for (let i = base; i < base + 16 && i < bin.length; i++) {
+      const b = bin.charCodeAt(i);
+      const ch = (b >= 32 && b < 127) ? bin[i] : '.';
+      const cell = tinted(ch, tint[i]);
+      cell.className = 'txt';
+      box.appendChild(cell);
+    }
     box.appendChild(document.createTextNode(NEWLINE));
   }
   return box;
+}
+// A field's value, read off the same bytes the dump shows. The byte order is
+// the document's own: a .mus states it, and the 2001-2005 era does occur
+// big-endian, where reading a width the wrong way round gives a number rather
+// than an error.
+function decode(bin, offset, field, order) {
+  if (offset + field.size > bin.length) { return '—'; }
+  const bytes = [];
+  for (let i = 0; i < field.size; i++) { bytes.push(bin.charCodeAt(offset + i)); }
+  if (!/^u?int(8|16|32)$/.test(field.type)) {
+    // char[4], uint8[]: no single number to state, so show the bytes as they lie.
+    return bytes.map(b => b.toString(16).padStart(2, '0')).join(' ');
+  }
+  const ordered = (order === 'big') ? bytes : bytes.slice().reverse();
+  let value = 0;
+  for (const b of ordered) { value = value * 256 + b; }
+  if (field.type[0] === 'i' && value >= Math.pow(2, field.size * 8 - 1)) {
+    value -= Math.pow(2, field.size * 8);
+  }
+  // Hex alongside: several of these fields pack a sign bit or a nibble beside
+  // their value, and the decimal alone hides that.
+  return (field.size > 1) ? value + '  0x' + (value >>> 0).toString(16) : String(value);
+}
+function layoutTable(layout, bin, order) {
+  const table = document.createElement('table');
+  const head = document.createElement('tr');
+  for (const label of ['', 'offset', 'size', 'type', 'field', 'value', 'meaning']) {
+    const th = document.createElement('th');
+    th.textContent = label;
+    head.appendChild(th);
+  }
+  table.appendChild(head);
+  layout.fields.forEach((f, i) => {
+    const row = document.createElement('tr');
+    const swatch = document.createElement('span');
+    swatch.className = 'swatch';
+    swatch.style.background = PALETTE[i % PALETTE.length];
+    const span = (f.size === 1)
+      ? '0x' + f.offset.toString(16)
+      : '0x' + f.offset.toString(16) + '–0x' + (f.offset + f.size - 1).toString(16);
+    const cells = [null, span, String(f.size), f.type, f.name,
+                   decode(bin, f.offset, f, order), f.note];
+    cells.forEach((text, n) => {
+      const td = document.createElement('td');
+      if (n === 0) { td.appendChild(swatch); } else { td.textContent = text; }
+      row.appendChild(td);
+    });
+    table.appendChild(row);
+  });
+  return table;
 }
 // `payload` and `extra` ARE the bytes shown above, so listing them again as
 // decoded values would just repeat the hex in base64.
@@ -247,9 +351,14 @@ function showRecord(right, pool, tag, rec) {
   right.appendChild(heading);
 
   let raw = '';
+  let payloadLength = 0;
   for (const name of BYTE_FIELDS) {
     const value = rec.fields && rec.fields[name];
     if (typeof value === 'string' && value !== '') { raw += atob(value); }
+    // A layout describes the payload, and `extra` follows it in the same dump.
+    // Where the one ends is not in the report -- `length` is their sum -- so it
+    // is taken here, from the field the bytes came out of.
+    if (name === 'payload') { payloadLength = raw.length; }
   }
   if (raw === '') {
     // A .musx record has no undecoded bytes -- EnigmaXML arrives as XML -- so
@@ -262,7 +371,23 @@ function showRecord(right, pool, tag, rec) {
     box.textContent = rec.xml || '';
     right.appendChild(box);
   } else {
-    right.appendChild(hexBlock(raw));
+    // Absent for most tags, and that is the honest answer rather than a gap:
+    // this project has decoded nine record payloads, and a document carries
+    // upwards of 180 tags. Untinted hex says "not decoded"; a layout guessed
+    // at would say something false.
+    const layout = ((data.layouts || {})[pool] || {})[tag];
+    right.appendChild(hexBlock(raw, tintMap(layout, payloadLength)));
+    if (layout) {
+      const caption = document.createElement('p');
+      caption.className = 'txt';
+      const slots = layout.stride
+        ? ', in ' + Math.ceil(payloadLength / layout.stride) + ' slots of ' + layout.stride +
+          ' bytes — the table shows the first'
+        : '';
+      caption.textContent = 'decodes as ' + layout.record + slots;
+      right.appendChild(caption);
+      right.appendChild(layoutTable(layout, raw, data.byteOrder));
+    }
     const caption = document.createElement('p');
     caption.className = 'txt';
     // Not "decodes as". These fields say where the record sits -- its cmper,
@@ -388,6 +513,7 @@ renderUntranslated();
 renderRecords();
 show('music');
 """
+)
 
 
 def _embed(data: object) -> str:
@@ -465,6 +591,7 @@ def render_html(inspection: Inspection) -> str:
             "document": inspection.document,
             "records": inspection.records,
             "layouts": inspection.layouts,
+            "byteOrder": inspection.byte_order,
             "notes": inspection.notes,
         }
     )

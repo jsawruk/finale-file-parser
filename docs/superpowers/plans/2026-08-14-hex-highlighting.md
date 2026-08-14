@@ -95,7 +95,33 @@ type's name and one-line description in the panel heading, so
 `others / &a / 48/0` reads as something. This is the change most likely to
 answer "I do not know what any of this means".
 
+## Follow-up: does the PDF's FrameSpec match the reader?
+
+Raised while doing Task 2, not resolved — it is outside this plan's scope, and
+guessing at it would be worse than leaving it stated.
+
+The specification draws `FrameSpec` with a 6-byte lead-in and `startEntry` at
++6. That is not how `mus_document._frame_span` reads one: it takes the entry
+pair from the record's **last** incidence, at `(incidences - 1) * 12`, in both
+eras. A single-incidence frameSpec therefore has its pair at +0, not +6.
+
+Either the struct describes something other than what the reader consumes, or
+it is stale. Both readings are plausible from the code alone. Settle it against
+`docs/eeppd.txt` and the corpus before the next spec regeneration, since the
+document currently states an offset the parser does not use — the exact
+divergence Task 1 moved the layouts to prevent.
+
+The same question applies to `gfhold`, whose frame slots sit at an era base of
+4 or 6. Task 2 leaves both records untinted for this reason.
+
 ## Also open, same area
+
+DCL-era documents are offered only two layouts (`MS`, `IS`). The other five
+applicable records — `tupletDef`, `staffGroup`, `lyricVerse`, `articAssign`,
+`instUsed` — carry no two-character DCL tag in the catalogue, so a 2001-2005
+document shows plain hex where a 2011 one shows fields. Those tags likely
+exist; the catalogue does not record them. Fill from the ETF docs, do not
+invent.
 
 Records sharing a key render identically in the tree — several rows read
 `65534/0`. Only visible on a real corpus document; the synthetic fixture hid it.

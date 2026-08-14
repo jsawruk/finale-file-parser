@@ -19,6 +19,25 @@ from dataclasses import dataclass
 
 from finale_file_parser.enigma import mus_others as OTH
 
+PALETTE = (
+    "#ffd9d9",
+    "#d9ecff",
+    "#dcffd9",
+    "#fff3cc",
+    "#e8d9ff",
+    "#d9fbff",
+    "#ffe0f0",
+    "#eaeaea",
+)
+"""Tints for a struct's fields, taken in turn and keyed by field position.
+
+Presentation, but it belongs here: the colour a field gets is its index in
+`fields`, so the palette and the ordering it indexes have to travel together.
+Both renderers use it -- the specification's hex dumps and the inspector's --
+so a field is the same colour in the document and in the tool. Chosen to stay
+legible in print: light enough for black text, distinct in greyscale.
+"""
+
 
 @dataclass(frozen=True)
 class Field:

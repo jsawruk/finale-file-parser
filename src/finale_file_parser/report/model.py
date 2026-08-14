@@ -88,6 +88,16 @@ class Inspection:
     already tripped once.
     """
 
+    byte_order: str = ""
+    """How to read a multi-byte field in this document's records.
+
+    Not a constant: a `.mus` container states its own order, and the
+    2001-2005 era does occur big-endian. Decoding a `measSpec` width the wrong
+    way round gives a number, not an error, so the order has to travel with the
+    layouts rather than be assumed by whatever reads them. Empty for a `.musx`,
+    which has no bytes to read.
+    """
+
     notes: list[str] = field(default_factory=list)
     """Anything the report had to leave out, and why."""
 
@@ -163,6 +173,9 @@ def inspect_document(path: str | os.PathLike[str]) -> Inspection:
 def _mus_stages(ladder: Ladder, target: Path, inspection: Inspection) -> None:
     pools = ladder.run("decode payload", lambda: read_mus_pools(target), _pools_detail)
     if pools is not None:
+        # The same pool `_pools_detail` reports the order from, so the Debug tab
+        # and the record pane's decoding cannot disagree about it.
+        inspection.byte_order = pools[0].byte_order if pools else ""
         records = ladder.run(
             "read records",
             lambda: _mus_records(target),
@@ -524,6 +537,7 @@ def _weight(inspection: Inspection) -> int:
                 "document": inspection.document,
                 "records": inspection.records,
                 "layouts": inspection.layouts,
+                "byteOrder": inspection.byte_order,
                 "notes": inspection.notes,
             }
         )

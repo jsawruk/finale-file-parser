@@ -13,24 +13,11 @@ import re
 from dataclasses import dataclass
 from dataclasses import field as dc_field
 
-from finale_file_parser.formats.layouts import Field, Layout
+from finale_file_parser.formats.layouts import PALETTE, Field, Layout
 
-__all__ = ["Field", "Layout", "Struct"]
+__all__ = ["PALETTE", "Field", "Layout", "Struct"]
 
 BYTES_PER_ROW = 16
-
-# Colors cycle per field within a structure. Chosen to stay legible in print:
-# light enough for black text, distinct in greyscale.
-PALETTE = [
-    "#ffd9d9",
-    "#d9ecff",
-    "#dcffd9",
-    "#fff3cc",
-    "#e8d9ff",
-    "#d9fbff",
-    "#ffe0f0",
-    "#eaeaea",
-]
 
 
 @dataclass
