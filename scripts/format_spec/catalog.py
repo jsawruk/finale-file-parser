@@ -1,13 +1,19 @@
 """The record catalog: one entry per decoded record type.
 
-Offsets are those the reader actually uses. Where a record's payload is only
-partly decoded, that is stated rather than padded out with guesses -- an
-invented offset in a format specification is worse than an admitted gap.
+Offsets are not written here. Every layout below comes from
+`finale_file_parser.formats.layouts`, which is what the parser and the
+inspector read too, so this document cannot state an offset the code does not
+use. What lives here is the document's own: example bytes and the prose that
+explains them.
+
+Where a record's payload is only partly decoded, that is stated rather than
+padded out with guesses -- an invented offset in a format specification is
+worse than an admitted gap.
 """
 
 from __future__ import annotations
 
-from finale_file_parser.enigma import mus_others as OTH
+from finale_file_parser.formats import layouts as LAY
 
 from .content import le16, le32
 from .hexview import Field, Struct, render_struct
@@ -27,15 +33,8 @@ def meas_spec() -> Struct:
     buf[4:6] = le16(4)  # beats
     buf[6:8] = le16(1024)  # divbeat
     buf[10:12] = le16(0x0002)  # flags; low byte carries the barline nibble
-    return Struct(
-        name="MeasSpec",
-        fields=[
-            Field(0, 2, "width", "uint16", "measure width in EVPU"),
-            Field(2, 2, "key", "uint16", "key signature; 0 means inherit"),
-            Field(4, 2, "beats", "uint16", "time signature numerator"),
-            Field(6, 2, "divbeat", "uint16", "EDU per beat; 1024 = quarter"),
-            Field(10, 2, "flags", "uint16", "low byte holds the barline nibble"),
-        ],
+    return Struct.of(
+        LAY.MEAS_SPEC,
         data=bytes(buf),
         caption="measSpec &mdash; one per measure, keyed by measure number. "
         "2011 tag 176; DCL tag <code>^MS</code>.",
@@ -74,17 +73,12 @@ def meas_spec() -> Struct:
 
 
 def frame_spec() -> Struct:
-    base = 6
+    base = LAY.FRAME_SPEC_BASE_2005
     buf = bytearray(base + 8)
     buf[base : base + 4] = le32(101)
     buf[base + 4 : base + 8] = le32(108)
-    return Struct(
-        name="FrameSpec",
-        fields=[
-            Field(0, base, "header", "uint8[]", "era-dependent lead-in"),
-            Field(base, 4, "startEntry", "uint32", "first entry number in this frame"),
-            Field(base + 4, 4, "endEntry", "uint32", "last entry number, inclusive"),
-        ],
+    return Struct.of(
+        LAY.FRAME_SPEC,
         data=bytes(buf),
         caption="frameSpec &mdash; a run of entries forming one layer of one measure. "
         "2011 tag 146; DCL tag <code>^FR</code>.",
@@ -104,13 +98,8 @@ def gfhold() -> Struct:
     buf[0:2] = le16(1)  # clefID
     buf[6:8] = le16(41)  # frame1
     buf[8:10] = le16(0)  # frame2, empty
-    return Struct(
-        name="GfHold",
-        fields=[
-            Field(0, 2, "clefID", "uint16", "clef in force for this measure"),
-            Field(6, 2, "frame1", "uint16", "layer 1 frame id; 0 = layer empty"),
-            Field(8, 2, "frame2", "uint16", "layer 2 frame id"),
-        ],
+    return Struct.of(
+        LAY.GF_HOLD,
         data=bytes(buf),
         caption="gfhold (&ldquo;frame hold&rdquo;) &mdash; keyed by <em>two</em> cmpers, "
         "(staff, measure). 2011 tag 1044; DCL tag <code>^GF</code>. This is the "
@@ -128,11 +117,8 @@ def gfhold() -> Struct:
 def staff_spec() -> Struct:
     buf = bytearray(22)
     buf[20:22] = le16(0xFFF9)
-    return Struct(
-        name="StaffSpec",
-        fields=[
-            Field(20, 2, "transposition", "uint16", "written-to-sounding interval"),
-        ],
+    return Struct.of(
+        LAY.STAFF_SPEC,
         data=bytes(buf),
         caption="staffSpec &mdash; one per staff, keyed by staff number. 2011 tag 231; "
         "DCL tag <code>^IS</code>. Only the transposition field is decoded.",
@@ -161,14 +147,8 @@ def tuplet_def() -> Struct:
     buf[2:4] = le16(1024)  # symbolicDur
     buf[4:6] = le16(2)  # refNum
     buf[6:8] = le16(1024)  # refDur
-    return Struct(
-        name="TupletDef",
-        fields=[
-            Field(0, 2, "symbolicNum", "uint16", "printed count, the 3 of a triplet"),
-            Field(2, 2, "symbolicDur", "uint16", "printed unit in EDU"),
-            Field(4, 2, "refNum", "uint16", "count these replace"),
-            Field(6, 2, "refDur", "uint16", "unit they replace, in EDU"),
-        ],
+    return Struct.of(
+        LAY.TUPLET_DEF,
         data=bytes(buf),
         caption="tupletDef &mdash; 2011 tag 1072. The example reads &ldquo;3 quarters in "
         "the time of 2 quarters&rdquo;.",
@@ -185,32 +165,21 @@ def staff_group() -> Struct:
     buf[2:4] = le16(4)
     buf[10:12] = le16(3)
     buf[21] = 0x01
-    return Struct(
-        name="StaffGroup",
-        fields=[
-            Field(0, 2, "startInst", "uint16", "first staff in the group"),
-            Field(2, 2, "endInst", "uint16", "last staff, inclusive"),
-            Field(10, 2, "bracketId", "uint16", "bracket shape"),
-            Field(21, 1, "barlineFlags", "uint8", "bit 0: barlines cross the group"),
-        ],
+    return Struct.of(
+        LAY.STAFF_GROUP,
         data=bytes(buf),
         caption="staffGroup &mdash; the braces and brackets down the left edge. 2011 tag 1057.",
     )
 
 
 def lyric_verse() -> Struct:
-    stride = 20
+    stride = LAY.LYRIC_VERSE.stride
     buf = bytearray(stride)
     buf[0:2] = le16(1)  # number
     buf[2:4] = le16(7)  # syll
     buf[8:10] = le16(0)  # wext
-    return Struct(
-        name="LyricVerseSlot",
-        fields=[
-            Field(0, 2, "number", "uint16", "verse number"),
-            Field(2, 2, "syll", "uint16", "syllable index into the text pool"),
-            Field(8, 2, "wext", "uint16", "non-zero: word extends with a melisma"),
-        ],
+    return Struct.of(
+        LAY.LYRIC_VERSE,
         data=bytes(buf),
         caption=f"lyricVerse &mdash; 2011 tag 1108. The payload is an array of "
         f"{stride}-byte slots, one per entry that sings.",
@@ -220,11 +189,8 @@ def lyric_verse() -> Struct:
 def artic_assign() -> Struct:
     buf = bytearray(4)
     buf[0:2] = le16(12)
-    return Struct(
-        name="ArticAssign",
-        fields=[
-            Field(0, 2, "definition", "uint16", "key of the articDef this uses"),
-        ],
+    return Struct.of(
+        LAY.ARTIC_ASSIGN,
         data=bytes(buf),
         caption="articAssign &mdash; 2011 tag 1009. Points at an articDef (tag 121), "
         "which carries the glyph.",
@@ -232,33 +198,35 @@ def artic_assign() -> Struct:
 
 
 def inst_used() -> Struct:
-    slot = 24
+    slot = LAY.INST_USED.stride
     buf = bytearray(slot * 2)
     buf[0:2] = le16(1)
     buf[slot : slot + 2] = le16(2)
-    return Struct(
-        name="InstUsedSlot",
-        fields=[
-            Field(0, 2, "staff", "uint16", "staff number, one per incidence"),
-            Field(slot, 2, "staff[1]", "uint16", "the next slot, 24 bytes on"),
-        ],
+    return Struct.of(
+        LAY.INST_USED,
         data=bytes(buf),
+        # A second slot, shown so the stride is visible. The layout describes one
+        # slot; how many follow is a property of the record, not of the struct.
+        extra=[Field(slot, 2, "staff[1]", "uint16", f"the next slot, {slot} bytes on")],
         caption=f"instUsed &mdash; 2011 tag 159. A {slot}-byte slot per incidence, giving "
         "the score's staff order. This, not the staff number, is what a part list "
         "should follow.",
     )
 
 
+# Each entry pairs a layout with the function that gives it example bytes and
+# prose. The record's name and tags are read off the layout, so this document
+# and the parser name a record the same way or not at all.
 CATALOG = [
-    ("measSpec", OTH.TAG_MEAS_SPEC, "MS", meas_spec),
-    ("frameSpec", OTH.TAG_FRAME_SPEC, "FR", frame_spec),
-    ("gfhold", 1044, "GF", gfhold),
-    ("staffSpec", OTH.TAG_STAFF_SPEC, "IS", staff_spec),
-    ("tupletDef", 1072, "", tuplet_def),
-    ("staffGroup", 1057, "", staff_group),
-    ("lyricVerse", 1108, "", lyric_verse),
-    ("articAssign", 1009, "", artic_assign),
-    ("instUsed", OTH.TAG_INST_USED, "", inst_used),
+    (LAY.MEAS_SPEC, meas_spec),
+    (LAY.FRAME_SPEC, frame_spec),
+    (LAY.GF_HOLD, gfhold),
+    (LAY.STAFF_SPEC, staff_spec),
+    (LAY.TUPLET_DEF, tuplet_def),
+    (LAY.STAFF_GROUP, staff_group),
+    (LAY.LYRIC_VERSE, lyric_verse),
+    (LAY.ARTIC_ASSIGN, artic_assign),
+    (LAY.INST_USED, inst_used),
 ]
 
 PARTIAL = [
@@ -272,9 +240,11 @@ PARTIAL = [
 
 def render_catalog() -> str:
     out: list[str] = []
-    for name, tag, etf, fn in CATALOG:
-        etf_txt = f", DCL <code>^{etf}</code>" if etf else ""
-        out.append(f"<h3>{name} <span class=meta>&mdash; tag {tag}{etf_txt}</span></h3>")
+    for layout, fn in CATALOG:
+        etf_txt = f", DCL <code>^{layout.dcl}</code>" if layout.dcl else ""
+        out.append(
+            f"<h3>{layout.record} <span class=meta>&mdash; tag {layout.tag}{etf_txt}</span></h3>"
+        )
         out.append(render_struct(fn()))
     rows = "".join(
         f"<tr><td><code>{n}</code></td><td>{t}</td><td>{d}</td></tr>" for n, t, d in PARTIAL

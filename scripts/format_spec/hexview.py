@@ -13,6 +13,10 @@ import re
 from dataclasses import dataclass
 from dataclasses import field as dc_field
 
+from finale_file_parser.formats.layouts import Field, Layout
+
+__all__ = ["Field", "Layout", "Struct"]
+
 BYTES_PER_ROW = 16
 
 # Colors cycle per field within a structure. Chosen to stay legible in print:
@@ -29,30 +33,46 @@ PALETTE = [
 ]
 
 
-@dataclass(frozen=True)
-class Field:
-    """One field of a binary structure."""
-
-    offset: int
-    size: int
-    name: str
-    type_: str
-    note: str = ""
-
-    @property
-    def end(self) -> int:
-        return self.offset + self.size
-
-
 @dataclass
 class Struct:
-    """A named binary layout, its fields, and one worth of example bytes."""
+    """A named binary layout, its fields, and one worth of example bytes.
+
+    The example bytes and the prose are the document's own: they exist to
+    explain a layout, not to describe one. A record type's layout itself comes
+    from `finale_file_parser.formats.layouts`, via `Struct.of`, so this document
+    and the parser cannot disagree about where a field sits. Container-level
+    structures -- a file header, a row framing -- are not record payloads and so
+    are declared here directly.
+    """
 
     name: str
     fields: list[Field]
     data: bytes
     caption: str = ""
     notes: list[str] = dc_field(default_factory=list)
+
+    @classmethod
+    def of(
+        cls,
+        layout: Layout,
+        data: bytes,
+        caption: str = "",
+        notes: list[str] | None = None,
+        extra: list[Field] | None = None,
+    ) -> Struct:
+        """A struct drawing its fields from `layout`.
+
+        `extra` appends fields that illustrate rather than describe -- a second
+        array slot shown so the reader can see the stride, for instance, which
+        belongs in the document and not in a layout a decoder consults.
+        """
+        return cls(
+            name=layout.name,
+            fields=[*layout.fields, *(extra or [])],
+            data=data,
+            caption=caption,
+            notes=notes or [],
+        )
 
     def field_at(self, index: int) -> tuple[int, Field] | None:
         for i, f in enumerate(self.fields):
