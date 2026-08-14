@@ -269,12 +269,12 @@ def test_a_tag_is_named_with_the_evidence_behind_the_name() -> None:
     decoded = by_tag["176"]
     assert isinstance(decoded, dict)
     assert decoded["name"] == "measSpec"
-    assert "checked against a paired .musx" in str(decoded["evidence"])
+    assert decoded["evidence"] == "", "a decoded name is settled and needs no qualifying"
 
     matched = by_tag["144"]
     assert isinstance(matched, dict)
     assert matched["name"] == "fontName"
-    assert "shape, not its meaning" in str(matched["evidence"])
+    assert "nothing about what its bytes mean" in str(matched["evidence"])
     assert "too few to be more than a guess" in str(matched["evidence"])
 
 
@@ -424,24 +424,26 @@ def test_a_record_is_keyed_by_every_identity_attribute_it_carries() -> None:
     from finale_file_parser.report.model import _musx_key
 
     gfhold = Record(tag="gfhold", attrs={"cmper1": "3", "cmper2": "12"}, text="", fields={})
-    assert _musx_key(gfhold, 7) == "3/12"
+    assert _musx_key(gfhold, 7) == "(cmper1 3, cmper2 12)"
 
     with_inci = Record(
         tag="crossChord", attrs={"cmper1": "3", "cmper2": "12", "inci": "1"}, text="", fields={}
     )
-    assert _musx_key(with_inci, 7) == "3/12/1"
+    assert _musx_key(with_inci, 7) == "(cmper1 3, cmper2 12, inci 1)"
 
     entry = Record(tag="entry", attrs={"entnum": "41", "next": "42"}, text="", fields={})
-    assert _musx_key(entry, 7) == "41", "`next` is a link, not identity"
+    assert _musx_key(entry, 7) == "(entnum 41)", "`next` is a link, not identity"
 
     text = Record(tag="expression", attrs={"number": "5"}, text="", fields={})
-    assert _musx_key(text, 7) == "5"
+    assert _musx_key(text, 7) == "(number 5)"
 
     ordinary = Record(tag="measSpec", attrs={"cmper": "2", "inci": "0"}, text="", fields={})
-    assert _musx_key(ordinary, 7) == "2/0", "unchanged for records that were already right"
+    assert _musx_key(ordinary, 7) == "(cmper 2, inci 0)", "every number says which it is"
 
     anonymous = Record(tag="header", attrs={}, text="", fields={})
-    assert _musx_key(anonymous, 7) == "7", "position is still the fallback when nothing names it"
+    assert _musx_key(anonymous, 7) == "(position 7)", (
+        "position is still the fallback when nothing names it, and now says so"
+    )
 
 
 _MIRROR_XML = (

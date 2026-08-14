@@ -188,7 +188,12 @@ function renderRecords() {
     const total = Object.values(tags).reduce((n, rs) => n + rs.length, 0);
     const node = tree(pool, Object.keys(tags).length + ' tags, ' + group(total) + ' records');
     for (const [tag, records] of Object.entries(tags)) {
-      const tagNode = tree(tag, group(records.length) + '');
+      // The name belongs here as much as in the panel: a tree of bare numbers
+      // is a tree nobody can navigate, and the name is what a reader is
+      // actually looking for.
+      const known = ((data.tags || {})[pool] || {})[tag];
+      const label = known ? tag + '  ' + known.name : tag;
+      const tagNode = tree(label, group(records.length) + '');
       for (const rec of records) {
         // A leaf, not another expander. The fields used to nest a third level
         // down, which made clicking a record look like it did nothing much;
@@ -366,12 +371,15 @@ function showRecord(right, pool, tag, rec) {
       what.textContent = named.description;
       right.appendChild(what);
     }
-    // Never the name without the evidence. Two of the catalogue's three tiers
-    // are leads rather than decodings, and a name shown bare reads as settled.
-    const how = document.createElement('p');
-    how.className = 'tier ' + named.tier;
-    how.textContent = named.evidence;
-    right.appendChild(how);
+    // A decoded name is settled and says nothing here. The other two tiers are
+    // leads rather than decodings, and shown bare they would read as settled
+    // too -- so those carry their qualification and this never omits it.
+    if (named.evidence) {
+      const how = document.createElement('p');
+      how.className = 'tier ' + named.tier;
+      how.textContent = named.evidence;
+      right.appendChild(how);
+    }
   }
 
   let raw = '';

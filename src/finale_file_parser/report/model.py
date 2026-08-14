@@ -237,6 +237,17 @@ def _record_entry(key: str, fields: object, length: int | None) -> dict[str, obj
     return {"key": key, "fields": fields, "length": length}
 
 
+def _key(*parts: tuple[str, object]) -> str:
+    """A record's identity, spelled out rather than punctuated.
+
+    `1/0` is unreadable without knowing the convention for this pool -- the
+    slash means something different in `others` (cmper/part), in `details`
+    (cmper1/cmper2/inci) and in a DCL row. Naming each number costs a little
+    width and removes the need to know any of that.
+    """
+    return "(" + ", ".join(f"{name} {value}" for name, value in parts) + ")"
+
+
 def _mus_other_entry(record: MusOther) -> dict[str, object]:
     fields = walk_fields(
         {
@@ -248,7 +259,7 @@ def _mus_other_entry(record: MusOther) -> dict[str, object]:
         depth=0,
     )
     return _record_entry(
-        key=f"{record.cmper}/{record.part}",
+        key=_key(("cmper", record.cmper), ("part", record.part)),
         fields=fields,
         length=len(record.payload) + len(record.extra),
     )
@@ -266,7 +277,7 @@ def _mus_detail_entry(record: MusDetailRecord) -> dict[str, object]:
         depth=0,
     )
     return _record_entry(
-        key=f"{record.cmper1}/{record.cmper2}/{record.inci}",
+        key=_key(("cmper1", record.cmper1), ("cmper2", record.cmper2), ("inci", record.inci)),
         fields=fields,
         length=len(record.payload) + len(record.extra),
     )
@@ -283,7 +294,7 @@ def _mus_row_entry(record: MusRowRecord) -> dict[str, object]:
         depth=0,
     )
     return _record_entry(
-        key=f"{record.cmper}/{record.cmper2}",
+        key=_key(("cmper", record.cmper), ("cmper2", record.cmper2)),
         fields=fields,
         length=len(record.payload),
     )
@@ -376,14 +387,18 @@ def _evidence(entry: TagName) -> str:
     the same way is how the weaker one gets quoted as the stronger.
     """
     if entry.tier == DECODED:
-        return "payload decoded and checked against a paired .musx"
+        # Nothing. A decoded record's name is settled, and a line explaining
+        # why it is settled is noise on every record that carries one. The
+        # tiers that need qualifying are the ones that get it.
+        return ""
     if entry.tier == MATCHED:
-        weak = " — too few to be more than a guess" if entry.documents < WEAK_MATCH else ""
+        weak = ", too few to be more than a guess" if entry.documents < WEAK_MATCH else ""
         return (
-            f"key sequence matched in {entry.documents} paired documents: "
-            f"evidence about this record's shape, not its meaning{weak}"
+            f"named only because its records are numbered the same way this record type is, "
+            f"in {entry.documents} documents saved both ways{weak}. That says this is a record "
+            f"of the same shape — it says nothing about what its bytes mean"
         )
-    return f"named by {SOURCES.get(entry.source, 'published research')}"
+    return f"named by {SOURCES.get(entry.source, 'published research')}, not decoded here"
 
 
 def _tag_names(records: dict[str, object]) -> dict[str, object]:
@@ -463,8 +478,8 @@ def _musx_key(record: Record, index: int) -> str:
     entirely, so 2,263 of one corpus archive's 5,880 records were labelled by
     array position or, where an `inci` was present, by the `inci` alone.
     """
-    parts = [record.attrs[name] for name in _IDENTITY_ATTRS if name in record.attrs]
-    return "/".join(parts) if parts else str(index)
+    parts = [(name, record.attrs[name]) for name in _IDENTITY_ATTRS if name in record.attrs]
+    return _key(*parts) if parts else _key(("position", index))
 
 
 def _musx_entry(record: Record, index: int, source: str = "") -> dict[str, object]:
