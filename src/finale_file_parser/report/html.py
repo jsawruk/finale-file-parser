@@ -85,6 +85,10 @@ details.node > summary::marker { color: #999; }
 .hex .txt { color: #666; }
 .no-bytes { color: #666; max-width: 34rem; }
 .swatch { display: inline-block; width: 0.9rem; height: 0.9rem; border: 1px solid #ccc; }
+.tier { font-size: 12px; margin: 0.1rem 0 0.6rem; }
+.tier.decoded { color: #2a7; }
+.tier.documented { color: #666; }
+.tier.matched { color: #c81; }
 """
 
 _SCRIPT = (
@@ -346,9 +350,29 @@ function layoutTable(layout, bin, order) {
 const BYTE_FIELDS = ['payload', 'extra'];
 function showRecord(right, pool, tag, rec) {
   right.innerHTML = '';
+  // A tag on its own says nothing: "others / 176 / 1/0" names a record only to
+  // someone holding the catalogue. Where this project can name it, the name
+  // leads and the tag follows.
+  const named = ((data.tags || {})[pool] || {})[tag];
   const heading = document.createElement('h3');
-  heading.textContent = pool + ' / ' + tag + ' ' + rec.key;
+  heading.textContent = named
+    ? named.name + '  —  ' + pool + ' / ' + tag + ' ' + rec.key
+    : pool + ' / ' + tag + ' ' + rec.key;
   right.appendChild(heading);
+  if (named) {
+    if (named.description) {
+      const what = document.createElement('p');
+      what.className = 'txt';
+      what.textContent = named.description;
+      right.appendChild(what);
+    }
+    // Never the name without the evidence. Two of the catalogue's three tiers
+    // are leads rather than decodings, and a name shown bare reads as settled.
+    const how = document.createElement('p');
+    how.className = 'tier ' + named.tier;
+    how.textContent = named.evidence;
+    right.appendChild(how);
+  }
 
   let raw = '';
   let payloadLength = 0;
@@ -590,6 +614,7 @@ def render_html(inspection: Inspection) -> str:
             "music": inspection.music,
             "document": inspection.document,
             "records": inspection.records,
+            "tags": inspection.tags,
             "layouts": inspection.layouts,
             "byteOrder": inspection.byte_order,
             "notes": inspection.notes,

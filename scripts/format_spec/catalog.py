@@ -14,6 +14,7 @@ worse than an admitted gap.
 from __future__ import annotations
 
 from finale_file_parser.formats import layouts as LAY
+from finale_file_parser.formats import tags as TAGS
 
 from .content import le16, le32
 from .hexview import Field, Struct, render_struct
@@ -266,47 +267,6 @@ def render_catalog() -> str:
 # becomes a "fact" in someone else's document.
 # --------------------------------------------------------------------------
 
-TIER_A: list[tuple[str, str, str, str, str]] = [
-    ("109", "", "clefOptions", "others", "Clef definition table, read as a strided array"),
-    ("121", "", "articDef", "others", "An articulation's definition; charMain is the glyph"),
-    ("146", "^FR", "frameSpec", "others", "Entry range for one layer of one measure"),
-    ("159", "", "instUsed", "others", "The staves the score lays out, in layout order"),
-    ("176", "^MS", "measSpec", "others", "Per measure: width, key, beats, divbeat, barline"),
-    ("203", "", "repeatBack", "others", "Backward repeat barline, keyed by measure"),
-    ("204", "", "repeatEndingStart", "others", "Ending bracket, keyed by measure"),
-    ("206", "", "repeatPassList", "others", "Which passes an ending is taken on"),
-    ("231", "^IS", "staffSpec", "others", "Per staff; transposition at +0x14"),
-    ("1009", "", "articAssign", "details", "The articulation on an entry; names an articDef"),
-    ("1044", "^GF", "gfhold", "details", "(staff, measure) to clef and up to four frames"),
-    ("1057", "", "staffGroup", "details", "Brace or bracket over a run of staves"),
-    ("1072", "", "tupletDef", "details", "Keyed by entry, not by (staff, measure)"),
-    ("1108", "", "lyrDataVerse", "details", "Verse lyrics"),
-    ("&mdash;", "^eE", "entry", "entries", "The notes; fixed 38-byte slots"),
-]
-
-TIER_B: list[tuple[str, str, str]] = [
-    ("124", "channelPlayData", "80"),
-    ("126", "chordSuffixPlay", "85"),
-    ("131", "drumLibName", "86"),
-    ("134", "durAllot", "91"),
-    ("136", "execShape", "85"),
-    ("140", "fretboardSymbol", "91"),
-    ("144", "fontName", "5"),
-    ("147", "lockMeas", "81"),
-    ("149", "fretInst", "90"),
-    ("163", "layerAtts", "85"),
-    ("165", "metaArtic", "80"),
-    ("168", "metaDynam", "81"),
-    ("169", "metaKeySig", "80"),
-    ("170", "metaRepeat", "81"),
-    ("171", "metaShape", "80"),
-    ("172", "metaStaffStyle", "80"),
-    ("173", "metaTimeSig", "81"),
-    ("235", "shapeExprDef", "10"),
-    ("242", "textExpressionEnclosure", "14"),
-    ("315", "volumeValue", "14"),
-]
-
 UNKNOWN: list[tuple[str, str, str, str]] = [
     ("213", "2011", "others", "25,576"),
     ("215", "2011", "others", "25,576"),
@@ -347,14 +307,20 @@ def render_unknown() -> str:
 
 
 def render_tag_tables() -> str:
+    # The `entry` record has no numeric tag: it is not in the numbered pools.
     a = "".join(
-        f"<tr><td><code>{n}</code></td><td class=off>{t}</td>"
-        f"<td><code>{e}</code></td><td>{p}</td><td>{d}</td></tr>"
-        for t, e, n, p, d in TIER_A
+        f"<tr><td><code>{e.name}</code></td>"
+        f"<td class=off>{e.tag if e.tag.isdigit() else '&mdash;'}</td>"
+        f"<td><code>{'^' + (e.etf or e.tag) if not e.tag.isdigit() or e.etf else ''}</code></td>"
+        f"<td>{e.pool}</td><td>{e.description}</td></tr>"
+        for e in TAGS.TAG_NAMES
+        if e.tier == TAGS.DECODED
     )
     b = "".join(
-        f"<tr><td class=off>{t}</td><td><code>{n}</code></td><td class=sz>{c}</td></tr>"
-        for t, n, c in TIER_B
+        f"<tr><td class=off>{e.tag}</td><td><code>{e.name}</code></td>"
+        f"<td class=sz>{e.documents}</td></tr>"
+        for e in TAGS.TAG_NAMES
+        if e.tier == TAGS.MATCHED
     )
     return f"""
 <h3>Known record tags</h3>
@@ -432,58 +398,6 @@ not known.</p></div>
 # the key-sequence matches below: the vendor named them.
 # --------------------------------------------------------------------------
 
-ETF_OTHERS: list[tuple[str, str, str, str]] = [
-    ("MS", "Measure Spec", "measure number", "spec"),
-    ("IS", "Staff Spec", "instrument (staff) number", "spec"),
-    ("IU", "Instrument Used", "IUList id; one incidence per slot", "spec"),
-    ("FR", "Frame", "frame id; the entry span of one layer", "lily"),
-    ("AC", "Tempo", "measure", "spec"),
-    ("DY", "Score Expression", "measure", "spec"),
-    ("DI", "Separate Placement", "measure of the score expression", "spec"),
-    ("DT", "Text Expression", "dynumber in staff/score expression", "spec"),
-    ("DO", "Shape Expression", "dynumber in staff/score expression", "spec"),
-    ("PD", "Play Dump", "value in text/shape expression", "spec"),
-    ("SD", "Shape", "shapedef in a shape expression", "spec"),
-    ("SL", "Shape Instructions", "instlist; 3 instructions per record", "spec"),
-    ("SB", "Shape Data", "datalist; the data those instructions use", "spec"),
-    ("TX", "Text Block", "text block id; layout of a block of text", "spec"),
-    ("pT", "Page Text Block", "page", "spec"),
-    ("PS", "Page Spec", "page number", "spec"),
-    ("SS", "Staff System Spec", "system number", "spec"),
-    ("MN", "MeasNumberRegion", "which measure-number region", "spec"),
-    ("IV", "Chord Suffix", "which chord suffix", "spec"),
-    ("IK", "Chord Playback", "matches the cmper of its IV", "spec"),
-    ("IX", "Articulation Definition", "referenced by an IM", "spec"),
-    ("Sx", "Slur", "slur number; four rows per slur", "lily"),
-    ("FB", "Fretboard library", "1&ndash;192; a fixed table, see below", "measured"),
-]
-
-ETF_DETAILS: list[tuple[str, str, str, str]] = [
-    ("GF", "Frame Hold", "(staff, measure)", "lily"),
-    ("NG", "Group Spec", "(iuList, groupID)", "spec"),
-    ("FL", "Floats: independent key and time", "(instrument, measure)", "spec"),
-    ("mt", "Measure Text Block", "(instrument, measure)", "spec"),
-    ("LP", "Staff Enduction", "(staff system, instrument)", "spec"),
-    ("MI", "MeasNumberSeparate", "(instrument, measure)", "spec"),
-    ("ME", "Midi Expression", "(instrument, measure)", "spec"),
-    ("hC", "Learned Chord", "(root, alternate bass)", "spec"),
-    ("Ex", "Slur detail", "two rows per slur, paired with Sx", "cahill"),
-    ("GT", "Fretboard index", "root as MIDI 60&ndash;71; 16 incidences each", "measured"),
-    ("DF", "Percussion map", "(map id 1&ndash;26, MIDI note 0&ndash;127)", "measured"),
-]
-
-ETF_ENTRY: list[tuple[str, str, str, str]] = [
-    ("ac", "Performance data", "MIDI velocity and duration, per note", "spec"),
-    ("ED", "Staff Expression", "one per expression on the entry", "spec"),
-    ("CD", "Cross Staffing", "note moved to another staff", "spec"),
-    ("IM", "Articulation", "positions a mark; names an IX", "spec"),
-    ("CH", "Chord", "chord symbol on the entry", "spec"),
-    ("CN", "Notehead Mods", "per-note custom attributes", "spec"),
-    ("ve", "Lyric: verse", "syllable offset into a raw text record", "spec"),
-    ("ch", "Lyric: chorus", "syllable offset, as for a verse", "spec"),
-    ("se", "Lyric: section", "syllable offset, as for a verse", "spec"),
-]
-
 _SOURCE = {
     "spec": "ETF&nbsp;spec",
     "lily": "LilyPond",
@@ -492,11 +406,13 @@ _SOURCE = {
 }
 
 
-def _etf_rows(rows: list[tuple[str, str, str, str]]) -> str:
+def _etf_rows(pool: str) -> str:
+    """The documented ETF tags of one pool, in catalogue order."""
     return "".join(
-        f"<tr><td><code>^{t}</code></td><td>{n}</td><td>{k}</td>"
-        f"<td class=sz>{_SOURCE[src]}</td></tr>"
-        for t, n, k, src in rows
+        f"<tr><td><code>^{e.tag}</code></td><td>{e.name}</td><td>{e.description}</td>"
+        f"<td class=sz>{_SOURCE[e.source]}</td></tr>"
+        for e in TAGS.TAG_NAMES
+        if e.tier == TAGS.DOCUMENTED and e.pool == pool and e.source
     )
 
 
@@ -519,17 +435,17 @@ and <code>^ac</code> is performance data; <code>^CH</code> is a chord and
 
 <h4>others</h4>
 <table><thead><tr><th>Tag</th><th>Name</th><th>Key (cmper)</th>
-<th>Source</th></tr></thead><tbody>{_etf_rows(ETF_OTHERS)}</tbody></table>
+<th>Source</th></tr></thead><tbody>{_etf_rows("others")}</tbody></table>
 
 <h4>details</h4>
 <table><thead><tr><th>Tag</th><th>Name</th><th>Keys</th>
-<th>Source</th></tr></thead><tbody>{_etf_rows(ETF_DETAILS)}</tbody></table>
+<th>Source</th></tr></thead><tbody>{_etf_rows("details")}</tbody></table>
 
 <h4>entry details</h4>
 <p>Keyed by an entry number rather than by position &mdash; the two cmpers hold
 the high and low words of the entry number.</p>
 <table><thead><tr><th>Tag</th><th>Name</th><th>Carries</th>
-<th>Source</th></tr></thead><tbody>{_etf_rows(ETF_ENTRY)}</tbody></table>
+<th>Source</th></tr></thead><tbody>{_etf_rows("entries")}</tbody></table>
 
 <div class=note><strong><code>^FB</code> and <code>^GT</code> were identified by
 structure, not by a document.</strong> Neither appears in any source consulted.

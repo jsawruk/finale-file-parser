@@ -325,6 +325,16 @@ def test_a_tag_with_no_layout_shows_hex_and_nothing_else() -> None:
     assert "if (layout) {" in script, "the table is drawn only where a layout exists"
 
 
+def test_a_named_tag_leads_with_its_name_and_never_hides_its_tier() -> None:
+    """A name shown bare reads as settled, and two of the catalogue's three
+    tiers are leads rather than decodings."""
+    html = render_html(_inspection())
+    script = html[html.index("//<![CDATA[") :]
+    assert "named.name + '  —  ' + pool" in script
+    assert "named.evidence" in script
+    assert "'tier ' + named.tier" in script, "the tier is rendered, not just carried"
+
+
 def test_the_hex_view_builds_its_newline_rather_than_escaping_one() -> None:
     """The script is a Python string literal, so a backslash-n would become a
     real newline inside a JS string literal and fail to parse. The old byte

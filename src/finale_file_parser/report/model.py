@@ -34,6 +34,14 @@ from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.errors import FinaleFileError
 from finale_file_parser.export.musicxml import to_musicxml
 from finale_file_parser.formats.layouts import Layout, layout_for
+from finale_file_parser.formats.tags import (
+    DECODED,
+    MATCHED,
+    SOURCES,
+    WEAK_MATCH,
+    TagName,
+    name_for,
+)
 from finale_file_parser.report.ladder import Ladder, Stage
 from finale_file_parser.report.summary import (
     DocumentSummary,
@@ -78,6 +86,14 @@ class Inspection:
     music: MusicTree | None = None
     document: DocumentSummary | None = None
     records: dict[str, object] = field(default_factory=dict)
+    tags: dict[str, object] = field(default_factory=dict)
+    """What each record tag present is called, and how strongly that is known.
+
+    A tag on its own says nothing: `others / 176 / 1/0` names a record only to
+    someone holding the catalogue. Every name carries the evidence behind it,
+    because the catalogue's three tiers are not equally strong.
+    """
+
     layouts: dict[str, object] = field(default_factory=dict)
     """The payload layout of each record tag present, where one is known.
 
@@ -184,6 +200,7 @@ def _mus_stages(ladder: Ladder, target: Path, inspection: Inspection) -> None:
         )
         if records is not None:
             inspection.records = records
+            inspection.tags = _tag_names(records)
             inspection.layouts = _layouts_present(records)
     document = ladder.run("build document", lambda: read_mus_document(target))
     _finish(ladder, document, inspection)
@@ -349,6 +366,51 @@ def _layout_entry(layout: Layout) -> dict[str, object]:
             for f in layout.fields
         ],
     }
+
+
+def _evidence(entry: TagName) -> str:
+    """One line on what backs this name, which travels with it everywhere.
+
+    A name with no evidence beside it reads as settled, and two of these three
+    tiers are not. `layerAtts` is a lead; `measSpec` is a decoding. Showing them
+    the same way is how the weaker one gets quoted as the stronger.
+    """
+    if entry.tier == DECODED:
+        return "payload decoded and checked against a paired .musx"
+    if entry.tier == MATCHED:
+        weak = " — too few to be more than a guess" if entry.documents < WEAK_MATCH else ""
+        return (
+            f"key sequence matched in {entry.documents} paired documents: "
+            f"evidence about this record's shape, not its meaning{weak}"
+        )
+    return f"named by {SOURCES.get(entry.source, 'published research')}"
+
+
+def _tag_names(records: dict[str, object]) -> dict[str, object]:
+    """What each tag in `records` is called, where this project can say.
+
+    Separate from the layouts: most named tags have no decoded payload, and a
+    few decoded payloads sit under tags whose offsets the reader computes. The
+    two questions -- what is this record, and what do its bytes mean -- have
+    different answers and different evidence.
+    """
+    named: dict[str, object] = {}
+    for pool, tags in records.items():
+        if not isinstance(tags, dict):
+            continue
+        found: dict[str, object] = {}
+        for tag in tags:
+            entry = name_for(pool, str(tag))
+            if entry is not None:
+                found[str(tag)] = {
+                    "name": entry.name,
+                    "description": entry.description,
+                    "evidence": _evidence(entry),
+                    "tier": entry.tier,
+                }
+        if found:
+            named[pool] = found
+    return named
 
 
 def _layouts_present(records: dict[str, object]) -> dict[str, object]:
@@ -536,6 +598,7 @@ def _weight(inspection: Inspection) -> int:
                 "music": inspection.music,
                 "document": inspection.document,
                 "records": inspection.records,
+                "tags": inspection.tags,
                 "layouts": inspection.layouts,
                 "byteOrder": inspection.byte_order,
                 "notes": inspection.notes,
@@ -557,8 +620,9 @@ def apply_budget(inspection: Inspection, limit: int = MAX_JSON_BYTES) -> None:
         return
     if inspection.records:
         inspection.records = {}
-        # The layouts describe records that are no longer here, so they go with
-        # them rather than being left behind describing nothing.
+        # The names and layouts describe records that are no longer here, so
+        # they go with them rather than being left behind describing nothing.
+        inspection.tags = {}
         inspection.layouts = {}
         inspection.notes.append(f"records omitted: the report exceeded its {limit} byte budget")
     if _weight(inspection) <= limit:
