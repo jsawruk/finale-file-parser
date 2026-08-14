@@ -325,6 +325,32 @@ def test_a_tag_with_no_layout_shows_hex_and_nothing_else() -> None:
     assert "if (layout) {" in script, "the table is drawn only where a layout exists"
 
 
+def test_document_options_are_grouped_out_of_the_tag_list() -> None:
+    """A document carries one option record under each of ~98 tags. Left in
+    place they read as the same row repeated down the whole tree; gathered
+    under one heading they read as what they are.
+
+    The tag is the row, because 4,743 of 4,790 such tags across the corpus hold
+    exactly one -- a child row under it would say nothing the tag did not.
+    """
+    html = render_html(_inspection())
+    script = html[html.index("//<![CDATA[") :]
+    assert "tree('document options'" in script
+    assert "records.filter(r => r.options)" in script
+    assert "records.filter(r => !r.options)" in script, "ordinary records stay in the tag list"
+    assert "if (records.length === 1)" in script, "a single option record needs no row of its own"
+
+
+def test_the_script_uses_no_regex_literal_for_the_sentinel() -> None:
+    """This script is a Python string literal, where a backslash is Python's
+    escape before it is ever JavaScript's. `/^\\(|\\)$/` raised a SyntaxWarning
+    and would have shipped a regex Python had already rewritten."""
+    html = render_html(_inspection())
+    script = html[html.index("//<![CDATA[") :]
+    assert "function withoutSentinel(key)" in script
+    assert "key.slice(1, -1)" in script
+
+
 def test_a_named_tag_leads_with_its_name_and_never_hides_its_tier() -> None:
     """A name shown bare reads as settled, and two of the catalogue's three
     tiers are leads rather than decodings."""

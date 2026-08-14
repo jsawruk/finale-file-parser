@@ -160,6 +160,17 @@ function stopped(what) {
 function findStage(name) {
   return (data.stages || []).find(s => s.name === name) || null;
 }
+// Inside the "document options" group the sentinel is already said once, at the
+// top. What is left is whatever else keys the record -- a part, an incidence --
+// which is the only part worth repeating per row.
+// No regex: this script is a Python string literal, where a backslash is
+// Python's escape before it is ever JavaScript's. A key is always parenthesised
+// by `_key`, so slicing the ends off is both simpler and safe.
+const SENTINEL = 'document options';
+function withoutSentinel(key) {
+  const inner = key.slice(1, -1).split(', ').filter(p => p !== SENTINEL);
+  return inner.length === 0 ? SENTINEL : '(' + inner.join(', ') + ')';
+}
 function renderRecords() {
   // `records` defaults to {} rather than null, and {} is truthy in JS, so
   // renderJson's own truthiness check cannot tell "read fine, found nothing"
@@ -184,29 +195,67 @@ function renderRecords() {
   right.className = 'detail';
   right.innerHTML = '<p class="stopped">Select a record.</p>';
 
+  // A leaf, not another expander. The fields used to nest a third level down,
+  // which made clicking a record look like it did nothing much; they are the
+  // right-hand panel's job now.
+  function recordRow(pool, tag, rec, label) {
+    const row = document.createElement('div');
+    row.className = 'rec';
+    row.textContent = label;
+    row.addEventListener('click', () => {
+      for (const other of left.querySelectorAll('.rec.on')) { other.classList.remove('on'); }
+      row.classList.add('on');
+      showRecord(right, pool, tag, rec);
+    });
+    return row;
+  }
+  // The name belongs in the tree as much as in the panel: a tree of bare
+  // numbers is a tree nobody can navigate.
+  function tagLabel(pool, tag) {
+    const known = ((data.tags || {})[pool] || {})[tag];
+    return known ? tag + '  ' + known.name : tag;
+  }
+
   for (const [pool, tags] of pools) {
     const total = Object.values(tags).reduce((n, rs) => n + rs.length, 0);
     const node = tree(pool, Object.keys(tags).length + ' tags, ' + group(total) + ' records');
+
+    // Document-wide options first, together. They are keyed by a sentinel
+    // rather than by anything, so a document carries one under each of around
+    // ninety tags -- scattered through the tree they read as the same row over
+    // and over. Split per record and not per tag: 94 corpus tags hold a
+    // document-wide default alongside the numbered records it applies to.
+    const optionTags = Object.entries(tags)
+      .map(([tag, records]) => [tag, records.filter(r => r.options)])
+      .filter(([, records]) => records.length !== 0);
+    if (optionTags.length !== 0) {
+      const box = tree('document options', optionTags.length + ' tags');
+      for (const [tag, records] of optionTags) {
+        // One record is the overwhelming case (4,743 of 4,790 across the
+        // corpus), and it needs no row of its own: the tag IS the record, so
+        // the tag is what you click.
+        if (records.length === 1) {
+          box.appendChild(recordRow(pool, tag, records[0], tagLabel(pool, tag)));
+          continue;
+        }
+        const tagNode = tree(tagLabel(pool, tag));
+        for (const rec of records) {
+          tagNode.appendChild(recordRow(pool, tag, rec, withoutSentinel(rec.key)));
+        }
+        box.appendChild(tagNode);
+      }
+      node.appendChild(box);
+    }
+
     for (const [tag, records] of Object.entries(tags)) {
-      // The name belongs here as much as in the panel: a tree of bare numbers
-      // is a tree nobody can navigate, and the name is what a reader is
-      // actually looking for.
-      const known = ((data.tags || {})[pool] || {})[tag];
-      const label = known ? tag + '  ' + known.name : tag;
-      const tagNode = tree(label, group(records.length) + '');
-      for (const rec of records) {
-        // A leaf, not another expander. The fields used to nest a third level
-        // down, which made clicking a record look like it did nothing much;
-        // they are the right-hand panel's job now.
-        const row = document.createElement('div');
-        row.className = 'rec';
-        row.textContent = rec.key;
-        row.addEventListener('click', () => {
-          for (const other of left.querySelectorAll('.rec.on')) { other.classList.remove('on'); }
-          row.classList.add('on');
-          showRecord(right, pool, tag, rec);
-        });
-        tagNode.appendChild(row);
+      const rest = records.filter(r => !r.options);
+      if (rest.length === 0) { continue; }
+      // No count on a tag row. The pool above already gives the totals, and a
+      // number beside every tag competed with the name for attention while
+      // answering a question nobody was asking at that level.
+      const tagNode = tree(tagLabel(pool, tag));
+      for (const rec of rest) {
+        tagNode.appendChild(recordRow(pool, tag, rec, rec.key));
       }
       node.appendChild(tagNode);
     }

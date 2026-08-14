@@ -272,6 +272,23 @@ def test_the_options_sentinel_is_shown_as_what_it_means_not_as_a_key() -> None:
     assert model._mus_other_entry(ordinary)["key"] == "(cmper 3, part 0)"
 
 
+def test_an_options_record_is_flagged_so_it_can_be_grouped() -> None:
+    """Flagged per record, not per tag: 94 corpus tags hold a document-wide
+    default alongside the numbered records it applies to, so grouping a whole
+    tag would move ordinary records under a heading that does not describe
+    them. The flag also spares a renderer parsing the key text back apart.
+    """
+    from finale_file_parser.enigma.mus_others import OPTIONS_CMPER, MusOther
+
+    options = MusOther(tag=109, cmper=OPTIONS_CMPER, part=0, payload=b"\x01", extra=b"")
+    assert model._mus_other_entry(options)["options"] is True
+
+    # Absent rather than False: it costs nothing on the records that are the
+    # overwhelming majority, and `rec.options` is falsy either way.
+    ordinary = MusOther(tag=176, cmper=3, part=0, payload=b"\x01", extra=b"")
+    assert "options" not in model._mus_other_entry(ordinary)
+
+
 @pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 def test_no_two_records_of_one_tag_share_a_key() -> None:
     """A row that cannot be told from its neighbour is a row that cannot be
@@ -424,7 +441,12 @@ def test_a_real_mus_file_gets_records() -> None:
                 # A `.mus` record carries `fields` -- the decoding of its bytes;
                 # a `.musx` record carries `xml` instead, which is both its
                 # source and its decoding.
-                assert entry.keys() in ({"key", "fields", "length"}, {"key", "xml", "length"})
+                # `options` is optional and marks the 0xFFFE sentinel, so it is
+                # dropped before the shape is checked. The shape stays pinned
+                # exactly: this test exists to catch a field added to every
+                # record without anyone deciding to add it.
+                shape = entry.keys() - {"options"}
+                assert shape in ({"key", "fields", "length"}, {"key", "xml", "length"})
                 assert isinstance(entry["key"], str)
 
     # Round-trips through JSON without error: no bytes, no dataclasses left over.

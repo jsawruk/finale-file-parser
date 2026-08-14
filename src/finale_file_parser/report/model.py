@@ -223,9 +223,16 @@ def _musx_stages(ladder: Ladder, target: Path, inspection: Inspection) -> None:
     _finish(ladder, document, inspection)
 
 
-def _record_entry(key: str, fields: object, length: int | None) -> dict[str, object]:
+def _record_entry(
+    key: str, fields: object, length: int | None, options: bool = False
+) -> dict[str, object]:
     """One record's report shape: identity, walked fields, and how many bytes it
     occupied when that is known.
+
+    `options` marks a record carrying the `0xFFFE` sentinel instead of a key, so
+    a renderer can group those together without parsing the key text back
+    apart. It is set per record rather than per tag because 94 corpus tags hold
+    both: a document-wide default alongside the numbered records it applies to.
 
     No byte offset. The design called for one, but no reader records where a
     record began -- `MusOther` and friends carry their decoded payload, not
@@ -234,7 +241,10 @@ def _record_entry(key: str, fields: object, length: int | None) -> dict[str, obj
     teaches a reader to distrust the rest, so it is gone until the readers can
     answer the question honestly.
     """
-    return {"key": key, "fields": fields, "length": length}
+    entry: dict[str, object] = {"key": key, "fields": fields, "length": length}
+    if options:
+        entry["options"] = True
+    return entry
 
 
 def _key(*parts: tuple[str, object]) -> str:
@@ -284,6 +294,7 @@ def _mus_other_entry(record: MusOther) -> dict[str, object]:
         key=_key(_comparator("cmper", record.cmper), ("part", record.part)),
         fields=fields,
         length=len(record.payload) + len(record.extra),
+        options=record.cmper == OPTIONS_CMPER,
     )
 
 
@@ -306,6 +317,7 @@ def _mus_detail_entry(record: MusDetailRecord) -> dict[str, object]:
         ),
         fields=fields,
         length=len(record.payload) + len(record.extra),
+        options=record.cmper1 == OPTIONS_CMPER,
     )
 
 
@@ -323,6 +335,7 @@ def _mus_row_entry(record: MusRowRecord) -> dict[str, object]:
         key=_key(_comparator("cmper", record.cmper), ("cmper2", record.cmper2)),
         fields=fields,
         length=len(record.payload),
+        options=record.cmper == OPTIONS_CMPER,
     )
 
 
