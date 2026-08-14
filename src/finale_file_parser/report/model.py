@@ -11,9 +11,13 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
+import xml.etree.ElementTree as ET
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+
+from defusedxml import ElementTree as DefusedET
 
 from finale_file_parser.enigma.document import EnigmaDocument, Record, parse_enigma
 from finale_file_parser.enigma.location import locate_entries
@@ -168,7 +172,7 @@ def _musx_stages(ladder: Ladder, target: Path, inspection: Inspection) -> None:
     if document is not None:
         records = ladder.run(
             "read records",
-            lambda: _musx_records(document),
+            lambda: _musx_records(document, xml or b""),
             lambda r: {"pools": str(len(r))},
             halt=False,
         )
@@ -326,15 +330,27 @@ def _musx_key(record: Record, index: int) -> str:
     return "/".join(parts) if parts else str(index)
 
 
-def _musx_entry(record: Record, index: int) -> dict[str, object]:
-    return _record_entry(
+def _musx_entry(record: Record, index: int, source: str = "") -> dict[str, object]:
+    entry = _record_entry(
         key=_musx_key(record, index),
         fields=walk_fields(record.fields, depth=0),
         length=None,
     )
+    # A .musx record has no undecoded bytes -- it arrived as XML -- so the
+    # report shows the record's own XML where a .mus shows hex.
+    if source:
+        entry["xml"] = source
+        # The XML *is* the record here, so the walked fields would restate it:
+        # same names, same values, same nesting, one line apart on screen. On
+        # the largest corpus document carrying both put the payload over the
+        # report's budget, which dropped the records entirely -- so the pane
+        # that gained the XML would have lost everything. A .mus keeps its
+        # fields, because there they decode bytes that are otherwise opaque.
+        entry.pop("fields", None)
+    return entry
 
 
-def _musx_records(document: EnigmaDocument) -> dict[str, object]:
+def _musx_records(document: EnigmaDocument, xml: bytes = b"") -> dict[str, object]:
     """Every record `EnigmaDocument` holds, one depth below the tag-and-count
     view `summarise_document` gives: the full, walked fields of each record.
 
@@ -344,13 +360,68 @@ def _musx_records(document: EnigmaDocument) -> dict[str, object]:
     EnigmaXML's own `Record` model already preserves every record verbatim
     (see `enigma.document`), so this pool *is* the raw view.
     """
+    source = _record_source(xml)
     records: dict[str, object] = {}
     for name in _MUSX_POOLS:
         pool_records = getattr(document, name).records
+        fragments = source.get(name, [])
         records[name] = _group_by_tag(
-            (record.tag, _musx_entry(record, index)) for index, record in enumerate(pool_records)
+            (
+                record.tag,
+                _musx_entry(record, index, fragments[index] if index < len(fragments) else ""),
+            )
+            for index, record in enumerate(pool_records)
         )
     return records
+
+
+_NS_PREFIX = re.compile(r"\bns\d+:")
+_NS_DECL = re.compile(r'\s+xmlns:ns\d+="[^"]*"')
+
+
+def _record_source(xml: bytes) -> dict[str, list[str]]:
+    """Each record's own XML, per pool, in the order `parse_enigma` returns them.
+
+    The report shows a `.musx` record's XML rather than a hex dump, because
+    EnigmaXML arrives as XML and has no undecoded form. Re-serialising the
+    parsed `Record` was not good enough: it is faithful in content but it is not
+    the fragment the file holds. This serialises the source element itself.
+
+    Parsed with the same defused parser the reader uses -- untrusted input gets
+    no second, softer path -- and the namespace prefixes ElementTree reintroduces
+    on output are stripped, since EnigmaXML declares one default namespace and
+    `ns0:` on every tag is noise rather than information.
+    """
+    if not xml:
+        return {}
+    try:
+        root = DefusedET.fromstring(xml)
+    except Exception:  # pragma: no cover - parse_enigma already accepted this
+        return {}
+    out: dict[str, list[str]] = {}
+    for pool in root:
+        name = pool.tag.rsplit("}", 1)[-1]
+        if name not in _MUSX_POOLS:
+            continue
+        out[name] = [
+            _dedent(_NS_DECL.sub("", _NS_PREFIX.sub("", ET.tostring(child, encoding="unicode"))))
+            for child in pool
+        ]
+    return out
+
+
+def _dedent(fragment: str) -> str:
+    """Strip the file's own indentation, keeping the fragment's shape.
+
+    A record sits several levels deep in EnigmaXML, and `tostring` keeps every
+    one of those leading spaces on every line. Across the largest corpus
+    document that is 21% of all the XML the report would carry, and it says
+    nothing about the record -- only about where it sat in the file.
+    """
+    lines = fragment.strip().splitlines()
+    depths = [len(line) - len(line.lstrip()) for line in lines[1:] if line.strip()]
+    cut = min(depths) if depths else 0
+    return "\n".join([lines[0]] + [line[cut:] for line in lines[1:]]) if lines else ""
 
 
 def encode_raw(data: bytes) -> str:

@@ -256,7 +256,10 @@ def test_a_real_mus_file_gets_records() -> None:
             for entry in entries:
                 # No `offset`: no reader records where a record began, so the
                 # field the design asked for could only ever have been null.
-                assert entry.keys() == {"key", "fields", "length"}
+                # A `.mus` record carries `fields` -- the decoding of its bytes;
+                # a `.musx` record carries `xml` instead, which is both its
+                # source and its decoding.
+                assert entry.keys() in ({"key", "fields", "length"}, {"key", "xml", "length"})
                 assert isinstance(entry["key"], str)
 
     # Round-trips through JSON without error: no bytes, no dataclasses left over.

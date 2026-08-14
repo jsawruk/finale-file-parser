@@ -253,14 +253,15 @@ function showRecord(right, pool, tag, rec) {
     if (typeof value === 'string' && value !== '') { raw += atob(value); }
   }
   if (raw === '') {
-    const note = document.createElement('p');
-    note.className = 'no-bytes';
-    // True of every .musx record: EnigmaXML arrives as XML, so a record has no
-    // undecoded form to show. Saying so beats an empty box that reads like a
-    // reader that lost the bytes.
-    note.textContent = 'No raw bytes: this record was read from XML, so its ' +
-                       'fields below are the source form rather than a decoding of it.';
-    right.appendChild(note);
+    // A .musx record has no undecoded bytes -- EnigmaXML arrives as XML -- so
+    // the source form to show is the XML itself. Rebuilt here from the parse
+    // rather than carried in the payload, which would have doubled it. Nothing
+    // is lost in the round trip: a Record keeps every attribute verbatim and
+    // maps every child element into its fields, coercing none of them.
+    const box = document.createElement('div');
+    box.className = 'hex';
+    box.textContent = rec.xml || '';
+    right.appendChild(box);
   } else {
     right.appendChild(hexBlock(raw));
     const caption = document.createElement('p');

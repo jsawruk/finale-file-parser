@@ -241,13 +241,40 @@ def test_the_bytes_a_record_carries_are_shown_as_hex_and_not_repeated_as_fields(
     assert "atob(value)" in html
 
 
-def test_a_record_with_no_bytes_says_why_rather_than_showing_an_empty_box() -> None:
-    """Every `.musx` record: EnigmaXML arrives as XML, so a record has no
-    undecoded form. An empty hex pane would read like a reader that lost the
-    bytes, which is the opposite of what happened."""
-    html = render_html(_inspection())
-    assert "read from XML" in html
-    assert "source form rather than a decoding" in html
+def test_a_record_with_no_bytes_shows_its_xml_instead() -> None:
+    """A `.musx` record has no undecoded form -- EnigmaXML arrives as XML -- so
+    the panel shows the record's own XML where a `.mus` shows hex.
+
+    It is the fragment the file holds, serialised from the source element, not
+    rebuilt from the parsed fields: a rebuild matches in content but is not what
+    the file says, and the point of the pane is to show what the file says.
+    """
+    records = {
+        "others": {"frameSpec": [{"key": "13/0", "length": None, "xml": '<frameSpec cmper="13"/>'}]}
+    }
+    html = render_html(_inspection(records=records))
+    assert "rec.xml" in html, "the panel renders the carried fragment verbatim"
+    assert "xmlOf(" not in html, "and does not rebuild one from fields"
+
+
+def test_a_musx_record_carries_xml_instead_of_walked_fields() -> None:
+    """Both would be the same information -- same names, same values, same
+    nesting -- and carrying both put the largest corpus document's payload over
+    the report's 16 MB budget, which dropped the records entirely. So the pane
+    that gained the XML would have lost everything.
+    """
+    from finale_file_parser.enigma.document import Record
+    from finale_file_parser.report.model import _musx_entry
+
+    record = Record(tag="gfhold", attrs={"cmper1": "1"}, text="", fields={"frame1": "2"})
+    with_source = _musx_entry(record, 0, '<gfhold cmper1="1"><frame1>2</frame1></gfhold>')
+    assert "fields" not in with_source
+    assert with_source["xml"].startswith("<gfhold")
+
+    # A .mus record keeps its fields: there they decode bytes that are
+    # otherwise opaque, which is not a restatement of anything on screen.
+    without_source = _musx_entry(record, 0, "")
+    assert "fields" in without_source
 
 
 def test_the_hex_view_builds_its_newline_rather_than_escaping_one() -> None:
