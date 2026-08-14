@@ -183,8 +183,7 @@ function renderRecords() {
         // they are the right-hand panel's job now.
         const row = document.createElement('div');
         row.className = 'rec';
-        const size = rec.length === null ? '' : '  ' + group(rec.length) + ' bytes';
-        row.textContent = rec.key + size;
+        row.textContent = rec.key;
         row.addEventListener('click', () => {
           for (const other of left.querySelectorAll('.rec.on')) { other.classList.remove('on'); }
           row.classList.add('on');
@@ -266,7 +265,11 @@ function showRecord(right, pool, tag, rec) {
     right.appendChild(hexBlock(raw));
     const caption = document.createElement('p');
     caption.className = 'txt';
-    caption.textContent = 'decodes as';
+    // Not "decodes as". These fields say where the record sits -- its cmper,
+    // its part, its incidence count. The payload above them is undecoded: what
+    // any of its bytes mean depends on the tag, and this reader decodes those
+    // per tag elsewhere rather than here.
+    caption.textContent = 'addressed by';
     right.appendChild(caption);
   }
   const rest = {};
