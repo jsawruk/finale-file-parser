@@ -351,14 +351,22 @@ def test_the_script_uses_no_regex_literal_for_the_sentinel() -> None:
     assert "key.slice(1, -1)" in script
 
 
-def test_a_named_tag_leads_with_its_name_and_never_hides_its_tier() -> None:
-    """A name shown bare reads as settled, and two of the catalogue's three
-    tiers are leads rather than decodings."""
+def test_a_named_tag_leads_with_its_name() -> None:
     html = render_html(_inspection())
     script = html[html.index("//<![CDATA[") :]
     assert "named.name + '  —  ' + pool" in script
-    assert "named.evidence" in script
-    assert "'tier ' + named.tier" in script, "the tier is rendered, not just carried"
+    assert "named.description" in script
+
+
+def test_a_records_key_is_not_restated_underneath_it() -> None:
+    """An "addressed by" block used to sit below the hex restating the cmper and
+    part. Those *are* the key, shown once in the heading, and could never differ
+    from it. What is not the key -- a DCL row's `incidences` -- still shows."""
+    html = render_html(_inspection())
+    script = html[html.index("//<![CDATA[") :]
+    # The quoted string, not the words: a comment still explains why it went.
+    assert "'addressed by'" not in script
+    assert "Object.keys(rest).length !== 0" in script, "and nothing renders when none is left"
 
 
 def test_the_hex_view_builds_its_newline_rather_than_escaping_one() -> None:

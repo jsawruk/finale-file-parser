@@ -85,10 +85,6 @@ details.node > summary::marker { color: #999; }
 .hex .txt { color: #666; }
 .no-bytes { color: #666; max-width: 34rem; }
 .swatch { display: inline-block; width: 0.9rem; height: 0.9rem; border: 1px solid #ccc; }
-.tier { font-size: 12px; margin: 0.1rem 0 0.6rem; }
-.tier.decoded { color: #2a7; }
-.tier.documented { color: #666; }
-.tier.matched { color: #c81; }
 """
 
 _SCRIPT = (
@@ -413,22 +409,14 @@ function showRecord(right, pool, tag, rec) {
     ? named.name + '  —  ' + pool + ' / ' + tag + ' ' + rec.key
     : pool + ' / ' + tag + ' ' + rec.key;
   right.appendChild(heading);
-  if (named) {
-    if (named.description) {
-      const what = document.createElement('p');
-      what.className = 'txt';
-      what.textContent = named.description;
-      right.appendChild(what);
-    }
-    // A decoded name is settled and says nothing here. The other two tiers are
-    // leads rather than decodings, and shown bare they would read as settled
-    // too -- so those carry their qualification and this never omits it.
-    if (named.evidence) {
-      const how = document.createElement('p');
-      how.className = 'tier ' + named.tier;
-      how.textContent = named.evidence;
-      right.appendChild(how);
-    }
+  // The description only. How strongly a name is known is not prose for every
+  // record to carry -- the specification's tag tables state each tier in full,
+  // and `tier` travels in the payload for anything reading this as data.
+  if (named && named.description) {
+    const what = document.createElement('p');
+    what.className = 'txt';
+    what.textContent = named.description;
+    right.appendChild(what);
   }
 
   let raw = '';
@@ -469,20 +457,19 @@ function showRecord(right, pool, tag, rec) {
       right.appendChild(caption);
       right.appendChild(layoutTable(layout, raw, data.byteOrder));
     }
-    const caption = document.createElement('p');
-    caption.className = 'txt';
-    // Not "decodes as". These fields say where the record sits -- its cmper,
-    // its part, its incidence count. The payload above them is undecoded: what
-    // any of its bytes mean depends on the tag, and this reader decodes those
-    // per tag elsewhere rather than here.
-    caption.textContent = 'addressed by';
-    right.appendChild(caption);
   }
+  // Whatever the record carries that is neither its bytes nor its key. For a
+  // .mus `others` or `details` record that is nothing at all: an "addressed by"
+  // block used to sit here restating the cmper and part, which are the key and
+  // could never differ from it. A DCL row still has `incidences` -- how many
+  // rows were joined to assemble the payload -- which the key does not say.
   const rest = {};
   for (const [k, v] of Object.entries(rec.fields || {})) {
     if (!BYTE_FIELDS.includes(k)) { rest[k] = v; }
   }
-  right.appendChild(fields(rest));
+  if (Object.keys(rest).length !== 0) {
+    right.appendChild(fields(rest));
+  }
 }
 // Both trees are built from DOM nodes rather than an innerHTML string: every
 // key, tag and value goes in as text, so there is no second escaper to get

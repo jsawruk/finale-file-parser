@@ -34,14 +34,7 @@ from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.errors import FinaleFileError
 from finale_file_parser.export.musicxml import to_musicxml
 from finale_file_parser.formats.layouts import Layout, layout_for
-from finale_file_parser.formats.tags import (
-    DECODED,
-    MATCHED,
-    SOURCES,
-    WEAK_MATCH,
-    TagName,
-    name_for,
-)
+from finale_file_parser.formats.tags import name_for
 from finale_file_parser.report.ladder import Ladder, Stage
 from finale_file_parser.report.summary import (
     DocumentSummary,
@@ -281,13 +274,11 @@ def _comparator(name: str, value: int) -> tuple[str, object]:
 
 
 def _mus_other_entry(record: MusOther) -> dict[str, object]:
+    # No cmper or part here: they are the key, stated once above. Repeating
+    # them underneath said nothing a reader could not already see, and could
+    # never differ from it.
     fields = walk_fields(
-        {
-            "cmper": record.cmper,
-            "part": record.part,
-            "payload": encode_raw(record.payload),
-            "extra": encode_raw(record.extra),
-        },
+        {"payload": encode_raw(record.payload), "extra": encode_raw(record.extra)},
         depth=0,
     )
     return _record_entry(
@@ -300,13 +291,7 @@ def _mus_other_entry(record: MusOther) -> dict[str, object]:
 
 def _mus_detail_entry(record: MusDetailRecord) -> dict[str, object]:
     fields = walk_fields(
-        {
-            "cmper1": record.cmper1,
-            "cmper2": record.cmper2,
-            "inci": record.inci,
-            "payload": encode_raw(record.payload),
-            "extra": encode_raw(record.extra),
-        },
+        {"payload": encode_raw(record.payload), "extra": encode_raw(record.extra)},
         depth=0,
     )
     return _record_entry(
@@ -322,13 +307,10 @@ def _mus_detail_entry(record: MusDetailRecord) -> dict[str, object]:
 
 
 def _mus_row_entry(record: MusRowRecord) -> dict[str, object]:
+    # `incidences` stays: alone among these it is not part of the key, and it
+    # says how many rows the reader joined to assemble this payload.
     fields = walk_fields(
-        {
-            "cmper": record.cmper,
-            "cmper2": record.cmper2,
-            "incidences": record.incidences,
-            "payload": encode_raw(record.payload),
-        },
+        {"incidences": record.incidences, "payload": encode_raw(record.payload)},
         depth=0,
     )
     return _record_entry(
@@ -418,28 +400,6 @@ def _layout_entry(layout: Layout) -> dict[str, object]:
     }
 
 
-def _evidence(entry: TagName) -> str:
-    """One line on what backs this name, which travels with it everywhere.
-
-    A name with no evidence beside it reads as settled, and two of these three
-    tiers are not. `layerAtts` is a lead; `measSpec` is a decoding. Showing them
-    the same way is how the weaker one gets quoted as the stronger.
-    """
-    if entry.tier == DECODED:
-        # Nothing. A decoded record's name is settled, and a line explaining
-        # why it is settled is noise on every record that carries one. The
-        # tiers that need qualifying are the ones that get it.
-        return ""
-    if entry.tier == MATCHED:
-        weak = ", too few to be more than a guess" if entry.documents < WEAK_MATCH else ""
-        return (
-            f"named only because its records are numbered the same way this record type is, "
-            f"in {entry.documents} documents saved both ways{weak}. That says this is a record "
-            f"of the same shape — it says nothing about what its bytes mean"
-        )
-    return f"named by {SOURCES.get(entry.source, 'published research')}, not decoded here"
-
-
 def _tag_names(records: dict[str, object]) -> dict[str, object]:
     """What each tag in `records` is called, where this project can say.
 
@@ -459,7 +419,11 @@ def _tag_names(records: dict[str, object]) -> dict[str, object]:
                 found[str(tag)] = {
                     "name": entry.name,
                     "description": entry.description,
-                    "evidence": _evidence(entry),
+                    # How strongly the name is known. Not rendered as prose on
+                    # every record -- the specification's tag tables state each
+                    # tier in full -- but carried for anything reading the
+                    # report as data, where a `matched` name must not be taken
+                    # for a decoded one.
                     "tier": entry.tier,
                 }
         if found:

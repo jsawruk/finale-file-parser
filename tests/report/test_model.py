@@ -314,10 +314,14 @@ def test_no_two_records_of_one_tag_share_a_key() -> None:
     assert collisions == []
 
 
-def test_a_tag_is_named_with_the_evidence_behind_the_name() -> None:
-    """`others / 176 / 1/0` names a record only to someone holding the
-    catalogue. The report carries the name -- and never without the tier, since
-    two of the three are leads rather than decodings."""
+def test_a_tag_is_named_and_its_tier_travels_with_the_name() -> None:
+    """`others / 176 / (cmper 1, part 0)` names a record only to someone holding
+    the catalogue.
+
+    The tier is carried but not rendered as prose on every record: the
+    specification's tag tables state each tier in full, and a reader of this
+    report as data must still not take a `matched` name for a decoded one.
+    """
     named = model._tag_names({"others": {"176": [], "144": [], "213": []}})
     by_tag = named["others"]
     assert isinstance(by_tag, dict)
@@ -328,13 +332,13 @@ def test_a_tag_is_named_with_the_evidence_behind_the_name() -> None:
     decoded = by_tag["176"]
     assert isinstance(decoded, dict)
     assert decoded["name"] == "measSpec"
-    assert decoded["evidence"] == "", "a decoded name is settled and needs no qualifying"
+    assert decoded["tier"] == "decoded"
+    assert "evidence" not in decoded
 
     matched = by_tag["144"]
     assert isinstance(matched, dict)
     assert matched["name"] == "fontName"
-    assert "nothing about what its bytes mean" in str(matched["evidence"])
-    assert "too few to be more than a guess" in str(matched["evidence"])
+    assert matched["tier"] == "matched", "a lead must not be recorded as a decoding"
 
 
 def test_the_budget_takes_the_names_with_the_records() -> None:
