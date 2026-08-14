@@ -9,12 +9,15 @@ lies about the parser is worse than no tool.
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 import os
+import re
+import xml.etree.ElementTree as ET
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+
+from defusedxml import ElementTree as DefusedET
 
 from finale_file_parser.enigma.document import EnigmaDocument, Record, parse_enigma
 from finale_file_parser.enigma.location import locate_entries
@@ -22,10 +25,6 @@ from finale_file_parser.enigma.mus_details import MusDetailRecord, read_mus_deta
 from finale_file_parser.enigma.mus_document import read_mus_document
 from finale_file_parser.enigma.mus_others import MusOther, read_mus_others
 from finale_file_parser.enigma.mus_payload import (
-    POOL_DETAILS,
-    POOL_ENTRIES,
-    POOL_OTHERS,
-    POOL_TEXT,
     MusPool,
     read_mus_pools,
 )
@@ -60,18 +59,6 @@ _MUSX_POOLS = ("header", "mappings", "options", "others", "details", "entries", 
 imported from `report.summary`: that module's `_POOLS` is a private detail of
 the count-only summary, not a shared constant."""
 
-_MUS_POOL_NAMES = ("others", "details", "entries", "text")
-"""The roles a `.mus` container's four pools play, in the order it writes them
--- `enigma.mus_payload`'s own docstring: kind 15/16/17/18 for a labelled DCL
-container, and the same order by structure alone for an unlabelled zlib one."""
-
-_MUS_POOL_KINDS = {
-    POOL_OTHERS: "others",
-    POOL_DETAILS: "details",
-    POOL_ENTRIES: "entries",
-    POOL_TEXT: "text",
-}
-
 MAX_JSON_BYTES = 16 * 1024 * 1024
 """Budget for the embedded JSON. The largest corpus payload is ~500 KB, so no
 real document approaches this; it exists to stop a pathological file."""
@@ -86,11 +73,10 @@ class Inspection:
 
     file: dict[str, str]
     stages: list[Stage] = field(default_factory=list)
-    score: ScoreSummary | None = None
+    stats: ScoreSummary | None = None
     music: MusicTree | None = None
     document: DocumentSummary | None = None
     records: dict[str, object] = field(default_factory=dict)
-    raw: dict[str, object] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     """Anything the report had to leave out, and why."""
 
@@ -106,11 +92,7 @@ def _identity(path: Path) -> dict[str, str]:
         data = path.read_bytes()
     except OSError as error:
         raise FinaleFileError(f"cannot read {path}: {error}") from error
-    return {
-        "name": path.name,
-        "size": str(len(data)),
-        "sha256": hashlib.sha256(data).hexdigest(),
-    }
+    return {"name": path.name, "size": str(len(data))}
 
 
 def _no_paths(text: str, path: Path) -> str:
@@ -170,14 +152,6 @@ def inspect_document(path: str | os.PathLike[str]) -> Inspection:
 def _mus_stages(ladder: Ladder, target: Path, inspection: Inspection) -> None:
     pools = ladder.run("decode payload", lambda: read_mus_pools(target), _pools_detail)
     if pools is not None:
-        raw = ladder.run(
-            "read raw bytes",
-            lambda: _mus_raw(pools),
-            lambda r: {"pools": str(len(r))},
-            halt=False,
-        )
-        if raw is not None:
-            inspection.raw = raw
         records = ladder.run(
             "read records",
             lambda: _mus_records(target),
@@ -198,34 +172,13 @@ def _musx_stages(ladder: Ladder, target: Path, inspection: Inspection) -> None:
     if document is not None:
         records = ladder.run(
             "read records",
-            lambda: _musx_records(document),
+            lambda: _musx_records(document, xml or b""),
             lambda r: {"pools": str(len(r))},
             halt=False,
         )
         if records is not None:
             inspection.records = records
     _finish(ladder, document, inspection)
-
-
-def _pool_name(pool: MusPool, index: int) -> str:
-    """A DCL container labels its pools by kind; a zlib one does not, so fall
-    back to the fixed order `enigma.mus_payload` documents its four streams
-    playing by structure alone."""
-    if pool.kind is not None and pool.kind in _MUS_POOL_KINDS:
-        return _MUS_POOL_KINDS[pool.kind]
-    return _MUS_POOL_NAMES[index] if index < len(_MUS_POOL_NAMES) else f"pool{index}"
-
-
-def _mus_raw(pools: tuple[MusPool, ...]) -> dict[str, object]:
-    """Every decoded pool, base64, keyed by the role it plays.
-
-    Independent of whether the pools decode into records below: a payload that
-    fails every record walk is still worth looking at as bytes. Pure, and
-    raises nothing of its own -- `_mus_stages` runs it through `Ladder.run`
-    regardless, so a change here that starts raising is still caught rather
-    than assumed away.
-    """
-    return {_pool_name(pool, index): encode_raw(pool.data) for index, pool in enumerate(pools)}
 
 
 def _record_entry(key: str, fields: object, length: int | None) -> dict[str, object]:
@@ -377,15 +330,27 @@ def _musx_key(record: Record, index: int) -> str:
     return "/".join(parts) if parts else str(index)
 
 
-def _musx_entry(record: Record, index: int) -> dict[str, object]:
-    return _record_entry(
+def _musx_entry(record: Record, index: int, source: str = "") -> dict[str, object]:
+    entry = _record_entry(
         key=_musx_key(record, index),
         fields=walk_fields(record.fields, depth=0),
         length=None,
     )
+    # A .musx record has no undecoded bytes -- it arrived as XML -- so the
+    # report shows the record's own XML where a .mus shows hex.
+    if source:
+        entry["xml"] = source
+        # The XML *is* the record here, so the walked fields would restate it:
+        # same names, same values, same nesting, one line apart on screen. On
+        # the largest corpus document carrying both put the payload over the
+        # report's budget, which dropped the records entirely -- so the pane
+        # that gained the XML would have lost everything. A .mus keeps its
+        # fields, because there they decode bytes that are otherwise opaque.
+        entry.pop("fields", None)
+    return entry
 
 
-def _musx_records(document: EnigmaDocument) -> dict[str, object]:
+def _musx_records(document: EnigmaDocument, xml: bytes = b"") -> dict[str, object]:
     """Every record `EnigmaDocument` holds, one depth below the tag-and-count
     view `summarise_document` gives: the full, walked fields of each record.
 
@@ -395,13 +360,70 @@ def _musx_records(document: EnigmaDocument) -> dict[str, object]:
     EnigmaXML's own `Record` model already preserves every record verbatim
     (see `enigma.document`), so this pool *is* the raw view.
     """
+    source = _record_source(xml)
     records: dict[str, object] = {}
     for name in _MUSX_POOLS:
         pool_records = getattr(document, name).records
+        fragments = source.get(name, [])
         records[name] = _group_by_tag(
-            (record.tag, _musx_entry(record, index)) for index, record in enumerate(pool_records)
+            (
+                record.tag,
+                _musx_entry(record, index, fragments[index] if index < len(fragments) else ""),
+            )
+            for index, record in enumerate(pool_records)
         )
     return records
+
+
+_NS_PREFIX = re.compile(r"\bns\d+:")
+_NS_DECL = re.compile(r'\s+xmlns:ns\d+="[^"]*"')
+
+
+def _record_source(xml: bytes) -> dict[str, list[str]]:
+    """Each record's own XML, per pool, in the order `parse_enigma` returns them.
+
+    The report shows a `.musx` record's XML rather than a hex dump, because
+    EnigmaXML arrives as XML and has no undecoded form. Re-serialising the
+    parsed `Record` was not good enough: it is faithful in content but it is not
+    the fragment the file holds. This serialises the source element itself.
+
+    Parsed with the same defused parser the reader uses -- untrusted input gets
+    no second, softer path -- and the namespace prefixes ElementTree reintroduces
+    on output are stripped, since EnigmaXML declares one default namespace and
+    `ns0:` on every tag is noise rather than information.
+    """
+    if not xml:
+        return {}
+    try:
+        root = DefusedET.fromstring(xml)
+    except Exception:  # pragma: no cover - parse_enigma already accepted this
+        return {}
+    out: dict[str, list[str]] = {}
+    for pool in root:
+        name = pool.tag.rsplit("}", 1)[-1]
+        if name not in _MUSX_POOLS:
+            continue
+        out[name] = [_fragment(child) for child in pool]
+    return out
+
+
+def _fragment(element: ET.Element) -> str:
+    """One record's XML, indented two spaces a level.
+
+    The elements, attributes and values are the file's own -- this serialises
+    the source element, it does not rebuild one from the parse. Only the
+    whitespace between them is this report's, and it has to be: EnigmaXML is
+    written both pretty-printed and compact, so left verbatim the same record
+    would render as an indented block from one file and as a single unreadable
+    line from another. Re-indenting makes the two look the same, which is what
+    someone comparing them needs.
+
+    `ET.indent` only touches elements that have children, so a record whose text
+    is its content -- a text pool's markup, say -- keeps that text exactly.
+    """
+    ET.indent(element, space="  ")
+    serialised = ET.tostring(element, encoding="unicode")
+    return _NS_DECL.sub("", _NS_PREFIX.sub("", serialised)).strip()
 
 
 def encode_raw(data: bytes) -> str:
@@ -435,11 +457,10 @@ def _weight(inspection: Inspection) -> int:
             {
                 "file": inspection.file,
                 "stages": [asdict(s) for s in inspection.stages],
-                "score": inspection.score,
+                "stats": inspection.stats,
                 "music": inspection.music,
                 "document": inspection.document,
                 "records": inspection.records,
-                "raw": inspection.raw,
                 "notes": inspection.notes,
             }
         )
@@ -447,18 +468,14 @@ def _weight(inspection: Inspection) -> int:
 
 
 def apply_budget(inspection: Inspection, limit: int = MAX_JSON_BYTES) -> None:
-    """Drop `raw` first, then `records`, naming what went in `notes`.
+    """Drop `records` first, then the music tree, naming what went in `notes`.
 
-    Score and document summaries are never dropped: they are small, and they
-    are the part a reader needs most. The music tree goes last of the three that
-    can be dropped: it is a re-derivable view of a score that is itself still
-    reported, where `raw` and `records` are the primary evidence.
+    The stats and document summaries are never dropped: they are small, and they
+    are the part a reader needs most. Of the two that can go, `records` goes
+    first: it is the primary evidence, but it is also far the largest, and the
+    music tree is the view a reader is most likely to have opened the report
+    for.
     """
-    if _weight(inspection) <= limit:
-        return
-    if inspection.raw:
-        inspection.raw = {}
-        inspection.notes.append(f"raw bytes omitted: the report exceeded its {limit} byte budget")
     if _weight(inspection) <= limit:
         return
     if inspection.records:
@@ -483,7 +500,7 @@ def _finish(ladder: Ladder, document: EnigmaDocument | None, inspection: Inspect
     if score is None:
         ladder.run("export MusicXML", _unreachable)
         return
-    inspection.score = summarise_score(score)
+    inspection.stats = summarise_score(score)
     inspection.music = music_tree(score, _mirrored_cells(document))
     ladder.run(
         "export MusicXML",

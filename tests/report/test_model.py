@@ -64,7 +64,9 @@ def test_the_error_does_not_carry_an_absolute_path(
 
 
 def test_file_identity_is_recorded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """So two people can confirm they are looking at the same file."""
+    """Name and size. The sha256 that used to sit beside them is gone: it was
+    read as saying something about how the file was decoded, when it was only
+    ever a hash of the bytes on disk."""
     path = _file(tmp_path)
     monkeypatch.setattr(model, "detect_version", lambda p: _FakeVersion())
     monkeypatch.setattr(
@@ -73,7 +75,7 @@ def test_file_identity_is_recorded(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     inspection = model.inspect_document(path)
     assert inspection.file["name"] == "score.mus"
     assert inspection.file["size"] == str(len(b"not really a mus file"))
-    assert len(inspection.file["sha256"]) == 64
+    assert "sha256" not in inspection.file
 
 
 def test_a_reader_bug_is_reported_as_a_crash(
@@ -136,7 +138,7 @@ def test_inspecting_a_file_that_is_not_finale_at_all_still_returns(
     path.write_bytes(b"\x00\x01\x02")
     inspection = model.inspect_document(path)
     assert inspection.stages
-    assert inspection.score is None
+    assert inspection.stats is None
 
 
 def test_inspecting_a_directory_still_returns() -> None:
@@ -146,7 +148,7 @@ def test_inspecting_a_directory_still_returns() -> None:
     assert inspection.stages[0].name == "read file"
     assert inspection.stages[0].status == REFUSED
     assert {s.status for s in inspection.stages[1:]} == {SKIPPED}
-    assert inspection.score is None
+    assert inspection.stats is None
 
 
 def test_inspecting_a_nonexistent_path_still_returns(tmp_path: Path) -> None:
@@ -155,7 +157,7 @@ def test_inspecting_a_nonexistent_path_still_returns(tmp_path: Path) -> None:
     assert inspection.stages[0].name == "read file"
     assert inspection.stages[0].status == REFUSED
     assert {s.status for s in inspection.stages[1:]} == {SKIPPED}
-    assert inspection.score is None
+    assert inspection.stats is None
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="chmod permission bits are POSIX-only")
@@ -173,7 +175,7 @@ def test_inspecting_an_unreadable_file_still_returns(tmp_path: Path) -> None:
     assert inspection.stages[0].name == "read file"
     assert inspection.stages[0].status == REFUSED
     assert {s.status for s in inspection.stages[1:]} == {SKIPPED}
-    assert inspection.score is None
+    assert inspection.stats is None
 
 
 class _FakeVersion:
@@ -215,33 +217,37 @@ def test_raw_bytes_are_base64_not_hex() -> None:
     assert base64.b64decode(encode_raw(b"\x00\xff\x10")) == b"\x00\xff\x10"
 
 
-def test_the_budget_drops_raw_before_records() -> None:
-    """Score and document summaries are never truncated; raw goes first."""
+def test_the_budget_drops_records_before_the_music_tree() -> None:
+    """Stats and document summaries are never truncated.
+
+    Of the two payloads that can go, `records` goes first: it is far the
+    largest, and the music tree is the view a reader most likely opened the
+    report to see.
+    """
     from finale_file_parser.report.model import Inspection, apply_budget
 
     inspection = Inspection(file={"name": "x", "size": "0", "sha256": ""})
-    inspection.score = {
+    inspection.stats = {
         "parts": [],
         "totals": {"parts": 1, "measures": 0, "events": 0, "pitches": 0},
     }
-    inspection.raw = {"others": "A" * 2000}
-    inspection.records = {"others": {"measSpec": [{"key": "1"}]}}
+    inspection.records = {"others": {"measSpec": [{"key": "A" * 2000}]}}
+    inspection.music = {"parts": []}
 
     apply_budget(inspection, limit=500)
-    assert inspection.raw == {}
-    assert inspection.score is not None
-    assert any("raw" in note for note in inspection.notes)
+    assert inspection.records == {}
+    assert inspection.stats is not None
+    assert any("records" in note for note in inspection.notes)
 
 
 @pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
-def test_a_real_mus_file_gets_raw_bytes_and_records() -> None:
-    """End-to-end: the wiring populates both lower depths from a real file,
-    and what it produces is actually JSON -- the shape `apply_budget` and a
-    renderer both depend on."""
+def test_a_real_mus_file_gets_records() -> None:
+    """End-to-end: the wiring populates the records depth from a real file, and
+    what it produces is actually JSON -- the shape `apply_budget` and a renderer
+    both depend on."""
     path = next(CORPUS.rglob("*.mus"))
     inspection = model.inspect_document(path)
 
-    assert inspection.raw
     assert inspection.records
     for _pool_name, by_tag in inspection.records.items():
         assert isinstance(by_tag, dict)
@@ -250,22 +256,22 @@ def test_a_real_mus_file_gets_raw_bytes_and_records() -> None:
             for entry in entries:
                 # No `offset`: no reader records where a record began, so the
                 # field the design asked for could only ever have been null.
-                assert entry.keys() == {"key", "fields", "length"}
+                # A `.mus` record carries `fields` -- the decoding of its bytes;
+                # a `.musx` record carries `xml` instead, which is both its
+                # source and its decoding.
+                assert entry.keys() in ({"key", "fields", "length"}, {"key", "xml", "length"})
                 assert isinstance(entry["key"], str)
 
     # Round-trips through JSON without error: no bytes, no dataclasses left over.
-    json.dumps(inspection.raw)
     json.dumps(inspection.records)
 
 
 @pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
-def test_a_real_musx_file_gets_records_but_no_raw() -> None:
-    """A `.musx` has no undecoded byte pools to embed -- only EnigmaXML's own
-    records, which are already the rawest view there is."""
+def test_a_real_musx_file_gets_records() -> None:
+    """EnigmaXML's own records are already the rawest view a `.musx` has."""
     path = next(CORPUS.rglob("*.musx"))
     inspection = model.inspect_document(path)
 
-    assert inspection.raw == {}
     assert inspection.records
     assert set(inspection.records) == {
         "header",
@@ -354,3 +360,33 @@ def test_an_unmirrored_document_reports_no_cells() -> None:
 
     plain = _MIRROR_XML.replace(b'<gfhold cmper1="2" cmper2="1"><frame1>20</frame1></gfhold>', b"")
     assert _mirrored_cells(parse_enigma(plain)) == {}
+
+
+def test_a_record_fragment_is_indented_however_the_file_wrote_it() -> None:
+    """EnigmaXML is written both pretty-printed and compact. Left verbatim the
+    same record would render as an indented block from one file and as a single
+    unreadable line from another, so the whitespace between elements is this
+    report's while the elements, attributes and values stay the file's.
+    """
+    from finale_file_parser.report.model import _record_source
+
+    compact = (
+        b'<finale xmlns="http://www.makemusic.com/2012/finale">'
+        b'<others><frameSpec cmper="11" inci="0">'
+        b"<startEntry>1</startEntry><endEntry>4</endEntry>"
+        b"</frameSpec></others></finale>"
+    )
+    spaced = (
+        b'<finale xmlns="http://www.makemusic.com/2012/finale">\n'
+        b'  <others>\n        <frameSpec cmper="11" inci="0">\n'
+        b"          <startEntry>1</startEntry>\n          <endEntry>4</endEntry>\n"
+        b"        </frameSpec>\n  </others>\n</finale>"
+    )
+    expected = (
+        '<frameSpec cmper="11" inci="0">\n'
+        "  <startEntry>1</startEntry>\n"
+        "  <endEntry>4</endEntry>\n"
+        "</frameSpec>"
+    )
+    assert _record_source(compact)["others"][0] == expected
+    assert _record_source(spaced)["others"][0] == expected, "the file's own depth is not carried"
