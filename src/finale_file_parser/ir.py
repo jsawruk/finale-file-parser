@@ -216,6 +216,17 @@ class Expression:
     attaches it to the staff rather than to one layer -- which is how 1,708 of
     the corpus's 6,672 assigned dynamics are placed."""
 
+    score_wide: bool = False
+    """The file attached this to a **staff list** rather than to one staff.
+
+    596 corpus markings are placed this way. Kept because the reader found it and
+    the placement is a convention rather than a reading: `enigma.to_ir` puts such
+    a marking on the topmost part, which is where a score expression is engraved,
+    and an exporter that can say "this applies to the whole score" should prefer
+    that. What the staff list actually selects is not decoded -- see
+    `to_ir._place_score_wide`.
+    """
+
 
 @dataclass(frozen=True)
 class Measure:

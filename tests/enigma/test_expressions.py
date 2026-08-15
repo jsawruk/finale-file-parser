@@ -19,7 +19,7 @@ from finale_file_parser.enigma.document import (
     Record,
     TextsPool,
 )
-from finale_file_parser.enigma.expressions import expressions_by_measure
+from finale_file_parser.enigma.expressions import SCORE_WIDE_STAFF, expressions_by_measure
 
 EMPTY: tuple[Record, ...] = ()
 
@@ -271,3 +271,41 @@ def test_a_definition_whose_text_is_only_markup_is_dropped() -> None:
         assignment(8, 51),
     )
     assert expressions_by_measure(doc) == {}
+
+
+def test_a_score_wide_assignment_keeps_its_sentinel_and_is_flagged() -> None:
+    """`staffAssign = -1` means a staff list, not a staff. The reader keeps the
+    sentinel as the key so `to_ir` can decide where a score-wide marking goes,
+    and flags the expression so the fact is not lost in the move."""
+    doc = document(*library(), assignment(4, 4, staff=-1, layer=None))
+    found = expressions_by_measure(doc)
+    assert set(found) == {(SCORE_WIDE_STAFF, 4)}
+    (marking,) = found[(SCORE_WIDE_STAFF, 4)]
+    assert marking.score_wide is True
+    assert marking.marking == "f"
+
+
+def test_a_score_wide_copy_of_a_marking_already_on_a_staff_is_dropped() -> None:
+    """A score expression is drawn once. Where the same measure also assigns the
+    same expression to a real staff, the score-wide copy would print it twice --
+    102 of the corpus's 746 list assignments are this shape.
+    """
+    doc = document(
+        *library(),
+        assignment(7, 4, staff=2),
+        assignment(7, 4, staff=-1, inci=1, layer=None),
+    )
+    found = expressions_by_measure(doc)
+    assert set(found) == {(2, 7)}, "the redundant score-wide copy should be gone"
+
+
+def test_a_score_wide_marking_survives_when_nothing_else_places_it() -> None:
+    """The 644 that are not redundant must still come through: dropping all of
+    them is what cost 596 markings before this existed."""
+    doc = document(
+        *library(),
+        assignment(7, 7, staff=2),
+        assignment(7, 4, staff=-1, inci=1, layer=None),
+    )
+    found = expressions_by_measure(doc)
+    assert set(found) == {(2, 7), (SCORE_WIDE_STAFF, 7)}

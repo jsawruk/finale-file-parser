@@ -23,7 +23,7 @@ from finale_file_parser.enigma.clef import (
     default_clefs,
 )
 from finale_file_parser.enigma.document import EnigmaDocument, Record
-from finale_file_parser.enigma.expressions import expressions_by_measure
+from finale_file_parser.enigma.expressions import SCORE_WIDE_STAFF, expressions_by_measure
 from finale_file_parser.enigma.fingerings import fingerings_by_entry
 from finale_file_parser.enigma.groups import staff_groups, staff_order
 from finale_file_parser.enigma.jumps import jumps_by_measure
@@ -161,6 +161,7 @@ def build_score(document: EnigmaDocument) -> Score:
     keys = effective_keys(document)
     numbers = _measure_numbers(keys, cells)
     clef_at = _carried_clefs(document, staves, numbers, clef_at)
+    expressions = _place_score_wide(expressions, staves)
     parts = [
         Part(
             id=f"P{staff}",
@@ -418,6 +419,44 @@ def _event(
         articulations=articulations,
         fingerings=fingerings,
     )
+
+
+def _place_score_wide(
+    expressions: dict[tuple[int, int], tuple[Expression, ...]], staves: list[int]
+) -> dict[tuple[int, int], tuple[Expression, ...]]:
+    """Move a score expression onto the topmost staff.
+
+    `staffAssign = -1` means the marking belongs to a **staff list** rather than
+    to a staff -- 596 markings across 267 corpus documents, which were dropped
+    entirely until this existed, because no `Part` is built for staff -1.
+
+    Where it goes is a **convention, not a decode.** What the list selects is
+    still unknown: the record is a six-slot `uint16` array (`others` 306 for the
+    score, 304 for the parts), zero fills an unused slot, and the first slot is
+    `-1` in 1,486 of 1,584 corpus records -- so `-1` is a value and not an
+    end-of-list marker, but which staves it stands for is not established. The
+    key is `staffList` on the assignment and **not** `categoryID`: those differ
+    in all 746 cases, and `categoryID` reaches values (25, 26, 29) for which no
+    list record exists at all.
+
+    So rather than guess the list, this places the marking where a score
+    expression is *engraved* -- once, above the top staff. MusicXML has no
+    score-wide direction, so it has to be attached to some part, and attaching it
+    to every part would turn 596 markings into 2,481 and print a dynamic on
+    staves the list may exclude. One part is recoverable information; eighteen
+    copies would be an invention.
+
+    The redundant ones are already gone: `expressions_by_measure` drops a
+    score-wide copy of an expression the same measure assigns to a real staff.
+    """
+    score_wide = {key: items for key, items in expressions.items() if key[0] == SCORE_WIDE_STAFF}
+    if not score_wide or not staves:
+        return expressions
+    top = staves[0]
+    out = {key: items for key, items in expressions.items() if key[0] != SCORE_WIDE_STAFF}
+    for (_staff, measure), items in score_wide.items():
+        out[(top, measure)] = out.get((top, measure), ()) + items
+    return out
 
 
 def _measure(

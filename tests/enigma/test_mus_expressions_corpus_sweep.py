@@ -26,23 +26,37 @@ CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
-PLACED = 3022
+PLACED = 2974
 """Markings read from the `.mus` corpus.
 
 Was 3,136 before shape assignments were excluded: 114 of those were a
 `shapeExprID` read as if it named an expression. See
 `mus_others.TAG_MEAS_EXPR_ASSIGN`.
+
+Then 3,022, before the reader began dropping a score-wide copy of a marking the
+same measure already places on a real staff. The 48 fewer are that, in this
+container.
 """
 
 DOCUMENTS = 186
 """`.mus` documents carrying at least one. All are 2011-era; a 2001-2005 document
 carries none, because `^DY` is not decoded -- see `mus_document.UNTRANSLATED`."""
 
-AGREE = 1464
-"""`(staff, measure, marking)` triples both containers place."""
+AGREE = 1441
+"""`(staff, measure, marking)` triples both containers place.
+
+Was 1,464. The 23 fewer are not a loss of agreement: a score-wide marking is
+keyed on staff -1 here, so a redundant copy formed its own `(-1, measure,
+marking)` triple that both containers agreed on. Dropping the redundancy removed
+those from both sides at once, and `DISAGREE` did not move.
+"""
 
 DISAGREE = 12
-"""Triples one places and the other does not, out of 1,476.
+"""Triples one places and the other does not, out of 1,453.
+
+Unchanged when the score-wide redundancy was dropped, which is the check that
+matters: that change removed 23 agreeing triples and no disagreeing ones, so it
+cost nothing in cross-container fidelity.
 
 Was 52 before the shape flag. The remainder are markings the `.mus` path misses,
 not spurious ones it invents -- `test_the_disagreement_is_not_the_mus_path
