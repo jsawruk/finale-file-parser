@@ -355,6 +355,23 @@ def test_the_script_uses_no_regex_literal_for_the_sentinel() -> None:
     assert "key.slice(1, -1)" in script
 
 
+def test_an_unprintable_tag_is_shown_as_its_code_point() -> None:
+    """A DCL tag is two characters decoded from a u16 as latin-1, and the era
+    uses bytes that are not letters. `0x80` arrives as a C1 control, which a
+    browser draws as a blank or a box -- unreadable, untypeable, unsearchable.
+
+    Printable tags must pass through untouched, which is every numeric 2011 tag
+    and every ordinary two-letter one.
+    """
+    html = render_html(_inspection())
+    script = html[html.index("//<![CDATA[") :]
+    assert "function displayTag(tag)" in script
+    assert "codes.every(printable)" in script, "a printable tag is returned as it is"
+    assert "'U+' + codes[i].toString(16)" in script
+    # Shown, not stored: the raw tag stays the key every lookup uses.
+    assert "displayTag(tag)" in script
+
+
 def test_a_named_tag_leads_with_its_name() -> None:
     html = render_html(_inspection())
     script = html[html.index("//<![CDATA[") :]
