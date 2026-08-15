@@ -58,18 +58,18 @@ text is still carried, so nothing is lost.
 
 ## Score expressions, and what still does not reach the IR
 
-This module returns 11,462 markings and **11,145 reach a `Measure`**.
+This module returns 11,732 markings and **11,367 reach a `Measure`**.
 
 **596 of them name no staff at all.** `staffAssign = -1` means the marking belongs
 to a **staff list**, and the file says so: all 746 corpus assignments carrying it
 also carry `staffGroup` *and* `staffList`, where a positive-staff assignment
 almost never does (138 of 11,687). 81 are a second copy of a marking the same
 measure already places on a real staff, and this module drops those as redundant;
-the remaining **515 are placed on the topmost part** by
+the remaining **563 are placed on the topmost part** by
 `to_ir._place_score_wide`, which explains why that is a convention rather than a
 reading. `Expression.score_wide` records the fact so it is not lost in the move.
 
-**317 remain dropped**, all one cause: they are assigned to a staff that holds no
+**365 remain dropped**, all one cause: they are assigned to a staff that holds no
 notes anywhere in the document, and one `Part` is built per staff *with music*, so
 there is nowhere to put them. Whether such a staff should become an empty part is
 a question about part construction, not about expressions.
@@ -196,34 +196,37 @@ def expressions_by_measure(
         if measure is None or staff is None or expr_id is None:
             continue
         definition = definitions.get(expr_id)
-        found = texts.get(expr_id)
-        if definition is None or found is None:
+        if definition is None:
             continue
         if staff == SCORE_WIDE_STAFF and (measure, expr_id) in on_a_staff:
             # The same expression is already placed on a real staff in this
             # measure, so the score-wide copy would print it twice. 102 of the
             # corpus's 746 list assignments are this shape.
             continue
-        # A rehearsal mark prints a label the file does not store, so it is the
-        # one expression kept despite having no literal text of its own.
-        label = labels.get(measure) if found.is_rehearsal else None
-        text = label if label is not None else found.printed
-        # An expression with nothing to print is not a marking: 306 corpus
-        # assignments resolve to a definition whose text record is absent, and a
-        # rehearsal mark whose style is unreadable has no label to print.
-        if not text:
-            continue
+        found = texts.get(expr_id)
+        printed = found.printed if found is not None else ""
+        # A rehearsal mark prints a label the file does not store; everything
+        # else prints what its text record says.
+        label = labels.get(measure) if found is not None and found.is_rehearsal else None
+        text = label if label is not None else printed
         category = categories.get(_int(definition.fields.get("categoryID")), "")
+        marking = _marking(
+            printed,
+            category=category,
+            in_music_font=found.in_music_font if found is not None else False,
+            description=str(definition.fields.get("descStr") or ""),
+        )
+        # Keep it if there is something to print *or* something to call it. An
+        # expression with neither is not a marking -- 461 corpus assignments
+        # resolve to a definition with no text record and no naming description,
+        # and a rehearsal mark whose style is unreadable has no label to print.
+        if not text and marking is None:
+            continue
         out.setdefault((staff, measure), []).append(
             Expression(
                 text=text,
                 category=category,
-                marking=_marking(
-                    found.printed,
-                    category=category,
-                    in_music_font=found.in_music_font,
-                    description=str(definition.fields.get("descStr") or ""),
-                ),
+                marking=marking,
                 velocity=_int(definition.fields.get("value")),
                 score_wide=staff == SCORE_WIDE_STAFF,
                 is_rehearsal=label is not None,

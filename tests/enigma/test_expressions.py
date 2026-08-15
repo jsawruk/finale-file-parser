@@ -382,3 +382,45 @@ def test_the_letter_sequence_continues_past_z() -> None:
     from finale_file_parser.enigma.expressions import _letter
 
     assert [_letter(i) for i in (0, 1, 25, 26, 27)] == ["A", "B", "Z", "AA", "AB"]
+
+
+def test_a_dynamic_with_no_text_is_kept_when_its_description_names_it() -> None:
+    """180 corpus assignments are this shape: the definition says
+    `'mezzo piano (velocity = 62)'` and the expression text record it points at is
+    simply absent. They were dropped for having nothing to print -- but MusicXML
+    renders `<dynamics><mp/></dynamics>` from the marking alone, so the character
+    was never needed.
+    """
+    doc = document(
+        *library(),
+        definition(6, value=62, desc="mezzo piano (velocity = 62)"),
+        assignment(5, 6),
+    )
+    (found,) = expressions_by_measure(doc)[(1, 5)]
+    assert found.text == "", "there is no character in the file, and none is invented"
+    assert found.marking == "mp"
+    assert found.velocity == 62
+
+
+def test_an_expression_with_neither_text_nor_a_name_is_still_dropped() -> None:
+    """461 corpus assignments resolve to a definition with no text record *and*
+    no naming description. Nothing to print and nothing to call it is not a
+    marking, and keeping it would emit an empty direction."""
+    doc = document(
+        *library(), definition(52, value=88, desc="Below Staff (Vel. 88)"), assignment(6, 52)
+    )
+    assert expressions_by_measure(doc) == {}
+
+
+def test_a_textless_dynamic_is_not_emitted_as_words() -> None:
+    """The guard that matters for output: empty text must reach the `<dynamics>`
+    branch, never `<words></words>`."""
+    from finale_file_parser.export.musicxml import prints_as_words
+
+    doc = document(
+        *library(),
+        definition(6, value=62, desc="mezzo piano (velocity = 62)"),
+        assignment(5, 6),
+    )
+    (found,) = expressions_by_measure(doc)[(1, 5)]
+    assert prints_as_words(found) is False

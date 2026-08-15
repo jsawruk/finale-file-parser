@@ -32,24 +32,29 @@ CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
-READ = 11462
+READ = 11732
 """Expressions `expressions_by_measure` returns across the corpus.
 
-Was 11,543. The 81 fewer are score-wide copies of a marking the same measure
-already assigns to a real staff, which the reader now drops as redundant.
+Was 11,462, then 11,642 when dynamics the file names in `descStr` but has no
+expression text for stopped being dropped. The 90 more are rehearsal marks, whose
+label is computed from `rehearsalMarkStyle` rather than read.
 """
 
-PLACED = 11145
+PLACED = 11367
 """Expressions that reach a `Measure` in the IR.
 
-Was 10,630. The 515 recovered are score expressions, now placed on the topmost
-part instead of being dropped for naming staff -1.
+Was 11,145, then 11,277 with the textless dynamics (132 of the 180 recovered; the
+other 48 land on a staff with no notes). The 90 more are rehearsal marks, and
+every one of those reaches a `Measure`.
 """
 
-SCORE_WIDE = 515
+SCORE_WIDE = 563
 """Markings the file attaches to a staff list rather than a staff, as delivered.
 
-Not 596. That was the count before redundant copies were dropped: 746 corpus
+Not 596, and no longer 515: 48 rehearsal marks are score-wide too, and they are
+placed by the same route. The 515 figure came from dynamics alone.
+
+596 was the count before redundant copies were dropped: 746 corpus
 assignments carry `staffAssign = -1`, 596 of them survived the reader's other
 checks, and 81 of those were a second copy of a marking the same measure already
 places on a real staff. 515 remain, and every one reaches the top part.
@@ -58,7 +63,7 @@ Pinned as a *placed* count rather than a lost one -- if it falls, score
 expressions have stopped arriving again.
 """
 
-DROPPED_ON_A_SILENT_STAFF = 317
+DROPPED_ON_A_SILENT_STAFF = 365
 """Assigned to a staff that holds no notes anywhere in the document.
 
 `build_score` builds one `Part` per staff that has music, so a staff carrying
@@ -178,6 +183,13 @@ def test_every_score_wide_marking_lands_on_the_top_part(reading: _Reading) -> No
 
 
 def test_most_expressions_do_reach_the_ir(reading: _Reading) -> None:
-    """The gap is a known edge, not the common case: 97% arrive."""
-    assert reading.placed / reading.read > 0.97
+    """The gap is a known edge, not the common case: 96.9% arrive.
+
+    Was 97.2%. It slipped because recovering the textless dynamics added 180 to
+    the numerator's input and only 132 to the numerator -- 48 of them are
+    assigned to a staff with no notes, so they join the one remaining cause. A
+    ratio that falls while the absolute count rises is not a regression, which is
+    why the exact counts above are the real guard and this is only a floor.
+    """
+    assert reading.placed / reading.read > 0.96
     assert reading.affected < reading.documents, "some document must place all of its markings"
