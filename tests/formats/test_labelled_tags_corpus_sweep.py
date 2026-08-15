@@ -60,3 +60,36 @@ def test_the_document_counts_are_not_overstated() -> None:
         assert entry.documents <= len(found[tag]), (
             f"^{tag} claims {entry.documents} documents; {len(found[tag])} carry it"
         )
+
+
+@pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
+def test_the_name_offset_lands_on_readable_text() -> None:
+    """A wrong offset would not fail loudly -- it would show a name cut in half,
+    or a fragment of whatever precedes it. So the check is that what sits there
+    reads as text: printable, non-empty, and NUL-terminated within the payload.
+    """
+    from finale_file_parser.formats.tags import TAG_NAMES
+
+    offsets = {e.tag: e.text_at for e in TAG_NAMES if e.text_at is not None}
+    seen: dict[str, int] = dict.fromkeys(offsets, 0)
+    ragged: list[str] = []
+    for path in sorted(CORPUS.rglob("*.mus")):
+        try:
+            rows = read_mus_rows(path)
+        except FinaleFileError:
+            continue
+        for pool in (rows.others, rows.details):
+            for key, record in pool.items():
+                at = offsets.get(key[0])
+                if at is None or len(record.payload) <= at:
+                    continue
+                body = record.payload[at:]
+                end = body.find(b"\x00")
+                name = body if end < 0 else body[:end]
+                if not name or not all(32 <= b < 127 for b in name):
+                    ragged.append(f"{key[0]} at +{at}: {name[:16]!r}")
+                else:
+                    seen[key[0]] += 1
+
+    assert not ragged, f"the stated offset does not land on text: {ragged[:5]}"
+    assert all(seen.values()), f"no corpus record exercised {[t for t, n in seen.items() if not n]}"

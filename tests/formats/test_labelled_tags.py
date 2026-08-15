@@ -27,6 +27,15 @@ EVIDENCE = {
 }
 
 
+def test_a_name_offset_is_stated_only_where_it_is_constant() -> None:
+    """`RT` has none deliberately: its text sits at +0 in 233 corpus records,
+    at +4 or +5 in 115, and is absent in 44. An offset that holds 57% of the
+    time is not an offset, and pointing the decoder at one would show a name
+    cut in half or a fragment of the record before it."""
+    at = {e.tag: e.text_at for e in TAG_NAMES if e.tier == LABELLED}
+    assert at == {"DL": 0, "DN": 0, "FN": 12, "fI": 12, "fg": 12, "ft": 84, "RT": None}
+
+
 def test_every_labelled_tag_states_its_evidence() -> None:
     labelled = [e for e in TAG_NAMES if e.tier == LABELLED]
     assert {e.tag for e in labelled} == set(EVIDENCE)

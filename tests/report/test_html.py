@@ -332,13 +332,31 @@ def test_a_tag_with_no_layout_says_so_rather_than_showing_nothing() -> None:
     assert "No field layout is known for this record" in script
 
 
-def test_a_description_names_the_tag_it_describes() -> None:
-    """ "names drum sets" says nothing about WHICH record names them. The heading
-    carries the tag too, but the description reads as a floating sentence
-    without it."""
+def test_a_record_that_carries_a_name_decodes_it() -> None:
+    """The `labelled` tags were identified by the words in their payloads, so
+    those words are the one field worth showing. The catalogue says where the
+    name starts; how far it runs is a property of the bytes, so the field is
+    built in the renderer rather than carried in the payload."""
     html = render_html(_inspection())
     script = html[html.index("//<![CDATA[") :]
-    assert "displayTag(tag) + ' tag — ' + named.description" in script
+    assert "typeof named.textAt === 'number'" in script
+    assert "type: 'char[]'" in script
+    assert "field.type === 'char[]'" in script, "and char[] decodes as text, not as hex"
+
+
+def test_a_description_reads_as_a_definition_not_a_sentence() -> None:
+    """The tag on its own line, its meaning indented beneath.
+
+    Run together as "fg tag - 'Simple Major Triad', ..." the two halves wrap
+    into each other and the tag stops being findable, which is the one thing on
+    that line a reader scans for.
+    """
+    html = render_html(_inspection())
+    script = html[html.index("//<![CDATA[") :]
+    assert "createElement('dl')" in script
+    assert "term.textContent = displayTag(tag)" in script
+    assert "meaning.textContent = named.description" in script
+    assert ".tagdef dt { font-weight: bold; }" in html, "the term is distinguished"
 
 
 def test_a_dcl_row_carries_only_its_bytes() -> None:

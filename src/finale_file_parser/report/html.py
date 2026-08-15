@@ -87,6 +87,9 @@ details.node > summary::marker { color: #999; }
 .score { overflow-x: auto; margin-bottom: 1rem; }
 .score .page { margin-bottom: 0.5rem; }
 .score svg { max-width: 100%; height: auto; }
+.tagdef { margin: 0.4rem 0 0.8rem; }
+.tagdef dt { font-weight: bold; }
+.tagdef dd { margin: 0.1rem 0 0 1.5rem; color: #444; max-width: 44rem; }
 .swatch { display: inline-block; width: 0.9rem; height: 0.9rem; border: 1px solid #ccc; }
 """
 
@@ -356,6 +359,17 @@ function decode(bin, offset, field, order) {
   if (offset + field.size > bin.length) { return '—'; }
   const bytes = [];
   for (let i = 0; i < field.size; i++) { bytes.push(bin.charCodeAt(offset + i)); }
+  if (field.type === 'char[]') {
+    // A name, NUL-terminated. Latin-1 because that is what the era wrote and
+    // what the tag decoder already assumes; a byte over 127 is a character
+    // here, not a decoding failure.
+    let text = '';
+    for (const b of bytes) {
+      if (b === 0) { break; }
+      text += String.fromCharCode(b);
+    }
+    return JSON.stringify(text);
+  }
   if (!/^u?int(8|16|32)$/.test(field.type)) {
     // char[4], uint8[]: no single number to state, so show the bytes as they lie.
     return bytes.map(b => b.toString(16).padStart(2, '0')).join(' ');
@@ -412,14 +426,19 @@ function showRecord(right, pool, tag, rec) {
     ? named.name + '  —  ' + pool + ' / ' + displayTag(tag) + ' ' + rec.key
     : pool + ' / ' + displayTag(tag) + ' ' + rec.key;
   right.appendChild(heading);
-  // The description, led by the tag it describes. The heading above carries the
-  // tag too, but the description reads as a floating sentence without it --
-  // "names drum sets" says nothing about WHICH record names them.
+  // A definition, not a sentence: the tag on its own line and its meaning
+  // indented beneath. Run together as "fg tag — 'Simple Major Triad', ..." the
+  // two halves wrap into each other and the tag stops being findable.
   if (named && named.description) {
-    const what = document.createElement('p');
-    what.className = 'txt';
-    what.textContent = displayTag(tag) + ' tag — ' + named.description;
-    right.appendChild(what);
+    const list = document.createElement('dl');
+    list.className = 'tagdef';
+    const term = document.createElement('dt');
+    term.textContent = displayTag(tag);
+    const meaning = document.createElement('dd');
+    meaning.textContent = named.description;
+    list.appendChild(term);
+    list.appendChild(meaning);
+    right.appendChild(list);
   }
 
   let raw = '';
@@ -432,7 +451,15 @@ function showRecord(right, pool, tag, rec) {
     // is taken here, from the field the bytes came out of.
     if (name === 'payload') { payloadLength = raw.length; }
   }
-  if (raw === '') {
+  if (rec.text !== undefined) {
+    // A .mus text section: ETF tagged text, not bytes. The markup is kept --
+    // ^font(Font0,8191) is the half of an expression that says what its
+    // character means, and stripping it would leave a glyph with no context.
+    const box = document.createElement('div');
+    box.className = 'hex';
+    box.textContent = rec.text;
+    right.appendChild(box);
+  } else if (raw === '') {
     // A .musx record has no undecoded bytes -- EnigmaXML arrives as XML -- so
     // the source form to show is the XML itself. Rebuilt here from the parse
     // rather than carried in the payload, which would have doubled it. Nothing
@@ -447,7 +474,37 @@ function showRecord(right, pool, tag, rec) {
     // this project has decoded nine record payloads, and a document carries
     // upwards of 180 tags. Untinted hex says "not decoded"; a layout guessed
     // at would say something false.
-    const layout = ((data.layouts || {})[pool] || {})[tag];
+    let layout = ((data.layouts || {})[pool] || {})[tag];
+    // No full layout, but the catalogue knows where this record's name begins.
+    // The fields are built here rather than carried in the payload because
+    // their extent is a property of the bytes: a name runs to the first NUL,
+    // and how far that is differs per record and per slot.
+    if (!layout && named && typeof named.textAt === 'number') {
+      // A strided record holds several names, one per slot -- `fg` carries two
+      // in a 120-byte payload. One field per slot rather than one field
+      // repeated, because each name is its own length, and a repeated field
+      // would tint the second slot to the first name's width.
+      const stride = named.textStride || payloadLength;
+      const fields = [];
+      for (let base = 0; base + named.textAt < payloadLength; base += stride) {
+        const at = base + named.textAt;
+        let end = raw.indexOf(String.fromCharCode(0), at);
+        if (end < 0 || end > base + stride) { end = Math.min(base + stride, payloadLength); }
+        if (end > at) {
+          fields.push({
+            offset: at,
+            size: end - at,
+            name: 'name',
+            type: 'char[]',
+            note: 'runs to the first NUL; the bytes around it are not decoded',
+          });
+        }
+        if (!named.textStride) { break; }
+      }
+      if (fields.length) {
+        layout = {record: named.name, stride: 0, fields: fields};
+      }
+    }
     right.appendChild(hexBlock(raw, tintMap(layout, payloadLength)));
     if (!layout) {
       // Say it rather than showing nothing. Nine record payloads are decoded

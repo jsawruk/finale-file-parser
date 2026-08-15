@@ -432,15 +432,24 @@ def test_a_real_mus_file_gets_records() -> None:
             for entry in entries:
                 # No `offset`: no reader records where a record began, so the
                 # field the design asked for could only ever have been null.
-                # A `.mus` record carries `fields` -- the decoding of its bytes;
-                # a `.musx` record carries `xml` instead, which is both its
-                # source and its decoding.
+                # A `.mus` binary record carries `fields` -- the decoding of
+                # its bytes; a `.musx` record carries `xml` instead, which is
+                # both its source and its decoding; a `.mus` text section
+                # carries `text`.
                 # `options` is optional and marks the 0xFFFE sentinel, so it is
                 # dropped before the shape is checked. The shape stays pinned
                 # exactly: this test exists to catch a field added to every
                 # record without anyone deciding to add it.
                 shape = entry.keys() - {"options"}
-                assert shape in ({"key", "fields", "length"}, {"key", "xml", "length"})
+                assert shape in (
+                    {"key", "fields", "length"},
+                    {"key", "xml", "length"},
+                    # A `.mus` text section: ETF tagged text, neither bytes to
+                    # decode nor XML. Listed rather than allowed by a wildcard,
+                    # so this still catches a field added to every record
+                    # without anyone deciding to add it.
+                    {"key", "text", "length"},
+                )
                 assert isinstance(entry["key"], str)
 
     # Round-trips through JSON without error: no bytes, no dataclasses left over.
@@ -573,3 +582,43 @@ def test_a_record_fragment_is_indented_however_the_file_wrote_it() -> None:
     )
     assert _record_source(compact)["others"][0] == expected
     assert _record_source(spaced)["others"][0] == expected, "the file's own depth is not carried"
+
+
+@pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
+def test_the_mus_text_stream_reaches_the_records_tree() -> None:
+    """The one major structure of a `.mus` the inspector could not see.
+
+    It holds the staff names, the expression text and the font each is set in,
+    and none of it appeared anywhere in the report: the records tree showed the
+    two binary pools, and `read_mus_document` translates only the three lyric
+    markers, so a document with several hundred sections reported one.
+    """
+    for path in sorted(CORPUS.rglob("*.mus"))[:12]:
+        try:
+            records = model._mus_records(path)
+        except FinaleFileError:
+            continue
+        texts = records.get("texts")
+        if not texts:
+            continue
+        assert isinstance(texts, dict)
+        # Every marker, not the three that become lyrics.
+        assert set(texts) - {"verse", "chorus", "section"}, "only the translated markers came back"
+        for sections in texts.values():
+            for entry in sections:
+                assert set(entry) == {"key", "text", "length"}
+                assert str(entry["text"]).startswith("^")
+                assert str(entry["text"]).endswith("^end")
+        return
+    pytest.skip("no corpus .mus carried a text stream")
+
+
+def test_a_text_section_keeps_its_markup() -> None:
+    """`^font(Font0,8191)` is the half of an expression that says what its
+    character means. A glyph shown without it is a glyph with no context."""
+    from finale_file_parser.report.html import render_html
+
+    page = render_html(model.Inspection(file={"name": "x", "size": "1"}))
+    script = page[page.index("//<![CDATA[") :]
+    assert "rec.text !== undefined" in script
+    assert "box.textContent = rec.text" in script
