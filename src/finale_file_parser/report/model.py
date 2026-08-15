@@ -444,6 +444,11 @@ def _tag_names(records: dict[str, object]) -> dict[str, object]:
                     # report as data, where a `matched` name must not be taken
                     # for a decoded one.
                     "tier": entry.tier,
+                    # Where the record's name starts, for the tags that carry
+                    # one. The renderer reads the NUL-terminated string off the
+                    # bytes it already has rather than being handed a copy.
+                    **({"textAt": entry.text_at} if entry.text_at is not None else {}),
+                    **({"textStride": entry.text_stride} if entry.text_stride is not None else {}),
                 }
         if found:
             named[pool] = found

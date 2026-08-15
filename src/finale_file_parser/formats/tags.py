@@ -85,6 +85,37 @@ class TagName:
     etf: str = ""
     """`DECODED` only: the two-character spelling of the same record, if any."""
 
+    text_stride: int | None = None
+    """Bytes per slot, where the payload holds several named things.
+
+    Set for `fg` alone, and on two independent signals: its payload lengths are
+    60, 120, 180 and 240 -- every one a multiple of 60 -- and the gap between
+    consecutive text runs is exactly 60 in 1,130 corpus records. Each slot holds
+    a 12-byte header, the name, then `0xCC` filler to the boundary.
+
+    **Not inferred from payload length alone.** Every `others` payload is a
+    multiple of 12 and every `details` payload a multiple of 10, because that is
+    the data width of the row each is assembled from -- so a common divisor of
+    12 or 10 is an artifact of the container and says nothing about slots. That
+    is why `DL`, `DN`, `FN` and `fI` have no stride here despite dividing
+    evenly: nothing but the row width says they should.
+    """
+
+    text_at: int | None = None
+    """Where this record's name begins, for the records that carry one.
+
+    A `LABELLED` tag was identified by the words in its payload, and those words
+    sit at a constant offset per tag -- `FN` at +12 in 458 of 458 corpus
+    records, `fI` at +12 in 1,008 of 1,008, `ft` at +84 in 179 of 179. The name
+    runs to the first NUL.
+
+    This is deliberately not a `Layout`. It says where the name starts and
+    nothing else: `fI`, `fg` and `ft` carry further data after it whose meaning
+    is unknown, and a layout claiming a field's extent would be claiming more
+    than was measured. `RT` has no entry because its offset is not constant --
+    +0 in 233 records, +4 or +5 in 115, absent in 44.
+    """
+
 
 # Decoded and payload-confirmed. Both spellings of each are registered below,
 # so a document of either era finds the same name.
@@ -356,6 +387,7 @@ _LABELLED: tuple[TagName, ...] = (
         "names drum sets: 'General MIDI Entry & Playback', 'Cymbals', 'Agogo Bells'",
         LABELLED,
         documents=38,
+        text_at=0,
     ),
     TagName(
         "FN",
@@ -364,6 +396,7 @@ _LABELLED: tuple[TagName, ...] = (
         "'Maestro', 'Times', 'Chicago', 'Helvetica', 'Jazz'",
         LABELLED,
         documents=38,
+        text_at=12,
     ),
     TagName(
         "RT",
@@ -381,6 +414,7 @@ _LABELLED: tuple[TagName, ...] = (
         "'Standard Guitar', 'Guitar - 7 String', 'Guitar - DADGAD'",
         LABELLED,
         documents=38,
+        text_at=12,
     ),
     TagName(
         "fg",
@@ -389,6 +423,8 @@ _LABELLED: tuple[TagName, ...] = (
         "'Simple Major Triad', 'Minor Triad Seville', 'dim triad', '7 Seville'",
         LABELLED,
         documents=34,
+        text_at=12,
+        text_stride=60,
     ),
     TagName(
         "ft",
@@ -397,6 +433,7 @@ _LABELLED: tuple[TagName, ...] = (
         "'Seville', 'Seville 5 Frets', 'Seville With Shapes', 'Jazz'",
         LABELLED,
         documents=38,
+        text_at=84,
     ),
     TagName(
         "DN",
@@ -405,6 +442,7 @@ _LABELLED: tuple[TagName, ...] = (
         "'Acoustic Bass Drum', 'Side Stick', 'Snare (Acoustic)', 'Hand Clap'",
         LABELLED,
         documents=38,
+        text_at=0,
     ),
 )
 
