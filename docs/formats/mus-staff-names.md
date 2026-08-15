@@ -129,6 +129,60 @@ all select block 22. Any attempt to fit a formula to nine points would be the pa
 more paired documents cover more ids, or Finale's own default table is obtained from outside this
 corpus. It does not close by staring harder at these files.
 
+### 3e. §3d re-tested and upheld — and how it nearly got overturned wrongly
+
+**2026-08-15.** §3d says the id-to-block map is document-independent, resting on
+25 anchors. That looked thin, so it was re-tested against a larger set — and the
+larger set was wrong.
+
+The tempting move is to treat every `.mus` name id paired with the block the
+`.musx` reaches through `staffSpec.fullName -> textBlock -> textID` as evidence.
+There are **144** of those, not 25, and read that way ids 93 and 94 each select
+half a dozen different blocks — which would overturn §3d outright. It does not,
+because 119 of the 144 are not anchors at all:
+
+| | |
+| --- | --- |
+| **25** | valid: the block exists in the `.mus` **and holds that staff's name** |
+| **116** | the block is absent from the `.mus` stream entirely |
+| **3** | the block exists but holds different text |
+
+The 116 are re-saved `.musx` files whose text blocks were renumbered, so their
+`textID` points at a block this `.mus` does not have. In **65** of them the name
+appears in no block at all: the `.mus` does not carry that name.
+
+So **a candidate is only an anchor if the block exists and holds the name**, and
+that criterion — not "the id spaces agree" — is what reduces 144 to 25. Two
+independent routes now reach the same 25, which is the strongest thing that can be
+said for it. `ANCHOR_VALIDITY` in the sweep pins all three counts, because
+inflating this set produces a confident wrong answer rather than a visible
+failure.
+
+**One real discrepancy survives.** Among the 25, id **94** selects block 23 twice
+and block 24 once. §3d's table records 94 -> 24. That is a 2-against-1 split on
+three votes, far too little to rewrite the table with and too definite to ignore,
+so it is recorded rather than resolved.
+
+### 3f. Two more routes closed
+
+**The lookup record does not exist.** Searched two ways over all 144 candidates:
+
+* a record keyed at the name id holding the block at any even offset — best is
+  tag 183 at `+0`, **28 of 144**, which is noise;
+* the `(id, block)` pair written adjacently as two `uint16`s **anywhere** — any
+  `others` payload, any `details` payload, any stream. Absent in **129 of 144**,
+  and the 15 hits scatter across four unrelated tags.
+
+The pair is not stored anywhere in the file. That is now a measured negative
+rather than a search that failed.
+
+**The renumbering cannot be undone.** The obvious rescue for the 116 is to find
+the staff's name among the blocks and take the difference as a per-document
+offset. 47 resolve to exactly one block, and their deltas are 1, 2, 21, 16, 20,
+22, 17, 3, 5 and 23 — ten values, no rule, and only 37 of 42 documents are even
+self-consistent. It is also the palette trap wearing a new hat: a staff called
+`Flute` matches the template's `Flute` block rather than its own.
+
 ### 3c. Why the delta is constant, and four more approaches ruled out
 
 **The constancy now has a reason.** A staff has a full name and an abbreviated one, at `staffSpec`
