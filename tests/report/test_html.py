@@ -184,7 +184,7 @@ def test_the_debug_tab_reads_file_then_pipeline_then_stats() -> None:
     says whether reading it worked, then the detail."""
     html = render_html(_inspection())
     headings = re.findall(r"<h2>([^<]+)</h2>", html)
-    assert headings == ["File", "Pipeline", "Stats", "Not translated"]
+    assert headings == ["File", "Pipeline", "Stats"]
 
 
 def test_a_stage_carries_a_mark_for_how_it_went() -> None:
@@ -207,18 +207,22 @@ def test_a_stage_carries_a_mark_for_how_it_went() -> None:
     assert '<li class="skipped">· build score' in html
 
 
-def test_the_document_dump_is_replaced_by_the_gaps_it_carried() -> None:
-    """The old Document pane held three things. Its per-pool counts were
-    identical to the ones the Records tree already shows -- measured across 40
-    `.musx` documents, identical in all 40 -- and its `version` was the family
-    string the ladder reports a line above. Only the untranslated list was
-    unique, so only it survived.
+def test_the_document_summary_is_not_embedded_in_the_page() -> None:
+    """All three of its parts had stopped saying anything here.
+
+    Its per-pool counts were identical to the ones the Records tree shows --
+    measured across 40 `.musx` documents, identical in all 40 -- and its
+    `version` was the family string the ladder reports a line above. The
+    untranslated list outlived both, and it is a module constant: 941 words of
+    the same text in every report, describing the reader rather than the file
+    in front of you. A caller holding an `Inspection` can still read it.
     """
     html = render_html(
         _inspection(document={"version": "18.0", "pools": {}, "untranslated": ["x"]})
     )
-    assert "renderUntranslated" in html
+    assert "renderUntranslated" not in html
     assert "JSON.stringify(value, null, 2)" not in html, "the document dump is gone"
+    assert '"document"' not in html, "and the payload no longer carries it"
 
 
 def test_a_record_row_is_a_leaf_that_selects_rather_than_a_third_expander() -> None:

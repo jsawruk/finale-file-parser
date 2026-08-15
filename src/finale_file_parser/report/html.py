@@ -124,24 +124,6 @@ function renderStats() {
   }
   el.innerHTML = out;
 }
-// What this reader knowingly does not carry out of a file. The rest of the old
-// Document summary is gone: its per-pool counts were identical to the ones the
-// Records tree already shows on its own summaries -- measured across 40 .musx
-// documents, identical in all 40 -- and its "version" was the family string the
-// ladder reports one line above.
-function renderUntranslated() {
-  const el = document.getElementById('untranslated');
-  const gaps = (data.document && data.document.untranslated) || [];
-  if (gaps.length === 0) { el.innerHTML = stopped('list of gaps'); return; }
-  const list = document.createElement('ul');
-  for (const gap of gaps) {
-    const item = document.createElement('li');
-    item.textContent = gap;
-    list.appendChild(item);
-  }
-  el.innerHTML = '';
-  el.appendChild(list);
-}
 // The ladder used to sit above every pane, so an empty pane explained itself.
 // It lives under Debug now, so a pane that has nothing to show has to say why
 // and where to look -- otherwise a file that failed to parse opens on a blank
@@ -577,7 +559,6 @@ function control(label, onClick) {
 }
 renderStats();
 renderMusic();
-renderUntranslated();
 renderRecords();
 show('music');
 """
@@ -656,7 +637,6 @@ def render_html(inspection: Inspection) -> str:
             "stages": [asdict(s) for s in inspection.stages],
             "stats": inspection.stats,
             "music": inspection.music,
-            "document": inspection.document,
             "records": inspection.records,
             "tags": inspection.tags,
             "layouts": inspection.layouts,
@@ -680,7 +660,6 @@ def render_html(inspection: Inspection) -> str:
         "<h2>Pipeline</h2>"
         f"{_ladder(inspection)}"
         '<h2>Stats</h2><div id="stats"></div>'
-        '<h2>Not translated</h2><div id="untranslated"></div>'
         "</section>"
         f'<script id="inspection" type="application/json">{payload}</script>'
         f"<script>//<![CDATA[\n{_SCRIPT}\n//]]></script>"

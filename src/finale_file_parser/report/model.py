@@ -78,6 +78,16 @@ class Inspection:
     stats: ScoreSummary | None = None
     music: MusicTree | None = None
     document: DocumentSummary | None = None
+    """Record counts and the reader's own list of gaps.
+
+    Populated for a caller holding an `Inspection`, but no longer embedded in
+    the page. Its three parts had each stopped saying anything there: `version`
+    is the family the ladder already reports, `pools` duplicates the counts the
+    Records tree carries (identical in 40 of 40 `.musx` documents when that was
+    measured), and `untranslated` is a module constant -- 941 words of the
+    same text in every report, about the reader rather than about the file.
+    """
+
     records: dict[str, object] = field(default_factory=dict)
     tags: dict[str, object] = field(default_factory=dict)
     """What each record tag present is called, and how strongly that is known.
@@ -614,7 +624,6 @@ def _weight(inspection: Inspection) -> int:
                 "stages": [asdict(s) for s in inspection.stages],
                 "stats": inspection.stats,
                 "music": inspection.music,
-                "document": inspection.document,
                 "records": inspection.records,
                 "tags": inspection.tags,
                 "layouts": inspection.layouts,
