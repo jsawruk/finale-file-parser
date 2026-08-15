@@ -35,6 +35,7 @@ __all__ = [
     "MAESTRO_DYNAMICS",
     "OTHER_DYNAMICS",
     "Dynamic",
+    "described_dynamic",
     "dynamic_for",
     "marking_of",
     "velocity_of",
@@ -144,6 +145,31 @@ def velocity_of(glyph: str) -> int | None:
     which carry no level. Use `dynamic_for` to tell those two cases apart."""
     entry = _BY_GLYPH.get(glyph)
     return entry.velocity if entry else None
+
+
+_BY_NAME: dict[str, Dynamic] = {d.name: d for d in GRADED_DYNAMICS}
+"""Only the graded ten. Two accent entries share the name `sforzato`, so a
+description cannot select between them -- see `ACCENT_DYNAMICS`."""
+
+
+def described_dynamic(description: str) -> Dynamic | None:
+    """The dynamic a `descStr` names, or None if it does not name one.
+
+    This is the strongest signal there is, and the one that named the table in
+    the first place: the file writes `'fortissimo (velocity = 101)'` in the same
+    record as the value. It settles cases the glyph cannot -- five of the ten
+    characters are plain ASCII letters, and a `.mus` document has no `^fontMus`
+    markup to say whether a letter is a glyph.
+
+    Normalised for the capitalisation one Finale version uses and for its doubled
+    spaces. The velocity in parentheses is ignored here; a caller comparing it
+    against the record's own `value` is doing a different check.
+
+    Returns None for a DCL-era description: that era writes the *placement*
+    instead -- `'Below Staff (Vel. 127)'` -- which names no dynamic.
+    """
+    name = " ".join(description.split("(")[0].split()).lower()
+    return _BY_NAME.get(name)
 
 
 def marking_of(glyph: str) -> str | None:

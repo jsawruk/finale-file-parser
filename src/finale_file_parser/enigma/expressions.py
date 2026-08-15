@@ -91,11 +91,17 @@ one letting the consumer default it.
 91 assignments in the corpus. There is nothing to print as text, and this module
 carries text markings only.
 
-**`.mus` documents.** `measExprAssign` is the `.musx` spelling. The DCL era has
-`^DY` for the assignment and `^DT` for the definition, and `DT` is only partly
-decoded -- one field, the playback value. A `.mus` therefore carries no
-expressions, which is a gap rather than a disagreement; see
-`mus_document.UNTRANSLATED`.
+**A 2001-2005 `.mus`.** The 2011 era is read -- `others` 241 is the definition
+and 177 the assignment, see `mus_others` -- and yields 3,022 markings across 186
+documents. The DCL era is not: it spells them `^DT` and `^DY`, and only one `DT`
+field is decoded (the playback value at `+4`, confirmed 434/434 by the record's
+own description). See `mus_document.UNTRANSLATED`.
+
+**A `.mus` expression has no category and no layer.** `categoryID` is not
+identified in the 241 record (best offset 20.3%, which is noise) and `layer`
+collides with `staffAssign` at `+8`. Both are absent rather than invented, so
+`category` is `""` and `layer` is None for every `.mus` expression -- and the
+dynamics are still named, because the description does that on its own.
 """
 
 from __future__ import annotations
@@ -104,7 +110,11 @@ import re
 
 from finale_file_parser.enigma.document import EnigmaDocument, Record
 from finale_file_parser.enigma.text import plain_text
-from finale_file_parser.formats.dynamics import DYNAMICS_CATEGORY, dynamic_for
+from finale_file_parser.formats.dynamics import (
+    DYNAMICS_CATEGORY,
+    described_dynamic,
+    dynamic_for,
+)
 from finale_file_parser.ir import Expression
 
 __all__ = ["expressions_by_measure"]
@@ -118,9 +128,12 @@ _MUSIC_FONT = re.compile(r"\^fontMus\(")
 """EnigmaXML's marker for text set in a music font.
 
 `fontName` cmper 0 is `Maestro` in every corpus document, so a character behind
-this markup is a glyph rather than a letter to read. The `.mus` dialect spells it
-`^font(` and does not distinguish, which does not matter here: a `.mus` carries
-no expression assignments at all.
+this markup is a glyph rather than a letter to read.
+
+A `.mus` has no equivalent: its dialect spells the command `^font(` without
+saying whether the font is a music one, and it carries no `fontName` records to
+resolve the id against. That is why the description is the primary signal -- a
+`.mus` dynamic is named from `descStr` alone.
 """
 
 
@@ -158,7 +171,12 @@ def expressions_by_measure(
             Expression(
                 text=text,
                 category=category,
-                marking=_marking(text, category=category, in_music_font=in_music_font),
+                marking=_marking(
+                    text,
+                    category=category,
+                    in_music_font=in_music_font,
+                    description=str(definition.fields.get("descStr") or ""),
+                ),
                 velocity=_int(definition.fields.get("value")),
                 layer=_int(record.fields.get("layer")),
             )
@@ -191,13 +209,27 @@ def _definitions(document: EnigmaDocument) -> dict[int, Record]:
     return out
 
 
-def _marking(text: str, *, category: str, in_music_font: bool) -> str | None:
-    """The readable dynamic this text is, or None if it is not one.
+def _marking(text: str, *, category: str, in_music_font: bool, description: str) -> str | None:
+    """The readable dynamic this expression is, or None if it is not one.
 
-    Requires the character to be in the table *and* a reason to read it as a
-    glyph rather than as letters -- see "When a glyph counts as a dynamic" in the
-    module docstring for the counts behind the rule.
+    Three signals, strongest first:
+
+    1. **The description names it.** `'fortissimo (velocity = 101)'` is the file
+       saying which dynamic this is, in words. No glyph or font reasoning can
+       beat that, and it is what named the table in the first place. It is also
+       the only signal a `.mus` document offers: that container has no
+       `^fontMus` markup and its category is not decoded.
+    2. **The glyph is in the table and set in a music font.** For a `.musx`,
+       where the markup distinguishes.
+    3. **The glyph is in the table and the document's own category is
+       `dynamics`.**
+
+    Anything else is left unnamed -- see "When a glyph counts as a dynamic" in
+    the module docstring for the counts behind the rule.
     """
+    described = described_dynamic(description)
+    if described is not None:
+        return described.marking
     entry = dynamic_for(text)
     if entry is None:
         return None

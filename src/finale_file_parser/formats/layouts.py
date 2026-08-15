@@ -248,6 +248,64 @@ ARTIC_ASSIGN = Layout(
     fields=(Field(0, 2, "definition", "uint16", "key of the articDef this uses"),),
 )
 
+TEXT_EXPR_DEF = Layout(
+    name="TextExprDef",
+    record="textExprDef",
+    tag=OTH.TAG_TEXT_EXPR_DEF,
+    dcl="DT",
+    pool="others",
+    fields=(
+        Field(0, 2, "textIDKey", "uint16", "names the expression text; not its number"),
+        Field(4, 2, "value", "uint16", "playback level; velocity for a dynamic"),
+        Field(6, 2, "auxdata1", "uint16", ""),
+        Field(8, 2, "playPass", "uint16", ""),
+        Field(
+            12,
+            2,
+            "horzMeasExprAlign",
+            "uint16",
+            "1 startTimeSig, 3 manual, 13 leftOfPrimaryNotehead, 14 rightOfAllNoteheads",
+        ),
+        Field(
+            24,
+            2,
+            "vertMeasExprAlign",
+            "uint16",
+            "2 manual, 4 topNote, 8 aboveStaffOrEntry, 9 belowStaffOrEntry",
+        ),
+        Field(30, 2, "yAdjustBaseline", "int16", ""),
+        Field(32, 2, "yAdjustEntry", "int16", ""),
+        Field(36, 0, "descStr", "string", "the marking in words, NUL-terminated"),
+    ),
+)
+"""Every field confirmed by exact equality against the 97 paired documents; see
+`mus_others.TAG_TEXT_EXPR_DEF` for the counts. `categoryID` and `playType` are
+absent because neither is identified. The DCL era shares `+4` and the description
+at `+36` and nothing else that has been shown."""
+
+MEAS_EXPR_ASSIGN_SLOT = 24
+
+MEAS_EXPR_ASSIGN = Layout(
+    name="MeasExprAssign",
+    record="measExprAssign",
+    tag=OTH.TAG_MEAS_EXPR_ASSIGN,
+    dcl="DY",
+    pool="others",
+    stride=MEAS_EXPR_ASSIGN_SLOT,
+    fields=(
+        Field(0, 2, "textExprID", "uint16", "names a textExprDef; a shapeExprID when +11 has 0x20"),
+        Field(2, 2, "horzEduOff", "int16", ""),
+        Field(4, 2, "horzEvpuOff", "int16", ""),
+        Field(6, 2, "vertOff", "int16", ""),
+        Field(8, 2, "staffAssign", "int16", "-1 means a staff list rather than a staff"),
+        Field(11, 1, "flags", "uint8", "0x20 marks a shape assignment"),
+        Field(12, 2, "staffGroup", "uint16", ""),
+        Field(14, 2, "staffList", "uint16", ""),
+    ),
+)
+"""One marking per 24-byte slot. `layer` is absent: its best offset is `+8`, which
+`staffAssign` already holds at 100%."""
+
 INST_USED = Layout(
     name="InstUsedSlot",
     record="instUsed",

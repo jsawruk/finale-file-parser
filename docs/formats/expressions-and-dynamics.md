@@ -243,6 +243,88 @@ glyph**: the definition described `forte` must print `f` and the one described
 `piano` must print `p`, or the document contributes nothing and is counted as
 desynchronised. Dropping such a document silently would be worse than failing.
 
+## The 2011 `.mus`: both records decoded
+
+A 2011-era `.mus` carries the same two records as a `.musx`, under numeric tags,
+and both are now read — **3,022 markings across 186 documents**.
+
+**How the definition was found.** By asking the record to name itself. A
+`textExprDef` carries a `descStr`, so every 2011 payload was searched for text of
+that shape: **exactly one tag matched** — `241`, 958 records in 85 documents. The
+same move that named the ten dynamics found the record that holds them.
+
+Decoded against the 97 paired documents, little-endian, by **exact equality**
+rather than a fitted mapping:
+
+| offset | field | agreement |
+| --- | --- | --- |
+| `+0` u16 | `textIDKey` | 7180/7180 |
+| `+4` u16 | `value` | 2107/2107 |
+| `+6` u16 | `auxdata1` | 457/457 |
+| `+8` u16 | `playPass` | 34/34 |
+| `+12` u16 | `horzMeasExprAlign` | 4 values, clean over 6892 rows |
+| `+24` u16 | `vertMeasExprAlign` | 4 values, clean over 5147 rows |
+| `+30` s16 | `yAdjustBaseline` | 4700/4700 |
+| `+32` s16 | `yAdjustEntry` | 5079/5079 |
+| `+36` | the description, NUL-terminated | **wording identical to the `.musx`** |
+
+The enum vocabularies, read off the pairs rather than guessed:
+`horzMeasExprAlign` 1 `startTimeSig`, 3 `manual`, 13 `leftOfPrimaryNotehead`,
+14 `rightOfAllNoteheads`; `vertMeasExprAlign` 2 `manual`, 4 `topNote`,
+8 `aboveStaffOrEntry`, 9 `belowStaffOrEntry`.
+
+**Not identified, and not guessed.** `categoryID` peaks at 20.3%, which is noise.
+`playType` partitions cleanly at no offset. `+4` also matches `execShape` at
+234/234, but that is a coincidence of coverage — the records carrying `execShape`
+are a subset of those carrying no `value` — and `value` is independently confirmed
+by the dynamics ladder and by the description stating the same number.
+
+### The assignment: tag 177, in 24-byte slots
+
+Found by content, not by counting: count-matching against the `.musx` assignment
+total peaked at 14 of 97 documents, which is chance. Asking instead *which
+tag/offset holds a number that the paired `.musx` assigns as an expression id at
+that same measure* gave one answer — tag 177 at `+0`, **1133/1166 = 97.2%**, with
+every rival at or below 18%.
+
+The payload is an **array of 24-byte slots**, one per marking. The stride is
+measured: read at 24, a slot's first u16 is an assigned expression id in 96.3% of
+1,555 slots; read at 12 it is 48.1% and the slot count stops matching the
+assignment count.
+
+| offset | field | agreement |
+| --- | --- | --- |
+| `+0` u16 | `textExprID` | 1044/1044 |
+| `+2` s16 | `horzEduOff` | 400/401 |
+| `+4` s16 | `horzEvpuOff` | 975/976 |
+| `+6` s16 | `vertOff` | 981/982 |
+| `+8` s16 | `staffAssign` (−1 means a staff list) | 1044/1044 |
+| `+11` u8 | flags; `0x20` marks a **shape** assignment | 57/57 and 0/1497 |
+| `+12` u16 | `staffGroup` | 57/57 |
+| `+14` u16 | `staffList` | 57/57 |
+
+**The flag at `+11` matters more than it looks.** A shape assignment's `+0` is a
+`shapeExprID`, so reading it as a `textExprID` places whatever definition happens
+to share that number. That produced **44 spurious markings** across the paired
+corpus — dynamics in scores that have none there. The bit separates the groups
+completely: set on all 57 shape slots, on none of the 1,497 text slots.
+
+`layer` is not identified: its best offset is `+8`, which `staffAssign` already
+holds at 100%.
+
+### Checked against the other container
+
+For 91 documents the corpus holds both, so the markings compare triple by triple:
+**1,464 of 1,476 `(staff, measure, marking)` triples agree** — 99.2%. Before the
+shape flag it was 1,464 against 52, and **44 of those 52 were the wrong
+direction**: markings the `.mus` invented rather than missed. The remaining 12 are
+markings the `.mus` path misses, which is a gap rather than wrong output, and the
+sweep asserts that direction explicitly.
+
+**A `.mus` expression has no category and no layer.** Both are absent rather than
+invented, and the dynamics are named anyway — from `descStr`, which is the
+stronger signal in any container.
+
 ## `^DT` — the 2001–2005 text expression, partly decoded
 
 `DT` is the DCL spelling of `textExprDef`. Payloads are 36, 48, 60 or 72
@@ -282,6 +364,26 @@ Measured across 1,794 records. These are *shapes*, not identifications — the
 **No offset holds the record's own cmper** — the best is 2.1%, which is noise.
 So `DT` carries no `textIDKey`-style pointer to its text, and the link to the
 `^expression(n)` section is likely positional. That is untested.
+
+### `DT` names itself too
+
+The DCL payload carries a description, exactly as the 2011 record does — but in
+that era's wording, which states the **placement** rather than the marking:
+`'Below Staff (Vel. 127)'`, `'Below Staff'`, `'Adagio'`, `'Tempo = 40'`.
+
+That is enough to confirm `+4` **without any paired document**: the velocity the
+description states equals the u16 at `+4` in **434 records out of 434, with zero
+disagreements**. `DT` vouches for its own field.
+
+It is not enough to carry the rest of the layout across. The 2011 record puts
+`vertMeasExprAlign` at `+24`, and if `DT` did the same then a description reading
+"Below Staff" should pin one value there — **no offset separates the "Below
+Staff" descriptions from the rest**. The shared offsets are `+0`, `+4`, `+32` and
+the description at `+36`; the enums are not claimed.
+
+Because the DCL description names a placement instead of a dynamic, it also
+cannot name the marking the way the 2011 one does. That route works for the newer
+era only.
 
 ### How to finish it
 
