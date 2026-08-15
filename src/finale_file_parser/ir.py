@@ -23,6 +23,7 @@ __all__ = [
     "Beam",
     "Ending",
     "Event",
+    "Expression",
     "Lyric",
     "Measure",
     "Part",
@@ -179,6 +180,44 @@ class Ending:
 
 
 @dataclass(frozen=True)
+class Expression:
+    """A marking the score attaches to one measure of one staff.
+
+    A dynamic, a tempo word, a technique instruction -- whatever the document
+    actually placed, as opposed to the library of definitions every Finale file
+    ships whether it uses them or not.
+
+    Distinct from `Measure.directions`, which is text repeats ("Fine", "D.C. al
+    Coda"): those belong to the measure across every part, while an expression
+    is placed on a particular staff and can differ between them.
+    """
+
+    text: str
+    """What is printed. For most dynamics this is a single music-font character
+    rather than letters -- `marking` is the readable form."""
+
+    category: str
+    """The document's own `categoryType`: `dynamics`, `tempoMarks`,
+    `techniqueText`, `expressiveText`, `rehearsalMarks`, `tempoAlts`, `misc`.
+    Read from the file, not inferred from what the marking looks like."""
+
+    marking: str | None = None
+    """The conventional spelling of a dynamic -- `"ff"`, `"mp"`. None when the
+    text is not one of the ten graded dynamics, including for a user-made
+    expression that merely sits in the dynamics category."""
+
+    velocity: int | None = None
+    """The playback level the file gives this expression, where it gives one.
+    Kept even though the MusicXML exporter does not emit it -- the IR holds what
+    the reader found; see the module docstring."""
+
+    layer: int | None = None
+    """The layer this marking is attached to, 1-based, or None where the file
+    attaches it to the staff rather than to one layer -- which is how 1,708 of
+    the corpus's 6,672 assigned dynamics are placed."""
+
+
+@dataclass(frozen=True)
 class Measure:
     """One measure of one part."""
 
@@ -200,6 +239,12 @@ class Measure:
     """Words printed over this measure -- "Fine", "D.C. al Coda". Text only:
     what a jump *does* is not modelled, because Enigma's is not read; see
     `enigma.jumps`."""
+
+    expressions: tuple[Expression, ...] = ()
+    """Markings placed on *this staff* at this measure -- dynamics, tempo words,
+    technique text. Unlike `directions` these differ between parts, and unlike
+    the expression library every document ships, these are the ones the score
+    actually uses; see `enigma.expressions`."""
 
     barline_style: str | None = None
     """MusicXML `bar-style` for this measure's right barline -- `light-light`

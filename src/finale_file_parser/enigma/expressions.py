@@ -1,0 +1,207 @@
+"""Which expressions a score actually places, and where.
+
+Three records, and the middle one is a library rather than a list of what is
+used:
+
+    measExprAssign(measure)  -- a marking is placed here, on this staff
+    textExprDef(cmper)       -- what it is: category, playback level, description
+    texts/expression(number) -- what it prints, usually one music-font character
+
+**Only an assignment puts a marking in the music.** Every corpus document ships
+the same expression library whether it uses any of it or not -- sixteen
+dynamics, a shelf of tempo words -- so reading `textExprDef` alone would print a
+fortissimo in every part of every file. The same trap as `textRepeatText`; see
+`enigma.jumps`.
+
+## The join
+
+`measExprAssign.textExprID` names the definition, and it holds up: across the
+401-document corpus **every** assignment that carries an id resolves --
+5,663 through `textExprID` to a `textExprDef` and 91 through `shapeExprID` to a
+`shapeExprDef`, with none left dangling. The remaining 7,488 carry no id at all
+and place nothing.
+
+Resolved, the corpus yields **6,672 assigned dynamics across 315 documents**,
+distributed as real music is rather than as a library is: f 1,715, mf 1,501,
+p 1,461, mp 777, ff 420, pp 161, ppp 45, fff 38, ffff 12. A palette read by
+mistake would instead give a flat count of about 400 for every entry.
+
+Definition to printed text pairs on **`cmper`**, not `textIDKey` -- see
+`docs/formats/expressions-and-dynamics.md` for why, and for how the ten dynamics
+came to be named.
+
+## When a glyph counts as a dynamic
+
+Five of the ten dynamic characters are **plain ASCII letters** -- Maestro writes
+forte as `f` and mezzo piano as `P` -- so matching the character alone would read
+a literal "f" label as a fortissimo. Two signals settle it, and the corpus says
+which to trust:
+
+| category | font | glyph in the table | count |
+| --- | --- | --- | --- |
+| `dynamics` | `^fontMus` | yes | 6,182 |
+| `techniqueText` | `^fontMus` | yes | 1,191 |
+| `dynamics` | none | yes | 114 |
+| `misc` / `tempoMarks` / `expressiveText` | none | yes | 129 |
+| anything | `^fontTxt` | **yes** | **0** |
+
+The last row is the useful one: across 401 documents **nothing set in a text
+font ever matches the table**, so the font markup never produces a false
+dynamic. The 1,191 `techniqueText` rows are user copies of a dynamic glyph filed
+in a custom category -- still a dynamic, since it is the Maestro character.
+
+So `marking` is claimed when the glyph is in the table **and** either the text is
+set in a music font or the document's own category is `dynamics`. The 129 rows
+with neither signal are left unmarked: a bare `f` in `misc` with no font at all
+is as likely to be a label as a dynamic, and this project does not guess. The
+text is still carried, so nothing is lost.
+
+## What is not read
+
+**Placement.** `horzEvpuOff` and `vertOff` carry the offsets Finale drew the
+marking at. They are not converted: EVPU to tenths is a scaling this project has
+not confirmed, and an exporter placing a dynamic at a wrong offset is worse than
+one letting the consumer default it.
+
+**Shape expressions.** `shapeExprID` names a drawn shape rather than text --
+91 assignments in the corpus. There is nothing to print as text, and this module
+carries text markings only.
+
+**`.mus` documents.** `measExprAssign` is the `.musx` spelling. The DCL era has
+`^DY` for the assignment and `^DT` for the definition, and `DT` is only partly
+decoded -- one field, the playback value. A `.mus` therefore carries no
+expressions, which is a gap rather than a disagreement; see
+`mus_document.UNTRANSLATED`.
+"""
+
+from __future__ import annotations
+
+import re
+
+from finale_file_parser.enigma.document import EnigmaDocument, Record
+from finale_file_parser.enigma.text import plain_text
+from finale_file_parser.formats.dynamics import DYNAMICS_CATEGORY, dynamic_for
+from finale_file_parser.ir import Expression
+
+__all__ = ["expressions_by_measure"]
+
+_ASSIGN = "measExprAssign"
+_DEF = "textExprDef"
+_CATEGORY = "markingsCategory"
+_TEXT = "expression"
+
+_MUSIC_FONT = re.compile(r"\^fontMus\(")
+"""EnigmaXML's marker for text set in a music font.
+
+`fontName` cmper 0 is `Maestro` in every corpus document, so a character behind
+this markup is a glyph rather than a letter to read. The `.mus` dialect spells it
+`^font(` and does not distinguish, which does not matter here: a `.mus` carries
+no expression assignments at all.
+"""
+
+
+def expressions_by_measure(
+    document: EnigmaDocument,
+) -> dict[tuple[int, int], tuple[Expression, ...]]:
+    """The markings the score places, keyed by `(staff, measure)`.
+
+    A staff and measure can carry more than one, and order follows the document.
+    """
+    categories = _categories(document)
+    definitions = _definitions(document)
+    texts = _texts(document)
+
+    out: dict[tuple[int, int], list[Expression]] = {}
+    for record in document.others.of_tag(_ASSIGN):
+        # A linked part repeats every assignment. Counting those doubles each
+        # marking: 20,606 of the corpus's 33,039 records carry a `part`.
+        if "part" in record.attrs:
+            continue
+        measure = _int(record.attrs.get("cmper"))
+        staff = _int(record.fields.get("staffAssign"))
+        expr_id = _int(record.fields.get("textExprID"))
+        if measure is None or staff is None or expr_id is None:
+            continue
+        definition = definitions.get(expr_id)
+        found = texts.get(expr_id)
+        # An expression with nothing to print is not a marking: 306 corpus
+        # assignments resolve to a definition whose text record is absent.
+        if definition is None or found is None or not found[0]:
+            continue
+        text, in_music_font = found
+        category = categories.get(_int(definition.fields.get("categoryID")), "")
+        out.setdefault((staff, measure), []).append(
+            Expression(
+                text=text,
+                category=category,
+                marking=_marking(text, category=category, in_music_font=in_music_font),
+                velocity=_int(definition.fields.get("value")),
+                layer=_int(record.fields.get("layer")),
+            )
+        )
+    return {where: tuple(items) for where, items in out.items()}
+
+
+def _categories(document: EnigmaDocument) -> dict[int | None, str]:
+    """categoryID -> the type the document itself gives it.
+
+    `dynamics`, `tempoMarks`, `techniqueText` and the rest are the file's own
+    words. Nothing here is inferred from what a marking looks like.
+    """
+    out: dict[int | None, str] = {}
+    for record in document.others.of_tag(_CATEGORY):
+        kind = record.fields.get("categoryType")
+        if isinstance(kind, str):
+            out[_int(record.attrs.get("cmper"))] = kind
+    return out
+
+
+def _definitions(document: EnigmaDocument) -> dict[int, Record]:
+    out: dict[int, Record] = {}
+    for record in document.others.of_tag(_DEF):
+        if "part" in record.attrs:
+            continue
+        cmper = _int(record.attrs.get("cmper"))
+        if cmper is not None:
+            out[cmper] = record
+    return out
+
+
+def _marking(text: str, *, category: str, in_music_font: bool) -> str | None:
+    """The readable dynamic this text is, or None if it is not one.
+
+    Requires the character to be in the table *and* a reason to read it as a
+    glyph rather than as letters -- see "When a glyph counts as a dynamic" in the
+    module docstring for the counts behind the rule.
+    """
+    entry = dynamic_for(text)
+    if entry is None:
+        return None
+    if in_music_font or category == DYNAMICS_CATEGORY:
+        return entry.marking
+    return None
+
+
+def _texts(document: EnigmaDocument) -> dict[int, tuple[str, bool]]:
+    """Expression number -> (what it prints, is it set in a music font).
+
+    The font matters because five dynamics are plain letters; the markup is kept
+    long enough to answer that and then discarded.
+    """
+    out: dict[int, tuple[str, bool]] = {}
+    for record in document.texts.records:
+        if record.tag != _TEXT or "part" in record.attrs:
+            continue
+        number = _int(record.attrs.get("number"))
+        if number is None:
+            continue
+        markup = record.text or ""
+        out[number] = (plain_text(markup), bool(_MUSIC_FONT.search(markup)))
+    return out
+
+
+def _int(value: object) -> int | None:
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return None

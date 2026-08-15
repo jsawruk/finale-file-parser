@@ -23,6 +23,7 @@ from finale_file_parser.enigma.clef import (
     default_clefs,
 )
 from finale_file_parser.enigma.document import EnigmaDocument, Record
+from finale_file_parser.enigma.expressions import expressions_by_measure
 from finale_file_parser.enigma.fingerings import fingerings_by_entry
 from finale_file_parser.enigma.groups import staff_groups, staff_order
 from finale_file_parser.enigma.jumps import jumps_by_measure
@@ -39,6 +40,7 @@ from finale_file_parser.enigma.timesig import time_signatures
 from finale_file_parser.enigma.tuplet import entry_chain, sounded_durations, tuplets_by_entry
 from finale_file_parser.ir import (
     Event,
+    Expression,
     Lyric,
     Measure,
     Part,
@@ -153,6 +155,7 @@ def build_score(document: EnigmaDocument) -> Score:
     repeats = repeats_for(document)
     directions = jumps_by_measure(document)
     barlines = barline_styles(document)
+    expressions = expressions_by_measure(document)
 
     staves = _ordered_staves(document, {staff for staff, _ in cells})
     keys = effective_keys(document)
@@ -179,6 +182,7 @@ def build_score(document: EnigmaDocument) -> Score:
                     repeats=repeats,
                     directions=directions,
                     barlines=barlines,
+                    expressions=expressions,
                 )
                 for index, number in enumerate(numbers)
             ),
@@ -429,6 +433,7 @@ def _measure(
     repeats: Repeats,
     directions: dict[int, tuple[str, ...]] | None = None,
     barlines: dict[int, str] | None = None,
+    expressions: dict[tuple[int, int], tuple[Expression, ...]] | None = None,
 ) -> Measure:
     cell = cells.get((staff, number))
 
@@ -472,6 +477,9 @@ def _measure(
         # A marking belongs to the measure, so every part shows it -- which is
         # what a player reading one part needs.
         directions=(directions or {}).get(number, ()),
+        # An expression, unlike a text repeat, belongs to one staff -- so it is
+        # keyed by (staff, measure) and the parts can legitimately differ.
+        expressions=(expressions or {}).get((staff, number), ()),
         barline_style=(barlines or {}).get(number),
         repeat_forward=here.forward,
         repeat_backward=here.backward,

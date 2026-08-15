@@ -8,10 +8,12 @@ import pytest
 from defusedxml import ElementTree as DET
 
 from finale_file_parser.export.musicxml import ExportError, to_musicxml
+from finale_file_parser.formats.dynamics import DYNAMICS
 from finale_file_parser.ir import (
     Beam,
     Ending,
     Event,
+    Expression,
     Lyric,
     Measure,
     Part,
@@ -576,3 +578,76 @@ def test_a_dotted_whole_exports_as_a_dotted_whole() -> None:
     root = _tree(_score(_note(duration=DOTTED_WHOLE, written_duration=DOTTED_WHOLE, dots=1)))
     assert [e.text for e in root.iter("type")] == ["whole"]
     assert len(list(root.iter("dot"))) == 1
+
+
+def _expr(**kwargs: object) -> Expression:
+    base: dict[str, object] = {"text": "f", "category": "dynamics", "marking": "f"}
+    base.update(kwargs)
+    return Expression(**base)  # type: ignore[arg-type]
+
+
+def test_a_named_dynamic_becomes_a_dynamics_element() -> None:
+    """Not `<words>f</words>`: a consumer should get the marking as MusicXML
+    models it, so it can transpose, play back, or re-engrave it."""
+    root = _tree(_score(_note(), expressions=(_expr(marking="ff", text="Ä"),)))
+    direction = root.find("./part/measure/direction")
+    assert direction is not None
+    assert direction.get("placement") == "below"
+    assert direction.find("./direction-type/dynamics/ff") is not None
+
+
+def test_every_named_dynamic_is_a_legal_musicxml_element() -> None:
+    """The guard that matters: `subito p` is a real library entry whose marking
+    has a space in it, and `<subito p/>` is a document no parser can read.
+    Serialising every marking the table knows proves none of them can.
+    """
+    for entry in DYNAMICS:
+        if not entry.marking:
+            continue
+        score = _score(_note(), expressions=(_expr(text=entry.glyph, marking=entry.marking),))
+        # Round-trips through a real parser, so an illegal name fails here.
+        root = DET.fromstring(to_musicxml(score).decode())
+        dynamics = root.find("./part/measure/direction/direction-type/dynamics")
+        assert dynamics is not None, entry
+        assert len(dynamics) == 1, entry
+
+
+def test_a_marking_musicxml_has_no_element_for_uses_other_dynamics() -> None:
+    root = _tree(_score(_note(), expressions=(_expr(text="subito p", marking="subito p"),)))
+    assert (
+        root.findtext("./part/measure/direction/direction-type/dynamics/other-dynamics")
+        == "subito p"
+    )
+
+
+def test_a_tempo_word_is_emitted_as_words_above() -> None:
+    root = _tree(
+        _score(_note(), expressions=(_expr(text="Adagio", category="tempoMarks", marking=None),))
+    )
+    direction = root.find("./part/measure/direction")
+    assert direction is not None
+    assert direction.get("placement") == "above"
+    assert direction.findtext("./direction-type/words") == "Adagio"
+
+
+def test_an_unidentified_glyph_is_not_printed_as_text() -> None:
+    """`§` is a music-font character. Emitting it as words puts a section sign
+    in the score; the IR still carries it, the exporter declines to print it."""
+    root = _tree(_score(_note(), expressions=(_expr(text="§", marking=None),)))
+    assert root.find("./part/measure/direction") is None
+
+
+def test_expressions_are_emitted_before_the_notes() -> None:
+    """A direction placed after the notes reads as belonging to the next bar."""
+    root = _tree(_score(_note(), expressions=(_expr(),)))
+    measure = root.find("./part/measure")
+    assert measure is not None
+    tags = [child.tag for child in measure]
+    assert tags.index("direction") < tags.index("note")
+
+
+def test_velocity_is_not_exported() -> None:
+    """The IR keeps the playback level; MusicXML's `<sound dynamics>` is a
+    percentage of MIDI velocity 90, and that conversion is unverified here."""
+    root = _tree(_score(_note(), expressions=(_expr(velocity=88),)))
+    assert root.find(".//sound") is None

@@ -111,6 +111,63 @@ expression*. In `tempoMarks` the same field holds beats per minute, and the
 words confirm it: `Adagio` 40, `Moderato` 108, `Allegro` 120, each matching the
 `q = …` printed in its own text.
 
+## Which expressions a score actually places
+
+The table above is the **library** every document ships. What a score *uses* is a
+`measExprAssign`, and the difference matters: reading the library would print a
+fortissimo in every part of every file, the same trap `textRepeatText` sets.
+
+    measExprAssign(measure)  -- placed here, on this staff, in this layer
+      -> textExprID          -- names a textExprDef
+        -> cmper             -- names the expression text
+
+**The join holds.** Across 401 documents every assignment that carries an id
+resolves — 5,663 through `textExprID` and 91 through `shapeExprID` — with none
+dangling. The other 7,488 carry no id and place nothing.
+
+Read this way the corpus yields **11,543 placed expressions**, of which 6,366 are
+dynamics in 319 documents:
+
+| marking | f | mf | p | mp | ff | fp | fz | pp | ppp | fff | pppp | ffff |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| count | 1715 | 1516 | 1503 | 834 | 420 | 330 | 276 | 191 | 60 | 38 | 22 | 15 |
+
+That shape is itself the evidence. A palette read by mistake gives a flat count,
+about one of each per document; real music is steeply uneven, with the middle of
+the range dominant and the extremes rare.
+
+### When a glyph counts as a dynamic
+
+Five of the ten characters are **plain ASCII letters** — Maestro writes forte as
+`f` — so matching the character alone would read a literal "f" label as a
+fortissimo. The font markup settles it:
+
+| category | font | glyph in the table | count |
+| --- | --- | --- | --- |
+| `dynamics` | `^fontMus` | yes | 6,182 |
+| `techniqueText` | `^fontMus` | yes | 1,191 |
+| `dynamics` | none | yes | 114 |
+| `misc` / `tempoMarks` / `expressiveText` | none | yes | 129 |
+| anything | `^fontTxt` | **yes** | **0** |
+
+**Nothing set in a text font ever matches the table**, so the font never produces
+a false dynamic. The 1,191 `techniqueText` rows are user copies of a Maestro
+dynamic filed in a custom category — still dynamics. A marking is therefore
+claimed when the glyph is in the table *and* either the text is set in a music
+font or the document's own category is `dynamics`; the 129 rows with neither
+signal are carried as text and left unnamed.
+
+### What the exporter does with them
+
+`<dynamics><ff/></dynamics>` for a named marking, `<words>` for anything that
+reads as words, and nothing at all for an unidentified music-font glyph — a
+literal `§` in a score is worse than an omission. `subito p` goes to
+`<other-dynamics>`, since its name has a space and `<subito p/>` is not XML.
+
+**Velocity is not exported.** MusicXML carries playback on `<sound dynamics>` as
+a percentage of MIDI velocity 90, and that conversion is unverified here. The IR
+keeps the number; the exporter drops it at the edge.
+
 ## Which key joins a definition to its text
 
 Join on **`cmper`**. `textExprDef.textIDKey` is not the expression number:

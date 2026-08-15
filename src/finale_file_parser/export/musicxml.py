@@ -17,6 +17,7 @@ from finale_file_parser.errors import FinaleFileError
 from finale_file_parser.ir import (
     Ending,
     Event,
+    Expression,
     Lyric,
     Measure,
     Part,
@@ -26,7 +27,7 @@ from finale_file_parser.ir import (
     Voice,
 )
 
-__all__ = ["MUSICXML_VERSION", "ExportError", "to_musicxml"]
+__all__ = ["MUSICXML_VERSION", "ExportError", "prints_as_words", "to_musicxml"]
 
 MUSICXML_VERSION = "4.0"
 
@@ -208,6 +209,75 @@ def _append_part(root: ET.Element, part: Part) -> None:
         first = False
 
 
+_DYNAMICS_PLACEMENT = "below"
+"""Where dynamics are engraved, and where a reader expects them. Tempo and
+technique words go above; dynamics do not."""
+
+_MAX_GLYPH = 2
+"""Text this short with no letters or digits is a music-font character rather
+than words. Printing it literally puts an A-umlaut in the score where a
+fortissimo belongs -- the same guard `enigma.jumps` applies to the segno."""
+
+_MUSICXML_DYNAMICS = frozenset(
+    """p pp ppp pppp ppppp pppppp f ff fff ffff fffff ffffff mp mf
+       sf sfp sfpp fp rf rfz sfz sffz fz n pf sfzp""".split()
+)
+"""The element names MusicXML's `<dynamics>` accepts.
+
+A marking outside this set is not an element -- `subito p` is a real library
+entry whose name has a space in it, and emitting `<subito p/>` would produce a
+document no parser can read. Those go to `<other-dynamics>`, which is what it
+is for.
+"""
+
+
+def _append_expressions(element: ET.Element, measure: Measure) -> None:
+    """Emit this staff's markings.
+
+    Three cases, and the third is why they are not all `<words>`:
+
+    * a dynamic this project has named becomes a real `<dynamics>` element, so a
+      consumer gets `<ff/>` rather than a character it would have to recognise;
+    * anything else that reads as words -- tempo marks, technique text -- is
+      emitted as `<words>`;
+    * an unidentified music-font glyph is **dropped**, because printing it
+      literally is worse than omitting it. The IR keeps it either way.
+
+    `velocity` is deliberately not emitted. MusicXML carries playback on
+    `<sound dynamics="...">` as a percentage of MIDI velocity 90, and converting
+    Finale's own scale to that is a claim this project has not verified. The
+    reader keeps the number; the exporter drops it at the edge, which is the
+    split `ir` records.
+    """
+    for expression in measure.expressions:
+        if expression.marking:
+            direction = ET.SubElement(element, "direction", placement=_DYNAMICS_PLACEMENT)
+            dynamics = ET.SubElement(ET.SubElement(direction, "direction-type"), "dynamics")
+            if expression.marking in _MUSICXML_DYNAMICS:
+                ET.SubElement(dynamics, expression.marking)
+            else:
+                ET.SubElement(dynamics, "other-dynamics").text = expression.marking
+        elif prints_as_words(expression):
+            direction = ET.SubElement(element, "direction", placement="above")
+            words = ET.SubElement(ET.SubElement(direction, "direction-type"), "words")
+            words.text = expression.text
+
+
+def prints_as_words(expression: Expression) -> bool:
+    """Whether this expression is emitted as `<words>`.
+
+    Public because the export audit counts against it: the completeness sweep
+    asserts that everything this predicate calls printable *is* printed, and one
+    rule stated once is what makes that check mean anything. Whether the rule
+    itself is right is pinned by the unit tests, not here.
+    """
+    return not expression.marking and not _is_glyph(expression.text)
+
+
+def _is_glyph(text: str) -> bool:
+    return len(text) <= _MAX_GLYPH and not any(character.isalnum() for character in text)
+
+
 def _append_measure(
     parent: ET.Element, measure: Measure, divisions: int, *, emit_divisions: bool
 ) -> None:
@@ -219,6 +289,7 @@ def _append_measure(
         # placed after them would read as belonging to the next bar.
         direction = ET.SubElement(element, "direction", placement="above")
         ET.SubElement(ET.SubElement(direction, "direction-type"), "words").text = words
+    _append_expressions(element, measure)
 
     for index, voice in enumerate(measure.voices):
         if index:
