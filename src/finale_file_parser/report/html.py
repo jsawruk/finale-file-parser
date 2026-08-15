@@ -12,6 +12,7 @@ import json
 import re
 from dataclasses import asdict
 
+from finale_file_parser.formats.layouts import PALETTE
 from finale_file_parser.report.model import Inspection
 
 __all__ = ["render_html"]
@@ -83,9 +84,16 @@ details.node > summary::marker { color: #999; }
 .hex .off { color: #999; }
 .hex .txt { color: #666; }
 .no-bytes { color: #666; max-width: 34rem; }
+.swatch { display: inline-block; width: 0.9rem; height: 0.9rem; border: 1px solid #ccc; }
 """
 
-_SCRIPT = """
+_SCRIPT = (
+    f"""
+// Generated from the library's palette rather than restated here, so a field
+// is the same colour in this report as in the specification document.
+const PALETTE = {json.dumps(list(PALETTE))};
+"""
+    + """
 const data = JSON.parse(document.getElementById('inspection').textContent);
 function show(name) {
   for (const s of document.querySelectorAll('section')) {
@@ -148,6 +156,17 @@ function stopped(what) {
 function findStage(name) {
   return (data.stages || []).find(s => s.name === name) || null;
 }
+// Inside the "document options" group the sentinel is already said once, at the
+// top. What is left is whatever else keys the record -- a part, an incidence --
+// which is the only part worth repeating per row.
+// No regex: this script is a Python string literal, where a backslash is
+// Python's escape before it is ever JavaScript's. A key is always parenthesised
+// by `_key`, so slicing the ends off is both simpler and safe.
+const SENTINEL = 'document options';
+function withoutSentinel(key) {
+  const inner = key.slice(1, -1).split(', ').filter(p => p !== SENTINEL);
+  return inner.length === 0 ? SENTINEL : '(' + inner.join(', ') + ')';
+}
 function renderRecords() {
   // `records` defaults to {} rather than null, and {} is truthy in JS, so
   // renderJson's own truthiness check cannot tell "read fine, found nothing"
@@ -172,24 +191,67 @@ function renderRecords() {
   right.className = 'detail';
   right.innerHTML = '<p class="stopped">Select a record.</p>';
 
+  // A leaf, not another expander. The fields used to nest a third level down,
+  // which made clicking a record look like it did nothing much; they are the
+  // right-hand panel's job now.
+  function recordRow(pool, tag, rec, label) {
+    const row = document.createElement('div');
+    row.className = 'rec';
+    row.textContent = label;
+    row.addEventListener('click', () => {
+      for (const other of left.querySelectorAll('.rec.on')) { other.classList.remove('on'); }
+      row.classList.add('on');
+      showRecord(right, pool, tag, rec);
+    });
+    return row;
+  }
+  // The name belongs in the tree as much as in the panel: a tree of bare
+  // numbers is a tree nobody can navigate.
+  function tagLabel(pool, tag) {
+    const known = ((data.tags || {})[pool] || {})[tag];
+    return known ? tag + '  ' + known.name : tag;
+  }
+
   for (const [pool, tags] of pools) {
     const total = Object.values(tags).reduce((n, rs) => n + rs.length, 0);
     const node = tree(pool, Object.keys(tags).length + ' tags, ' + group(total) + ' records');
+
+    // Document-wide options first, together. They are keyed by a sentinel
+    // rather than by anything, so a document carries one under each of around
+    // ninety tags -- scattered through the tree they read as the same row over
+    // and over. Split per record and not per tag: 94 corpus tags hold a
+    // document-wide default alongside the numbered records it applies to.
+    const optionTags = Object.entries(tags)
+      .map(([tag, records]) => [tag, records.filter(r => r.options)])
+      .filter(([, records]) => records.length !== 0);
+    if (optionTags.length !== 0) {
+      const box = tree('document options', optionTags.length + ' tags');
+      for (const [tag, records] of optionTags) {
+        // One record is the overwhelming case (4,743 of 4,790 across the
+        // corpus), and it needs no row of its own: the tag IS the record, so
+        // the tag is what you click.
+        if (records.length === 1) {
+          box.appendChild(recordRow(pool, tag, records[0], tagLabel(pool, tag)));
+          continue;
+        }
+        const tagNode = tree(tagLabel(pool, tag));
+        for (const rec of records) {
+          tagNode.appendChild(recordRow(pool, tag, rec, withoutSentinel(rec.key)));
+        }
+        box.appendChild(tagNode);
+      }
+      node.appendChild(box);
+    }
+
     for (const [tag, records] of Object.entries(tags)) {
-      const tagNode = tree(tag, group(records.length) + '');
-      for (const rec of records) {
-        // A leaf, not another expander. The fields used to nest a third level
-        // down, which made clicking a record look like it did nothing much;
-        // they are the right-hand panel's job now.
-        const row = document.createElement('div');
-        row.className = 'rec';
-        row.textContent = rec.key;
-        row.addEventListener('click', () => {
-          for (const other of left.querySelectorAll('.rec.on')) { other.classList.remove('on'); }
-          row.classList.add('on');
-          showRecord(right, pool, tag, rec);
-        });
-        tagNode.appendChild(row);
+      const rest = records.filter(r => !r.options);
+      if (rest.length === 0) { continue; }
+      // No count on a tag row. The pool above already gives the totals, and a
+      // number beside every tag competed with the name for attention while
+      // answering a question nobody was asking at that level.
+      const tagNode = tree(tagLabel(pool, tag));
+      for (const rec of rest) {
+        tagNode.appendChild(recordRow(pool, tag, rec, rec.key));
       }
       node.appendChild(tagNode);
     }
@@ -220,36 +282,152 @@ function hexRows(bin) {
   }
   return rows;
 }
-function hexBlock(bin) {
+// Which field, if any, claims each byte. A layout describes the payload only,
+// so `limit` stops the tint at the payload's end -- past it lie the record's
+// `extra` bytes, which the layout says nothing about. A strided layout
+// describes one slot and the payload repeats it, so the spans repeat too.
+function tintMap(layout, limit) {
+  const map = [];
+  if (!layout) { return map; }
+  const stride = layout.stride || 0;
+  const slots = stride ? Math.ceil(limit / stride) : 1;
+  for (let slot = 0; slot < slots; slot++) {
+    const base = slot * stride;
+    layout.fields.forEach((f, i) => {
+      for (let b = 0; b < f.size; b++) {
+        const at = base + f.offset + b;
+        if (at < limit) { map[at] = i; }
+      }
+    });
+  }
+  return map;
+}
+function tinted(text, field) {
+  const span = document.createElement('span');
+  span.textContent = text;
+  if (field !== undefined) {
+    span.style.background = PALETTE[field % PALETTE.length];
+  }
+  return span;
+}
+// One span per byte rather than one per row: a field is tinted where it sits,
+// including a field that straddles a row boundary.
+function hexBlock(bin, map) {
+  const tint = map || [];
   const box = document.createElement('div');
   box.className = 'hex';
-  for (const row of hexRows(bin)) {
+  for (let base = 0; base < bin.length; base += 16) {
     const off = document.createElement('span');
     off.className = 'off';
-    off.textContent = row.off + '  ';
-    const txt = document.createElement('span');
-    txt.className = 'txt';
-    txt.textContent = '  ' + row.txt;
+    off.textContent = base.toString(16).padStart(8, '0') + '  ';
     box.appendChild(off);
-    box.appendChild(document.createTextNode(row.hex));
-    box.appendChild(txt);
+    for (let i = base; i < base + 16; i++) {
+      if (i >= bin.length) {
+        box.appendChild(document.createTextNode('   '));
+        continue;
+      }
+      const b = bin.charCodeAt(i);
+      box.appendChild(tinted(b.toString(16).padStart(2, '0'), tint[i]));
+      box.appendChild(document.createTextNode(' '));
+    }
+    const gap = document.createElement('span');
+    gap.className = 'txt';
+    gap.textContent = ' ';
+    box.appendChild(gap);
+    for (let i = base; i < base + 16 && i < bin.length; i++) {
+      const b = bin.charCodeAt(i);
+      const ch = (b >= 32 && b < 127) ? bin[i] : '.';
+      const cell = tinted(ch, tint[i]);
+      cell.className = 'txt';
+      box.appendChild(cell);
+    }
     box.appendChild(document.createTextNode(NEWLINE));
   }
   return box;
+}
+// A field's value, read off the same bytes the dump shows. The byte order is
+// the document's own: a .mus states it, and the 2001-2005 era does occur
+// big-endian, where reading a width the wrong way round gives a number rather
+// than an error.
+function decode(bin, offset, field, order) {
+  if (offset + field.size > bin.length) { return '—'; }
+  const bytes = [];
+  for (let i = 0; i < field.size; i++) { bytes.push(bin.charCodeAt(offset + i)); }
+  if (!/^u?int(8|16|32)$/.test(field.type)) {
+    // char[4], uint8[]: no single number to state, so show the bytes as they lie.
+    return bytes.map(b => b.toString(16).padStart(2, '0')).join(' ');
+  }
+  const ordered = (order === 'big') ? bytes : bytes.slice().reverse();
+  let value = 0;
+  for (const b of ordered) { value = value * 256 + b; }
+  if (field.type[0] === 'i' && value >= Math.pow(2, field.size * 8 - 1)) {
+    value -= Math.pow(2, field.size * 8);
+  }
+  // Hex alongside: several of these fields pack a sign bit or a nibble beside
+  // their value, and the decimal alone hides that.
+  return (field.size > 1) ? value + '  0x' + (value >>> 0).toString(16) : String(value);
+}
+function layoutTable(layout, bin, order) {
+  const table = document.createElement('table');
+  const head = document.createElement('tr');
+  for (const label of ['', 'offset', 'size', 'type', 'field', 'value', 'meaning']) {
+    const th = document.createElement('th');
+    th.textContent = label;
+    head.appendChild(th);
+  }
+  table.appendChild(head);
+  layout.fields.forEach((f, i) => {
+    const row = document.createElement('tr');
+    const swatch = document.createElement('span');
+    swatch.className = 'swatch';
+    swatch.style.background = PALETTE[i % PALETTE.length];
+    const span = (f.size === 1)
+      ? '0x' + f.offset.toString(16)
+      : '0x' + f.offset.toString(16) + '–0x' + (f.offset + f.size - 1).toString(16);
+    const cells = [null, span, String(f.size), f.type, f.name,
+                   decode(bin, f.offset, f, order), f.note];
+    cells.forEach((text, n) => {
+      const td = document.createElement('td');
+      if (n === 0) { td.appendChild(swatch); } else { td.textContent = text; }
+      row.appendChild(td);
+    });
+    table.appendChild(row);
+  });
+  return table;
 }
 // `payload` and `extra` ARE the bytes shown above, so listing them again as
 // decoded values would just repeat the hex in base64.
 const BYTE_FIELDS = ['payload', 'extra'];
 function showRecord(right, pool, tag, rec) {
   right.innerHTML = '';
+  // A tag on its own says nothing: "others / 176 / 1/0" names a record only to
+  // someone holding the catalogue. Where this project can name it, the name
+  // leads and the tag follows.
+  const named = ((data.tags || {})[pool] || {})[tag];
   const heading = document.createElement('h3');
-  heading.textContent = pool + ' / ' + tag + ' ' + rec.key;
+  heading.textContent = named
+    ? named.name + '  —  ' + pool + ' / ' + tag + ' ' + rec.key
+    : pool + ' / ' + tag + ' ' + rec.key;
   right.appendChild(heading);
+  // The description only. How strongly a name is known is not prose for every
+  // record to carry -- the specification's tag tables state each tier in full,
+  // and `tier` travels in the payload for anything reading this as data.
+  if (named && named.description) {
+    const what = document.createElement('p');
+    what.className = 'txt';
+    what.textContent = named.description;
+    right.appendChild(what);
+  }
 
   let raw = '';
+  let payloadLength = 0;
   for (const name of BYTE_FIELDS) {
     const value = rec.fields && rec.fields[name];
     if (typeof value === 'string' && value !== '') { raw += atob(value); }
+    // A layout describes the payload, and `extra` follows it in the same dump.
+    // Where the one ends is not in the report -- `length` is their sum -- so it
+    // is taken here, from the field the bytes came out of.
+    if (name === 'payload') { payloadLength = raw.length; }
   }
   if (raw === '') {
     // A .musx record has no undecoded bytes -- EnigmaXML arrives as XML -- so
@@ -262,21 +440,36 @@ function showRecord(right, pool, tag, rec) {
     box.textContent = rec.xml || '';
     right.appendChild(box);
   } else {
-    right.appendChild(hexBlock(raw));
-    const caption = document.createElement('p');
-    caption.className = 'txt';
-    // Not "decodes as". These fields say where the record sits -- its cmper,
-    // its part, its incidence count. The payload above them is undecoded: what
-    // any of its bytes mean depends on the tag, and this reader decodes those
-    // per tag elsewhere rather than here.
-    caption.textContent = 'addressed by';
-    right.appendChild(caption);
+    // Absent for most tags, and that is the honest answer rather than a gap:
+    // this project has decoded nine record payloads, and a document carries
+    // upwards of 180 tags. Untinted hex says "not decoded"; a layout guessed
+    // at would say something false.
+    const layout = ((data.layouts || {})[pool] || {})[tag];
+    right.appendChild(hexBlock(raw, tintMap(layout, payloadLength)));
+    if (layout) {
+      const caption = document.createElement('p');
+      caption.className = 'txt';
+      const slots = layout.stride
+        ? ', in ' + Math.ceil(payloadLength / layout.stride) + ' slots of ' + layout.stride +
+          ' bytes — the table shows the first'
+        : '';
+      caption.textContent = 'decodes as ' + layout.record + slots;
+      right.appendChild(caption);
+      right.appendChild(layoutTable(layout, raw, data.byteOrder));
+    }
   }
+  // Whatever the record carries that is neither its bytes nor its key. For a
+  // .mus `others` or `details` record that is nothing at all: an "addressed by"
+  // block used to sit here restating the cmper and part, which are the key and
+  // could never differ from it. A DCL row still has `incidences` -- how many
+  // rows were joined to assemble the payload -- which the key does not say.
   const rest = {};
   for (const [k, v] of Object.entries(rec.fields || {})) {
     if (!BYTE_FIELDS.includes(k)) { rest[k] = v; }
   }
-  right.appendChild(fields(rest));
+  if (Object.keys(rest).length !== 0) {
+    right.appendChild(fields(rest));
+  }
 }
 // Both trees are built from DOM nodes rather than an innerHTML string: every
 // key, tag and value goes in as text, so there is no second escaper to get
@@ -388,6 +581,7 @@ renderUntranslated();
 renderRecords();
 show('music');
 """
+)
 
 
 def _embed(data: object) -> str:
@@ -464,6 +658,9 @@ def render_html(inspection: Inspection) -> str:
             "music": inspection.music,
             "document": inspection.document,
             "records": inspection.records,
+            "tags": inspection.tags,
+            "layouts": inspection.layouts,
+            "byteOrder": inspection.byte_order,
             "notes": inspection.notes,
         }
     )

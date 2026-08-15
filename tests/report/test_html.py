@@ -278,6 +278,97 @@ def test_a_musx_record_carries_xml_instead_of_walked_fields() -> None:
     assert "fields" in without_source
 
 
+def test_the_hex_view_tints_a_byte_at_a_time() -> None:
+    """A field is tinted where it sits. Emitting one span per row -- the shape
+    before this -- cannot colour a field that straddles a row boundary."""
+    html = render_html(_inspection())
+    assert "function tintMap(" in html
+    assert "function tinted(" in html
+    assert "function hexBlock(bin, map)" in html
+
+
+def test_the_report_and_the_specification_tint_from_one_palette() -> None:
+    """A field is the same colour in the document as in the tool, because both
+    read the palette out of the library rather than restating it."""
+    from finale_file_parser.formats.layouts import PALETTE
+
+    html = render_html(_inspection())
+    assert f"const PALETTE = {json.dumps(list(PALETTE))};" in html
+
+
+def test_a_decoded_value_is_read_with_the_document_s_own_byte_order() -> None:
+    """A `.mus` states its byte order and the 2001-2005 era does occur
+    big-endian. Reading a measure width the wrong way round yields a number
+    rather than an error, so the order travels with the report.
+    """
+    html = render_html(_inspection(byte_order="big"))
+    assert '"byteOrder": "big"' in html
+    assert "function decode(bin, offset, field, order)" in html
+    assert "(order === 'big')" in html
+
+
+def test_the_tint_stops_where_the_payload_does() -> None:
+    """A layout describes the payload; `extra` follows it in the same dump and
+    the layout says nothing about it. `length` is their sum, so the boundary is
+    taken from the payload field itself."""
+    html = render_html(_inspection())
+    assert "payloadLength" in html
+    assert "tintMap(layout, payloadLength)" in html
+
+
+def test_a_tag_with_no_layout_shows_hex_and_nothing_else() -> None:
+    """Nine payloads are decoded against a document's ~180 tags, so most records
+    have no layout. Untinted hex says "not decoded", which is true; a guessed
+    layout would say something false."""
+    html = render_html(_inspection())
+    script = html[html.index("//<![CDATA[") :]
+    assert "if (layout) {" in script, "the table is drawn only where a layout exists"
+
+
+def test_document_options_are_grouped_out_of_the_tag_list() -> None:
+    """A document carries one option record under each of ~98 tags. Left in
+    place they read as the same row repeated down the whole tree; gathered
+    under one heading they read as what they are.
+
+    The tag is the row, because 4,743 of 4,790 such tags across the corpus hold
+    exactly one -- a child row under it would say nothing the tag did not.
+    """
+    html = render_html(_inspection())
+    script = html[html.index("//<![CDATA[") :]
+    assert "tree('document options'" in script
+    assert "records.filter(r => r.options)" in script
+    assert "records.filter(r => !r.options)" in script, "ordinary records stay in the tag list"
+    assert "if (records.length === 1)" in script, "a single option record needs no row of its own"
+
+
+def test_the_script_uses_no_regex_literal_for_the_sentinel() -> None:
+    """This script is a Python string literal, where a backslash is Python's
+    escape before it is ever JavaScript's. `/^\\(|\\)$/` raised a SyntaxWarning
+    and would have shipped a regex Python had already rewritten."""
+    html = render_html(_inspection())
+    script = html[html.index("//<![CDATA[") :]
+    assert "function withoutSentinel(key)" in script
+    assert "key.slice(1, -1)" in script
+
+
+def test_a_named_tag_leads_with_its_name() -> None:
+    html = render_html(_inspection())
+    script = html[html.index("//<![CDATA[") :]
+    assert "named.name + '  —  ' + pool" in script
+    assert "named.description" in script
+
+
+def test_a_records_key_is_not_restated_underneath_it() -> None:
+    """An "addressed by" block used to sit below the hex restating the cmper and
+    part. Those *are* the key, shown once in the heading, and could never differ
+    from it. What is not the key -- a DCL row's `incidences` -- still shows."""
+    html = render_html(_inspection())
+    script = html[html.index("//<![CDATA[") :]
+    # The quoted string, not the words: a comment still explains why it went.
+    assert "'addressed by'" not in script
+    assert "Object.keys(rest).length !== 0" in script, "and nothing renders when none is left"
+
+
 def test_the_hex_view_builds_its_newline_rather_than_escaping_one() -> None:
     """The script is a Python string literal, so a backslash-n would become a
     real newline inside a JS string literal and fail to parse. The old byte

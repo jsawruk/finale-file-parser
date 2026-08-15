@@ -23,7 +23,7 @@ from finale_file_parser.enigma.document import EnigmaDocument, Record, parse_eni
 from finale_file_parser.enigma.location import locate_entries
 from finale_file_parser.enigma.mus_details import MusDetailRecord, read_mus_details
 from finale_file_parser.enigma.mus_document import read_mus_document
-from finale_file_parser.enigma.mus_others import MusOther, read_mus_others
+from finale_file_parser.enigma.mus_others import OPTIONS_CMPER, MusOther, read_mus_others
 from finale_file_parser.enigma.mus_payload import (
     MusPool,
     read_mus_pools,
@@ -33,6 +33,8 @@ from finale_file_parser.enigma.score import score_xml
 from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.errors import FinaleFileError
 from finale_file_parser.export.musicxml import to_musicxml
+from finale_file_parser.formats.layouts import Layout, layout_for
+from finale_file_parser.formats.tags import name_for
 from finale_file_parser.report.ladder import Ladder, Stage
 from finale_file_parser.report.summary import (
     DocumentSummary,
@@ -77,6 +79,34 @@ class Inspection:
     music: MusicTree | None = None
     document: DocumentSummary | None = None
     records: dict[str, object] = field(default_factory=dict)
+    tags: dict[str, object] = field(default_factory=dict)
+    """What each record tag present is called, and how strongly that is known.
+
+    A tag on its own says nothing: `others / 176 / 1/0` names a record only to
+    someone holding the catalogue. Every name carries the evidence behind it,
+    because the catalogue's three tiers are not equally strong.
+    """
+
+    layouts: dict[str, object] = field(default_factory=dict)
+    """The payload layout of each record tag present, where one is known.
+
+    Held per tag rather than per record: every `measSpec` in a document has the
+    same layout, and one corpus document carries thousands of them. Attaching
+    the spans to each record would have repeated an identical list of five
+    fields several thousand times, against a report budget this branch has
+    already tripped once.
+    """
+
+    byte_order: str = ""
+    """How to read a multi-byte field in this document's records.
+
+    Not a constant: a `.mus` container states its own order, and the
+    2001-2005 era does occur big-endian. Decoding a `measSpec` width the wrong
+    way round gives a number, not an error, so the order has to travel with the
+    layouts rather than be assumed by whatever reads them. Empty for a `.musx`,
+    which has no bytes to read.
+    """
+
     notes: list[str] = field(default_factory=list)
     """Anything the report had to leave out, and why."""
 
@@ -152,6 +182,9 @@ def inspect_document(path: str | os.PathLike[str]) -> Inspection:
 def _mus_stages(ladder: Ladder, target: Path, inspection: Inspection) -> None:
     pools = ladder.run("decode payload", lambda: read_mus_pools(target), _pools_detail)
     if pools is not None:
+        # The same pool `_pools_detail` reports the order from, so the Debug tab
+        # and the record pane's decoding cannot disagree about it.
+        inspection.byte_order = pools[0].byte_order if pools else ""
         records = ladder.run(
             "read records",
             lambda: _mus_records(target),
@@ -160,6 +193,8 @@ def _mus_stages(ladder: Ladder, target: Path, inspection: Inspection) -> None:
         )
         if records is not None:
             inspection.records = records
+            inspection.tags = _tag_names(records)
+            inspection.layouts = _layouts_present(records)
     document = ladder.run("build document", lambda: read_mus_document(target))
     _finish(ladder, document, inspection)
 
@@ -181,9 +216,16 @@ def _musx_stages(ladder: Ladder, target: Path, inspection: Inspection) -> None:
     _finish(ladder, document, inspection)
 
 
-def _record_entry(key: str, fields: object, length: int | None) -> dict[str, object]:
+def _record_entry(
+    key: str, fields: object, length: int | None, options: bool = False
+) -> dict[str, object]:
     """One record's report shape: identity, walked fields, and how many bytes it
     occupied when that is known.
+
+    `options` marks a record carrying the `0xFFFE` sentinel instead of a key, so
+    a renderer can group those together without parsing the key text back
+    apart. It is set per record rather than per tag because 94 corpus tags hold
+    both: a document-wide default alongside the numbered records it applies to.
 
     No byte offset. The design called for one, but no reader records where a
     record began -- `MusOther` and friends carry their decoded payload, not
@@ -192,58 +234,90 @@ def _record_entry(key: str, fields: object, length: int | None) -> dict[str, obj
     teaches a reader to distrust the rest, so it is gone until the readers can
     answer the question honestly.
     """
-    return {"key": key, "fields": fields, "length": length}
+    entry: dict[str, object] = {"key": key, "fields": fields, "length": length}
+    if options:
+        entry["options"] = True
+    return entry
+
+
+def _key(*parts: tuple[str, object]) -> str:
+    """A record's identity, spelled out rather than punctuated.
+
+    `1/0` is unreadable without knowing the convention for this pool -- the
+    slash means something different in `others` (cmper/part), in `details`
+    (cmper1/cmper2/inci) and in a DCL row. Naming each number costs a little
+    width and removes the need to know any of that.
+
+    A part with no name renders as its value alone, for the component that is
+    not a number at all -- see `_comparator`.
+    """
+    return "(" + ", ".join(f"{name} {value}".strip() for name, value in parts) + ")"
+
+
+def _comparator(name: str, value: int) -> tuple[str, object]:
+    """A record's leading comparator, or what it means when it is a sentinel.
+
+    `0xFFFE` is not an address. It is what Enigma writes where a key would go
+    on a record that has nothing to be keyed by -- a document-wide option (see
+    `mus_others.OPTIONS_CMPER`). Every occurrence across the corpus is in this
+    leading position: 3,771 in `others`, 828 in DCL rows, 180 in `details`
+    under `cmper1`, and never in a `cmper2`, `part` or `inci`.
+
+    Printing it as `cmper 65534` invites reading it as a very high measure or
+    staff number. Worse, a document carries one such record under each of
+    around 99 different tags, so a tree of them reads as the same row repeated
+    when in fact each is a different record.
+    """
+    if value == OPTIONS_CMPER:
+        return ("", "document options")
+    return (name, value)
 
 
 def _mus_other_entry(record: MusOther) -> dict[str, object]:
+    # No cmper or part here: they are the key, stated once above. Repeating
+    # them underneath said nothing a reader could not already see, and could
+    # never differ from it.
     fields = walk_fields(
-        {
-            "cmper": record.cmper,
-            "part": record.part,
-            "payload": encode_raw(record.payload),
-            "extra": encode_raw(record.extra),
-        },
+        {"payload": encode_raw(record.payload), "extra": encode_raw(record.extra)},
         depth=0,
     )
     return _record_entry(
-        key=f"{record.cmper}/{record.part}",
+        key=_key(_comparator("cmper", record.cmper), ("part", record.part)),
         fields=fields,
         length=len(record.payload) + len(record.extra),
+        options=record.cmper == OPTIONS_CMPER,
     )
 
 
 def _mus_detail_entry(record: MusDetailRecord) -> dict[str, object]:
     fields = walk_fields(
-        {
-            "cmper1": record.cmper1,
-            "cmper2": record.cmper2,
-            "inci": record.inci,
-            "payload": encode_raw(record.payload),
-            "extra": encode_raw(record.extra),
-        },
+        {"payload": encode_raw(record.payload), "extra": encode_raw(record.extra)},
         depth=0,
     )
     return _record_entry(
-        key=f"{record.cmper1}/{record.cmper2}/{record.inci}",
+        key=_key(
+            _comparator("cmper1", record.cmper1),
+            ("cmper2", record.cmper2),
+            ("inci", record.inci),
+        ),
         fields=fields,
         length=len(record.payload) + len(record.extra),
+        options=record.cmper1 == OPTIONS_CMPER,
     )
 
 
 def _mus_row_entry(record: MusRowRecord) -> dict[str, object]:
+    # `incidences` stays: alone among these it is not part of the key, and it
+    # says how many rows the reader joined to assemble this payload.
     fields = walk_fields(
-        {
-            "cmper": record.cmper,
-            "cmper2": record.cmper2,
-            "incidences": record.incidences,
-            "payload": encode_raw(record.payload),
-        },
+        {"incidences": record.incidences, "payload": encode_raw(record.payload)},
         depth=0,
     )
     return _record_entry(
-        key=f"{record.cmper}/{record.cmper2}",
+        key=_key(_comparator("cmper", record.cmper), ("cmper2", record.cmper2)),
         fields=fields,
         length=len(record.payload),
+        options=record.cmper == OPTIONS_CMPER,
     )
 
 
@@ -302,6 +376,87 @@ def _mus_records(target: Path) -> dict[str, object]:
     return records
 
 
+def _layout_entry(layout: Layout) -> dict[str, object]:
+    """One layout, flattened for the report.
+
+    Offsets and sizes only -- no decoded values. The bytes are already in the
+    record; a reader of this JSON holds both and can decode one from the other,
+    whereas writing the values here would state the payload twice.
+    """
+    return {
+        "record": layout.record,
+        "struct": layout.name,
+        "stride": layout.stride,
+        "fields": [
+            {
+                "offset": f.offset,
+                "size": f.size,
+                "name": f.name,
+                "type": f.type_,
+                "note": f.note,
+            }
+            for f in layout.fields
+        ],
+    }
+
+
+def _tag_names(records: dict[str, object]) -> dict[str, object]:
+    """What each tag in `records` is called, where this project can say.
+
+    Separate from the layouts: most named tags have no decoded payload, and a
+    few decoded payloads sit under tags whose offsets the reader computes. The
+    two questions -- what is this record, and what do its bytes mean -- have
+    different answers and different evidence.
+    """
+    named: dict[str, object] = {}
+    for pool, tags in records.items():
+        if not isinstance(tags, dict):
+            continue
+        found: dict[str, object] = {}
+        for tag in tags:
+            entry = name_for(pool, str(tag))
+            if entry is not None:
+                found[str(tag)] = {
+                    "name": entry.name,
+                    "description": entry.description,
+                    # How strongly the name is known. Not rendered as prose on
+                    # every record -- the specification's tag tables state each
+                    # tier in full -- but carried for anything reading the
+                    # report as data, where a `matched` name must not be taken
+                    # for a decoded one.
+                    "tier": entry.tier,
+                }
+        if found:
+            named[pool] = found
+    return named
+
+
+def _layouts_present(records: dict[str, object]) -> dict[str, object]:
+    """The layout of every tag in `records` that has one, by pool and tag.
+
+    Two of the nine known layouts are left out, and the omission is the point.
+    A `frameSpec` keeps its entry pair in its *last* incidence and a `gfhold`
+    puts its frame slots at an era-dependent base, so for both of them the
+    reader works out where a field sits from the record in front of it. Laying
+    the nominal offsets over those bytes would tint the wrong ones and decode
+    numbers that look entirely reasonable -- the failure this format is most
+    generous with. Showing plain, untinted hex says "not decoded", which is
+    true; showing the wrong span says something false.
+    """
+    present: dict[str, object] = {}
+    for pool, tags in records.items():
+        if not isinstance(tags, dict):
+            continue
+        found: dict[str, object] = {}
+        for tag in tags:
+            layout = layout_for(pool, str(tag))
+            if layout is not None and not layout.era_dependent:
+                found[str(tag)] = _layout_entry(layout)
+        if found:
+            present[pool] = found
+    return present
+
+
 _IDENTITY_ATTRS = ("cmper", "cmper1", "cmper2", "entnum", "number", "type", "inci", "part")
 """Every attribute that names *which* record this is, widest key first.
 
@@ -326,8 +481,8 @@ def _musx_key(record: Record, index: int) -> str:
     entirely, so 2,263 of one corpus archive's 5,880 records were labelled by
     array position or, where an `inci` was present, by the `inci` alone.
     """
-    parts = [record.attrs[name] for name in _IDENTITY_ATTRS if name in record.attrs]
-    return "/".join(parts) if parts else str(index)
+    parts = [(name, record.attrs[name]) for name in _IDENTITY_ATTRS if name in record.attrs]
+    return _key(*parts) if parts else _key(("position", index))
 
 
 def _musx_entry(record: Record, index: int, source: str = "") -> dict[str, object]:
@@ -461,6 +616,9 @@ def _weight(inspection: Inspection) -> int:
                 "music": inspection.music,
                 "document": inspection.document,
                 "records": inspection.records,
+                "tags": inspection.tags,
+                "layouts": inspection.layouts,
+                "byteOrder": inspection.byte_order,
                 "notes": inspection.notes,
             }
         )
@@ -480,6 +638,10 @@ def apply_budget(inspection: Inspection, limit: int = MAX_JSON_BYTES) -> None:
         return
     if inspection.records:
         inspection.records = {}
+        # The names and layouts describe records that are no longer here, so
+        # they go with them rather than being left behind describing nothing.
+        inspection.tags = {}
+        inspection.layouts = {}
         inspection.notes.append(f"records omitted: the report exceeded its {limit} byte budget")
     if _weight(inspection) <= limit:
         return

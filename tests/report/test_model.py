@@ -240,6 +240,192 @@ def test_the_budget_drops_records_before_the_music_tree() -> None:
     assert any("records" in note for note in inspection.notes)
 
 
+def test_the_budget_takes_the_layouts_with_the_records() -> None:
+    """A layout describes a record. With the records gone it describes nothing,
+    and a renderer holding one would key a hex view to bytes that are not
+    there."""
+    from finale_file_parser.report.model import Inspection, apply_budget
+
+    inspection = Inspection(file={"name": "x", "size": "0"})
+    inspection.records = {"others": {"176": [{"key": "A" * 2000}]}}
+    inspection.layouts = {"others": {"176": {"record": "measSpec", "fields": []}}}
+
+    apply_budget(inspection, limit=500)
+    assert inspection.records == {}
+    assert inspection.layouts == {}
+
+
+def test_the_options_sentinel_is_shown_as_what_it_means_not_as_a_key() -> None:
+    """`0xFFFE` is not an address: it is what Enigma writes where a key would go
+    on a record that has nothing to be keyed by.
+
+    Shown as `cmper 65534` it reads like a very high measure number, and since a
+    document carries one such record under each of ~99 tags, a tree of them
+    reads as one row repeated when each is a different record.
+    """
+    from finale_file_parser.enigma.mus_others import OPTIONS_CMPER, MusOther
+
+    options = MusOther(tag=109, cmper=OPTIONS_CMPER, part=0, payload=b"\x01", extra=b"")
+    assert model._mus_other_entry(options)["key"] == "(document options, part 0)"
+
+    ordinary = MusOther(tag=176, cmper=3, part=0, payload=b"\x01", extra=b"")
+    assert model._mus_other_entry(ordinary)["key"] == "(cmper 3, part 0)"
+
+
+def test_an_options_record_is_flagged_so_it_can_be_grouped() -> None:
+    """Flagged per record, not per tag: 94 corpus tags hold a document-wide
+    default alongside the numbered records it applies to, so grouping a whole
+    tag would move ordinary records under a heading that does not describe
+    them. The flag also spares a renderer parsing the key text back apart.
+    """
+    from finale_file_parser.enigma.mus_others import OPTIONS_CMPER, MusOther
+
+    options = MusOther(tag=109, cmper=OPTIONS_CMPER, part=0, payload=b"\x01", extra=b"")
+    assert model._mus_other_entry(options)["options"] is True
+
+    # Absent rather than False: it costs nothing on the records that are the
+    # overwhelming majority, and `rec.options` is falsy either way.
+    ordinary = MusOther(tag=176, cmper=3, part=0, payload=b"\x01", extra=b"")
+    assert "options" not in model._mus_other_entry(ordinary)
+
+
+@pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
+def test_no_two_records_of_one_tag_share_a_key() -> None:
+    """A row that cannot be told from its neighbour is a row that cannot be
+    selected, so this is worth pinning rather than assuming.
+
+    It also records what an earlier reading of the tree got wrong: rows reading
+    `65534/0` under many different tags looked like duplicates and are not --
+    each is that tag's own options record. Within any one tag, keys are unique
+    across every `.mus` in the corpus.
+    """
+    collisions = []
+    for path in sorted(CORPUS.rglob("*.mus"))[:40]:
+        try:
+            records = model._mus_records(path)
+        except FinaleFileError:
+            continue
+        for pool, tags in records.items():
+            assert isinstance(tags, dict)
+            for tag, entries in tags.items():
+                keys = [e["key"] for e in entries]
+                if len(keys) != len(set(keys)):
+                    collisions.append(f"{path.name} {pool}/{tag}")
+    assert collisions == []
+
+
+def test_a_tag_is_named_and_its_tier_travels_with_the_name() -> None:
+    """`others / 176 / (cmper 1, part 0)` names a record only to someone holding
+    the catalogue.
+
+    The tier is carried but not rendered as prose on every record: the
+    specification's tag tables state each tier in full, and a reader of this
+    report as data must still not take a `matched` name for a decoded one.
+    """
+    named = model._tag_names({"others": {"176": [], "144": [], "213": []}})
+    by_tag = named["others"]
+    assert isinstance(by_tag, dict)
+
+    # 213 is observed across the corpus but unidentified: no name is correct.
+    assert set(by_tag) == {"176", "144"}
+
+    decoded = by_tag["176"]
+    assert isinstance(decoded, dict)
+    assert decoded["name"] == "measSpec"
+    assert decoded["tier"] == "decoded"
+    assert "evidence" not in decoded
+
+    matched = by_tag["144"]
+    assert isinstance(matched, dict)
+    assert matched["name"] == "fontName"
+    assert matched["tier"] == "matched", "a lead must not be recorded as a decoding"
+
+
+def test_the_budget_takes_the_names_with_the_records() -> None:
+    from finale_file_parser.report.model import Inspection, apply_budget
+
+    inspection = Inspection(file={"name": "x", "size": "0"})
+    inspection.records = {"others": {"176": [{"key": "A" * 2000}]}}
+    inspection.tags = {"others": {"176": {"name": "measSpec"}}}
+
+    apply_budget(inspection, limit=500)
+    assert inspection.records == {}
+    assert inspection.tags == {}
+
+
+def test_a_layout_is_offered_for_a_tag_whose_payload_is_decoded() -> None:
+    records: dict[str, object] = {"others": {"176": [], "124": []}}
+    layouts = model._layouts_present(records)
+
+    assert set(layouts) == {"others"}
+    by_tag = layouts["others"]
+    assert isinstance(by_tag, dict)
+    # 176 is measSpec, whose payload this project decodes; 124 is channelPlayData,
+    # which it does not. A tag with no layout must be absent rather than empty:
+    # the renderer distinguishes "no layout" from "a layout with no fields".
+    assert set(by_tag) == {"176"}
+    entry = by_tag["176"]
+    assert isinstance(entry, dict)
+    assert entry["record"] == "measSpec"
+    assert [f["name"] for f in entry["fields"]] == [
+        "width",
+        "key",
+        "beats",
+        "divbeat",
+        "flags",
+    ]
+
+
+def test_a_layout_carries_spans_and_not_values() -> None:
+    """The bytes are already in the record. Writing decoded values here would
+    state the payload a second time, in a report with a size budget."""
+    layouts = model._layouts_present({"others": {"176": []}})
+    by_tag = layouts["others"]
+    assert isinstance(by_tag, dict)
+    entry = by_tag["176"]
+    assert isinstance(entry, dict)
+
+    for span in entry["fields"]:
+        assert set(span) == {"offset", "size", "name", "type", "note"}
+
+
+def test_the_dcl_spelling_of_a_tag_finds_the_same_layout() -> None:
+    """A 2001-2005 document keys its records by two characters, not a number."""
+    numeric = model._layouts_present({"others": {"176": []}})["others"]
+    dcl = model._layouts_present({"others": {"MS": []}})["others"]
+    assert isinstance(numeric, dict)
+    assert isinstance(dcl, dict)
+    assert numeric["176"] == dcl["MS"]
+
+
+@pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
+def test_the_byte_order_travels_with_the_report() -> None:
+    """Not a constant, and not cosmetic: the corpus holds big-endian `.mus`
+    documents, where reading a measSpec width little-endian turns 360 EVPU into
+    26,625 -- a number, not an error. The renderer decodes with this, so it has
+    to be the order the reader used.
+    """
+    orders = set()
+    for path in sorted(CORPUS.rglob("*.mus"))[:40]:
+        inspection = model.inspect_document(path)
+        assert inspection.byte_order in {"little", "big"}
+        orders.add(inspection.byte_order)
+    assert "big" in orders, "a corpus that cannot exercise the order proves nothing"
+
+
+def test_no_layout_is_offered_where_the_reader_computes_the_offsets() -> None:
+    """`frameSpec` keeps its entry pair in its last incidence and `gfhold` puts
+    its frame slots at an era-dependent base, so neither has one fixed layout to
+    lay over a record's bytes.
+
+    Tinting them at their nominal offsets would decode entry numbers that look
+    entirely plausible and are wrong. Plain hex says "not decoded", which is
+    true; a wrong span says something false.
+    """
+    assert model._layouts_present({"others": {"146": [], "FR": []}}) == {}
+    assert model._layouts_present({"details": {"1044": [], "GF": []}}) == {}
+
+
 @pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 def test_a_real_mus_file_gets_records() -> None:
     """End-to-end: the wiring populates the records depth from a real file, and
@@ -259,7 +445,12 @@ def test_a_real_mus_file_gets_records() -> None:
                 # A `.mus` record carries `fields` -- the decoding of its bytes;
                 # a `.musx` record carries `xml` instead, which is both its
                 # source and its decoding.
-                assert entry.keys() in ({"key", "fields", "length"}, {"key", "xml", "length"})
+                # `options` is optional and marks the 0xFFFE sentinel, so it is
+                # dropped before the shape is checked. The shape stays pinned
+                # exactly: this test exists to catch a field added to every
+                # record without anyone deciding to add it.
+                shape = entry.keys() - {"options"}
+                assert shape in ({"key", "fields", "length"}, {"key", "xml", "length"})
                 assert isinstance(entry["key"], str)
 
     # Round-trips through JSON without error: no bytes, no dataclasses left over.
@@ -301,24 +492,26 @@ def test_a_record_is_keyed_by_every_identity_attribute_it_carries() -> None:
     from finale_file_parser.report.model import _musx_key
 
     gfhold = Record(tag="gfhold", attrs={"cmper1": "3", "cmper2": "12"}, text="", fields={})
-    assert _musx_key(gfhold, 7) == "3/12"
+    assert _musx_key(gfhold, 7) == "(cmper1 3, cmper2 12)"
 
     with_inci = Record(
         tag="crossChord", attrs={"cmper1": "3", "cmper2": "12", "inci": "1"}, text="", fields={}
     )
-    assert _musx_key(with_inci, 7) == "3/12/1"
+    assert _musx_key(with_inci, 7) == "(cmper1 3, cmper2 12, inci 1)"
 
     entry = Record(tag="entry", attrs={"entnum": "41", "next": "42"}, text="", fields={})
-    assert _musx_key(entry, 7) == "41", "`next` is a link, not identity"
+    assert _musx_key(entry, 7) == "(entnum 41)", "`next` is a link, not identity"
 
     text = Record(tag="expression", attrs={"number": "5"}, text="", fields={})
-    assert _musx_key(text, 7) == "5"
+    assert _musx_key(text, 7) == "(number 5)"
 
     ordinary = Record(tag="measSpec", attrs={"cmper": "2", "inci": "0"}, text="", fields={})
-    assert _musx_key(ordinary, 7) == "2/0", "unchanged for records that were already right"
+    assert _musx_key(ordinary, 7) == "(cmper 2, inci 0)", "every number says which it is"
 
     anonymous = Record(tag="header", attrs={}, text="", fields={})
-    assert _musx_key(anonymous, 7) == "7", "position is still the fallback when nothing names it"
+    assert _musx_key(anonymous, 7) == "(position 7)", (
+        "position is still the fallback when nothing names it, and now says so"
+    )
 
 
 _MIRROR_XML = (
