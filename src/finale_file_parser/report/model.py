@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
@@ -26,6 +27,7 @@ from finale_file_parser.enigma.mus_others import OPTIONS_CMPER, MusOther, read_m
 from finale_file_parser.enigma.mus_payload import (
     MusPool,
     read_mus_pools,
+    read_mus_streams,
 )
 from finale_file_parser.enigma.mus_rows import MusRowRecord, read_mus_rows
 from finale_file_parser.enigma.score import score_xml
@@ -64,6 +66,9 @@ the count-only summary, not a shared constant."""
 MAX_JSON_BYTES = 16 * 1024 * 1024
 """Budget for the embedded JSON. The largest corpus payload is ~500 KB, so no
 real document approaches this; it exists to stop a pathological file."""
+
+_MUS_TEXT_STREAM = 3
+"""Which payload stream holds the tagged text. See `enigma.mus_document`."""
 
 MAX_FIELD_DEPTH = 8
 """A record's fields may contain records. Bound the walk."""
@@ -387,12 +392,67 @@ def _mus_records(target: Path) -> dict[str, object]:
     if details is not None:
         records["details"] = _group_by_tag((str(r.tag), _mus_detail_entry(r)) for r in details)
     if others is not None or details is not None:
+        _add_texts(records, target)
         return records
 
     rows = read_mus_rows(target)  # a FinaleFileError here is left to propagate
     records["others"] = _group_by_tag((r.tag, _mus_row_entry(r)) for r in rows.others.values())
     records["details"] = _group_by_tag((r.tag, _mus_row_entry(r)) for r in rows.details.values())
+    _add_texts(records, target)
     return records
+
+
+def _add_texts(records: dict[str, object], target: Path) -> None:
+    """The text stream, if this document has one. Never fatal: a document whose
+    binary pools read perfectly must not lose them to a text stream that does
+    not."""
+    try:
+        texts = _mus_texts(target)
+    except (FinaleFileError, OSError, UnicodeError):
+        return
+    if texts:
+        records["texts"] = texts
+
+
+_TEXT_SECTION = re.compile(r"\^([A-Za-z]\w*)\((\d*)\)(.*?)\^end", re.DOTALL)
+"""One tagged section of the `.mus` text stream: `^expression(3)...^end`.
+
+Every marker, not the three `mus_document` translates. That reader takes
+`verse`/`chorus`/`section` because they are the lyrics it can place in a score;
+the stream also holds `^block` (staff names, titles), `^expression` (markings,
+including dynamics) and `^smartshape` (glissandi, octave lines), none of which
+reach a `Score` today. A diagnostic report showing only the translated three
+said a document had one text record when it had several hundred.
+"""
+
+
+def _mus_texts(target: Path) -> dict[str, list[dict[str, object]]]:
+    """The `.mus` text stream, section by section, grouped by marker.
+
+    A `.mus` keeps this as ETF tagged text rather than as binary records, so it
+    is read straight out of the stream and never appeared in the records tree at
+    all -- the one major structure of the file the inspector could not see. It
+    is where staff names live, and expression text, and the font each is set in.
+
+    Text rather than bytes, so these entries carry `text` where a binary record
+    carries `fields`. The markup is kept: `^font(Font0,8191)` is the half of an
+    expression that says what its character means.
+    """
+    streams = read_mus_streams(target)
+    if len(streams) <= _MUS_TEXT_STREAM:
+        return {}
+    body = streams[_MUS_TEXT_STREAM].decode("cp1252", errors="replace")
+    grouped: dict[str, list[dict[str, object]]] = {}
+    for match in _TEXT_SECTION.finditer(body):
+        marker, number, section = match.group(1), match.group(2), match.group(0)
+        grouped.setdefault(marker, []).append(
+            {
+                "key": _key(("number", number)) if number else "(unnumbered)",
+                "text": section,
+                "length": len(section),
+            }
+        )
+    return grouped
 
 
 def _layout_entry(layout: Layout) -> dict[str, object]:

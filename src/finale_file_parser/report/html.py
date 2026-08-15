@@ -451,7 +451,15 @@ function showRecord(right, pool, tag, rec) {
     // is taken here, from the field the bytes came out of.
     if (name === 'payload') { payloadLength = raw.length; }
   }
-  if (raw === '') {
+  if (rec.text !== undefined) {
+    // A .mus text section: ETF tagged text, not bytes. The markup is kept --
+    // ^font(Font0,8191) is the half of an expression that says what its
+    // character means, and stripping it would leave a glyph with no context.
+    const box = document.createElement('div');
+    box.className = 'hex';
+    box.textContent = rec.text;
+    right.appendChild(box);
+  } else if (raw === '') {
     // A .musx record has no undecoded bytes -- EnigmaXML arrives as XML -- so
     // the source form to show is the XML itself. Rebuilt here from the parse
     // rather than carried in the payload, which would have doubled it. Nothing
