@@ -124,24 +124,6 @@ function renderStats() {
   }
   el.innerHTML = out;
 }
-// What this reader knowingly does not carry out of a file. The rest of the old
-// Document summary is gone: its per-pool counts were identical to the ones the
-// Records tree already shows on its own summaries -- measured across 40 .musx
-// documents, identical in all 40 -- and its "version" was the family string the
-// ladder reports one line above.
-function renderUntranslated() {
-  const el = document.getElementById('untranslated');
-  const gaps = (data.document && data.document.untranslated) || [];
-  if (gaps.length === 0) { el.innerHTML = stopped('list of gaps'); return; }
-  const list = document.createElement('ul');
-  for (const gap of gaps) {
-    const item = document.createElement('li');
-    item.textContent = gap;
-    list.appendChild(item);
-  }
-  el.innerHTML = '';
-  el.appendChild(list);
-}
 // The ladder used to sit above every pane, so an empty pane explained itself.
 // It lives under Debug now, so a pane that has nothing to show has to say why
 // and where to look -- otherwise a file that failed to parse opens on a blank
@@ -162,6 +144,22 @@ function findStage(name) {
 // No regex: this script is a Python string literal, where a backslash is
 // Python's escape before it is ever JavaScript's. A key is always parenthesised
 // by `_key`, so slicing the ends off is both simpler and safe.
+// A DCL tag is two characters decoded from a u16 as latin-1, and the era uses
+// plenty of bytes that are not letters: 0x80 and friends arrive as C1 controls,
+// which a browser draws as a blank, a box, or whatever glyph the font happens
+// to put there. None of those can be read back, typed, or searched for. Show
+// the code point instead, and leave printable tags exactly as they are so the
+// numeric 2011 tags and the ordinary two-letter ones are untouched.
+function displayTag(tag) {
+  const codes = [...tag].map(c => c.codePointAt(0));
+  const printable = n => n >= 33 && n <= 126;
+  if (codes.every(printable)) { return tag; }
+  return [...tag]
+    .map((c, i) => printable(codes[i])
+      ? c
+      : 'U+' + codes[i].toString(16).toUpperCase().padStart(4, '0'))
+    .join(' ');
+}
 const SENTINEL = 'document options';
 function withoutSentinel(key) {
   const inner = key.slice(1, -1).split(', ').filter(p => p !== SENTINEL);
@@ -209,7 +207,9 @@ function renderRecords() {
   // numbers is a tree nobody can navigate.
   function tagLabel(pool, tag) {
     const known = ((data.tags || {})[pool] || {})[tag];
-    return known ? tag + '  ' + known.name : tag;
+    // The raw tag stays the lookup key everywhere; only what is shown changes.
+    const shown = displayTag(tag);
+    return known ? shown + '  ' + known.name : shown;
   }
 
   for (const [pool, tags] of pools) {
@@ -406,8 +406,8 @@ function showRecord(right, pool, tag, rec) {
   const named = ((data.tags || {})[pool] || {})[tag];
   const heading = document.createElement('h3');
   heading.textContent = named
-    ? named.name + '  —  ' + pool + ' / ' + tag + ' ' + rec.key
-    : pool + ' / ' + tag + ' ' + rec.key;
+    ? named.name + '  —  ' + pool + ' / ' + displayTag(tag) + ' ' + rec.key
+    : pool + ' / ' + displayTag(tag) + ' ' + rec.key;
   right.appendChild(heading);
   // The description only. How strongly a name is known is not prose for every
   // record to carry -- the specification's tag tables state each tier in full,
@@ -577,7 +577,6 @@ function control(label, onClick) {
 }
 renderStats();
 renderMusic();
-renderUntranslated();
 renderRecords();
 show('music');
 """
@@ -656,7 +655,6 @@ def render_html(inspection: Inspection) -> str:
             "stages": [asdict(s) for s in inspection.stages],
             "stats": inspection.stats,
             "music": inspection.music,
-            "document": inspection.document,
             "records": inspection.records,
             "tags": inspection.tags,
             "layouts": inspection.layouts,
@@ -680,7 +678,6 @@ def render_html(inspection: Inspection) -> str:
         "<h2>Pipeline</h2>"
         f"{_ladder(inspection)}"
         '<h2>Stats</h2><div id="stats"></div>'
-        '<h2>Not translated</h2><div id="untranslated"></div>'
         "</section>"
         f'<script id="inspection" type="application/json">{payload}</script>'
         f"<script>//<![CDATA[\n{_SCRIPT}\n//]]></script>"
