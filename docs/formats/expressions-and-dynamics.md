@@ -157,6 +157,33 @@ claimed when the glyph is in the table *and* either the text is set in a music
 font or the document's own category is `dynamics`; the 129 rows with neither
 signal are carried as text and left unnamed.
 
+### 913 of them do not reach the IR
+
+Read: 11,543. Reaching a `Measure`: **10,630**. The gap is 913 markings in 267
+documents, and it was invisible for a release because the sweep that was supposed
+to prove the feature asked the reader whether the reader had read — never once
+going through `build_score`. Two causes:
+
+| cause | count | why |
+| --- | --- | --- |
+| assigned to a staff **list** (`staffAssign = -1`) | 596 | needs `categoryStaffListScore`; see below |
+| assigned to a staff holding **no notes** | 317 | one `Part` per staff *with music*, so nowhere to put it |
+
+**Why the list is not resolved.** `staffAssign = -1` is the sentinel for "this
+belongs to a staff list", and the file says so itself: all 746 assignments
+carrying it also carry `staffGroup` *and* `staffList`, where a positive-staff
+assignment almost never does (138 of 11,687). `staffList` selects a
+`categoryStaffListScore`, whose repeated `inst` field is `-1` in 6,215 of 6,419
+incidences — but the remainder name real staves, and `-1` appears *beside* them
+in tuples such as `('-1', '9', '13')`. Reading `-1` as "every staff" would place
+a marking on staves the list may exclude, so it is left alone. This closes when
+`inst` is decoded, not by looking harder at the assignment.
+
+All three counts are pinned in both directions by
+`tests/enigma/test_expressions_ir_corpus_sweep.py`: growth means a new way to
+lose a marking, and a fall means one of these causes was fixed and the constants
+should say so.
+
 ### What the exporter does with them
 
 `<dynamics><ff/></dynamics>` for a named marking, `<words>` for anything that
