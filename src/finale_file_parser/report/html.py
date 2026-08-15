@@ -412,13 +412,13 @@ function showRecord(right, pool, tag, rec) {
     ? named.name + '  —  ' + pool + ' / ' + displayTag(tag) + ' ' + rec.key
     : pool + ' / ' + displayTag(tag) + ' ' + rec.key;
   right.appendChild(heading);
-  // The description only. How strongly a name is known is not prose for every
-  // record to carry -- the specification's tag tables state each tier in full,
-  // and `tier` travels in the payload for anything reading this as data.
+  // The description, led by the tag it describes. The heading above carries the
+  // tag too, but the description reads as a floating sentence without it --
+  // "names drum sets" says nothing about WHICH record names them.
   if (named && named.description) {
     const what = document.createElement('p');
     what.className = 'txt';
-    what.textContent = named.description;
+    what.textContent = displayTag(tag) + ' tag — ' + named.description;
     right.appendChild(what);
   }
 
@@ -449,6 +449,17 @@ function showRecord(right, pool, tag, rec) {
     // at would say something false.
     const layout = ((data.layouts || {})[pool] || {})[tag];
     right.appendChild(hexBlock(raw, tintMap(layout, payloadLength)));
+    if (!layout) {
+      // Say it rather than showing nothing. Nine record payloads are decoded
+      // against roughly 180 tags in a document, so most records land here, and
+      // an empty space below the hex reads as a table that failed to render
+      // rather than as the honest answer.
+      const none = document.createElement('p');
+      none.className = 'txt';
+      none.textContent = 'No field layout is known for this record, so the bytes '
+        + 'above are shown undecoded.';
+      right.appendChild(none);
+    }
     if (layout) {
       const caption = document.createElement('p');
       caption.className = 'txt';
