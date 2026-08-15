@@ -1,6 +1,7 @@
 # Expressions, and how a dynamic is written
 
-Status: **identified.** Measured 2026-08-15 against 80 corpus `.musx` documents.
+Status: **identified, and now named.** Measured 2026-08-15 against 401 corpus
+`.musx` documents.
 
 ## A dynamic is a character, not a word
 
@@ -35,49 +36,128 @@ dynamics.
 `markingsCategoryName` gives its display name (`Dynamics`). A `textExprDef`
 names its `categoryID`. None of this is inferred.
 
+## The file names them itself: `descStr`
+
+A `textExprDef` carries a **`descStr`**, and for a dynamic that field spells the
+marking out in words with its playback level attached:
+
+    descStr = 'fortissimo (velocity = 101)'   value = 101
+    descStr = 'forte (velocity = 88)'         value = 88
+
+So no font chart is needed to say which glyph is which. This is worth dwelling
+on, because the previous reading of this file concluded the opposite — that
+naming them "needs Maestro's character chart, and Finale's manual renders it as
+images". The chart was never the obstacle. `descStr` was in the record all
+along, in the same record already being read for `value`, and was not looked at.
+It is the recurring failure in this project: *"the corpus cannot tell us" is
+usually "our selection code did not ask"*.
+
+`descStr` and `value` sit in the **same record**, so name-to-velocity needs no
+join at all: they agree in 4,369 records against 9 exceptions, and every
+exception is a document whose playback level a user edited.
+
 ## The table
 
-A `textExprDef` in the dynamics category carries a playback `value`, and its
-**`cmper`** selects the expression text holding the character. Nine of the ten
-are unanimous across 80 documents; `P` is 62 in 80 and 58 in one, a file whose
-playback level was edited. These are the defaults a document ships with:
+Measured across 401 parsed `.musx` documents, of which 393 contribute a glyph.
+The abbreviations are the conventional spellings of the Italian words the file
+uses; the words and the velocities are what was read out of the file.
 
-| glyph | code | velocity |
-| --- | --- | --- |
-| `ë` | 0xEB | 127 |
-| `ì` | 0xEC | 114 |
-| `Ä` | 0xC4 | 101 |
-| `f` | 0x66 | 88 |
-| `F` | 0x46 | 75 |
-| `P` | 0x50 | 62 |
-| `p` | 0x70 | 49 |
-| `¹` | 0xB9 | 36 |
-| `¸` | 0xB8 | 23 |
-| `¯` | 0xAF | 10 |
+| glyph | code | `descStr` | marking | velocity |
+| --- | --- | --- | --- | --- |
+| `ë` | 0xEB | fortissississimo | `ffff` | 127 |
+| `ì` | 0xEC | fortississimo | `fff` | 114 |
+| `Ä` | 0xC4 | fortissimo | `ff` | 101 |
+| `f` | 0x66 | forte | `f` | 88 |
+| `F` | 0x46 | mezzo forte | `mf` | 75 |
+| `P` | 0x50 | mezzo piano | `mp` | 62 |
+| `p` | 0x70 | piano | `p` | 49 |
+| `¹` | 0xB9 | pianissimo | `pp` | 36 |
+| `¸` | 0xB8 | pianississimo | `ppp` | 23 |
+| `¯` | 0xAF | pianissississimo | `pppp` | 10 |
 
-`subito p` shares piano's 49, being piano with a word in front of it.
+The two anchors land where they must: Maestro writes *forte* as `f` and *piano*
+as `p`, and those are the fourth and seventh rungs — exactly forte's and piano's
+places in a ten-step ladder. That was the only evidence for the ordering before
+`descStr` was read; it is now a cross-check on it.
 
-**The order is certain; the names are not claimed.** Calling these `fff`, `ff`
-and so on needs Maestro's character chart, and Finale's manual renders it as
-images. Two anchors do fall where they should, which is why the ordering can be
-trusted: Maestro writes *forte* as `f` and *piano* as `p`, and those sit at 88
-and 49 — exactly forte's and piano's places in a ten-step ladder.
+### The five that shape an attack
 
-## A join error worth recording
+These carry **no `value`** in the shipped library — they modify an attack rather
+than setting a level:
 
-`textExprDef.textIDKey` is **not** the expression number. It runs exactly
-`cmper + 13`, and reading it as the number pairs every definition with the text
-thirteen slots later. Done that way the dynamics category appears to contain
-`Adagio`, `Largo` and `Grave`, and the velocity ladder appears to be a
-meaningless per-slot default.
+| glyph | code | `descStr` | marking |
+| --- | --- | --- | --- |
+| `ê` | 0xEA | forte piano | `fp` |
+| `Z` | 0x5A | forzando | `fz` |
+| `S` | 0x53 | sforzando | *not claimed* |
+| `§` | 0xA7 | sforzato | *not claimed* |
+| `\x8d` | 0x8D | sforzato | *not claimed* |
 
-It is neither. Pairing on `cmper` puts the tempo words in `tempoMarks` where
-they belong and leaves the dynamics category holding only dynamics.
+**Three are deliberately unnamed.** `§` and `\x8d` have the *same* `descStr`, so
+the file does not say which is which, and *sforzando* is written `sf` and `sfz`
+both. Naming them needs evidence this project does not have.
+
+"No `value`" is the shipped default, not a rule: a user may set a playback level
+on any expression, and one corpus document gives its *sforzando* 88 with
+`playType='amplitude'`.
+
+`subito p` — the one library entry whose text is more than one character —
+shares piano's 49, being piano with a word in front of it.
+
+### A cross-check from another category
+
+`value` is not velocity-specific; it is *the playback number for this
+expression*. In `tempoMarks` the same field holds beats per minute, and the
+words confirm it: `Adagio` 40, `Moderato` 108, `Allegro` 120, each matching the
+`q = …` printed in its own text.
+
+## Which key joins a definition to its text
+
+Join on **`cmper`**. `textExprDef.textIDKey` is not the expression number:
+reading it as one pairs every definition with a text some slots later, and done
+that way the dynamics category appears to contain `Adagio`, `Largo` and `Grave`
+while the velocity ladder looks like a meaningless per-slot default. Pairing on
+`cmper` puts the tempo words in `tempoMarks` where they belong and leaves the
+dynamics category holding only dynamics. `descStr` now confirms this
+independently: the definition described `forte (velocity = 88)` prints `f`,
+where the `textIDKey` reading would pair *forte* with *Adagio*.
 
 The tell was a **constant offset in a supposed foreign key** — 1→14, 2→15,
-3→16. That is a join error, not a fact about the format, and it survived a
-first reading because tempo text under a Dynamics heading is odd enough to look
-like a real discovery.
+3→16 — which is a join error, not a fact about the format.
+
+### The offset is not 13, and that matters
+
+An earlier note here recorded `textIDKey` as running "exactly `cmper + 13`".
+Measured across all 396 documents that reach a named dynamic, the offset
+`textIDKey − number` is **13 in 368 documents, 19 in 21, and 1 in 7**. It is not
+a constant, so it is not a rule — 13 is just what the MakeMusic template
+documents happen to use. What `textIDKey` actually indexes is **not established**
+and is not guessed at here.
+
+Counting which join names all ten dynamics correctly: `cmper` in 391 documents,
+`textIDKey − 13` in 357. `cmper` wins, which is why it is the rule.
+
+### `cmper` can still slip, in one known way
+
+`Christmas Canon.musx` had its *mezzo forte* **deleted**. Expression text number
+5 is simply missing from the pool (`…'4', '6', '7'…`) while the definitions were
+renumbered to close the gap, so definition 6 is now *piano* and every glyph
+below the hole pairs with its neighbour's description:
+
+| cmper | `descStr` | `texts[cmper]` | correct glyph |
+| --- | --- | --- | --- |
+| 5 | mezzo piano | *(missing)* | `P` |
+| 6 | piano | `P` | `p` |
+| 7 | pianissimo | `p` | `¹` |
+
+In *this* document `textIDKey − 13` gives the right answer for every row, and
+`textIDKey` even skips 18 exactly where the deleted text was — so it is a real
+pointer into the text pool, just one whose base this project cannot yet predict.
+
+The corpus sweep therefore **validates the join per document before trusting a
+glyph**: the definition described `forte` must print `f` and the one described
+`piano` must print `p`, or the document contributes nothing and is counted as
+desynchronised. Dropping such a document silently would be worse than failing.
 
 ## `^DT` — the 2001–2005 text expression, partly decoded
 
@@ -125,6 +205,11 @@ The 2011 era has **95 paired documents**, so its numeric equivalent can be
 decoded field by field against the `.musx` twin that names them — the method
 that settled the clef table. Then check whether `DT` shares the layout.
 
-Two traps, both hit already: `textIDKey` is `cmper + 13`, so joining through it
-yields coherent nonsense; and the enum offsets above will look meaningless read
-in the wrong byte order.
+Two traps, both hit already: joining through `textIDKey` yields coherent
+nonsense (see above — and the offset that makes it look tidy is not even
+constant); and the enum offsets above will look meaningless read in the wrong
+byte order.
+
+A third, learned the expensive way here: **read the fields the record already
+has before reaching for an external source.** `descStr` named all ten dynamics
+and was sitting in a record this project had been parsing for weeks.
