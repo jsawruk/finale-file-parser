@@ -146,12 +146,10 @@ permissive license suits a format-interoperability library that other tools need
 
 <!-- Add architectural forks here as they arise, each with a recommended default and "owner to
      confirm". Move to a DECIDED entry above once resolved. -->
-- **OPEN — GUI framework and repo layout for notation rendering.** Narrowed by the 2026-08-04 entry
-  below: the hex-viewer half of the frontend shipped as a self-contained HTML report and took no GUI
-  dependency, so this question now applies only to notation rendering, which remains unbuilt and
-  unscheduled. Recommended default: keep the parser a standalone importable package and add any
-  future notation-rendering app as a separate package in the same repo, so the library never gains a
-  GUI dependency. Framework unchosen. Owner to confirm.
+- **RESOLVED 2026-08-15 — notation rendering.** Answered by the entry below: notation is engraved by
+  Verovio into the report's Music tab. No GUI framework, no separate package, no repo split. What
+  remains genuinely open is only whether this project ever grows an interactive editing application,
+  which nothing currently calls for.
 - **OPEN — does each detected version need distinct record-parsing logic?** Version detection
   itself is DECIDED (see above) and covers both `.mus` and `.musx`. What remains unknown is whether
   the record layouts inside a given version differ enough to require separate parsing paths per
@@ -561,3 +559,43 @@ across all 38 documents carry the text verbatim.
 
 **Reopen if** a `labelled` name is ever contradicted by a decoded payload, which
 would mean the words in a record describe something other than the record.
+
+## 2026-08-15 — DECIDED: Verovio engraves the score, as a runtime dependency
+
+**Owner's decision**, chosen over a hand-drawn SVG renderer that would have taken no dependency.
+
+The report's Music tab showed a tree of parts, measures and events. That is what the parser
+*found*; it is not the form in which "did this file read correctly?" is actually asked. A wrong
+clef, a passage a step sharp, or a rhythm that does not add up is obvious at a glance on a staff
+and invisible in a list of pitch names. The tab now shows the engraved score above the tree.
+
+**Why not hand-drawn.** This project draws its own staves in `scripts/format_spec/`, so the
+precedent existed and the option was real. It was rejected because notation that is subtly wrong
+because the *renderer* is wrong is worse than no notation at all: a reader cannot tell which half
+to distrust, and the entire value of this pane is trusting what it shows.
+
+**What it costs.**
+
+- **A runtime dependency, where there was one.** `dependencies` was `defusedxml` alone; it is now
+  `defusedxml` and `verovio`.
+- **LGPL-3.0, where this project is MIT.** Verovio is imported as a separate package and never
+  vendored or statically linked, so this project's own licence is unchanged and MIT code may depend
+  on an LGPL library. A redistributor bundling both into one artifact does take on the LGPL's
+  obligations for the Verovio part. `THIRD-PARTY-NOTICES.md` states this.
+- **Report size.** A page is 208 KB of SVG at the corpus median and the largest scores reach 5.2 MB
+  across twenty pages. Pages are taken in order up to `MAX_NOTATION_BYTES` (2 MB) and the number
+  omitted is stated on the page, following the same measured-and-reported pattern as the JSON
+  budget.
+- **Time.** Median 0.04 s per document, worst observed 0.18 s: about 35 seconds across the corpus
+  sweep, which the split gate absorbs.
+
+**What it does not cost.** The report is still one self-contained file that works offline. Verovio
+draws every glyph as a path and references no external font, image or stylesheet — verified on the
+corpus, not assumed.
+
+**The library still parses without it in every sense that matters**: engraving is a ladder stage
+run with `halt=False`, so a document Verovio cannot lay out still produces a report with its music
+tree, its records and its ladder, and the stage says what happened.
+
+**Reopen if** the dependency becomes a problem for a consumer who wants the parser without it, at
+which point the answer is an optional extra and a fallback message rather than a different engraver.

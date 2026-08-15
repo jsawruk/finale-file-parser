@@ -84,6 +84,9 @@ details.node > summary::marker { color: #999; }
 .hex .off { color: #999; }
 .hex .txt { color: #666; }
 .no-bytes { color: #666; max-width: 34rem; }
+.score { overflow-x: auto; margin-bottom: 1rem; }
+.score .page { margin-bottom: 0.5rem; }
+.score svg { max-width: 100%; height: auto; }
 .swatch { display: inline-block; width: 0.9rem; height: 0.9rem; border: 1px solid #ccc; }
 """
 
@@ -514,7 +517,9 @@ function fields(value) {
   return box;
 }
 function renderMusic() {
-  const el = document.getElementById('music');
+  // The engraved staves are already in the page, written as markup rather than
+  // rebuilt from the payload. This fills the tree beneath them.
+  const el = document.getElementById('music-tree');
   if (!data.music) { el.innerHTML = stopped('music'); return; }
   el.innerHTML = '';
   for (const part of data.music.parts) {
@@ -631,6 +636,30 @@ def _ladder(inspection: Inspection) -> str:
     return '<ol class="ladder">' + "".join(rows) + "</ol>"
 
 
+def _notation(inspection: Inspection) -> str:
+    """The engraved pages, or a line saying why there are none.
+
+    Verovio's SVG goes in verbatim: it is generated markup, not document text,
+    and it is the one thing on this page that must not be escaped. Nothing from
+    the file reaches it as markup either -- the engraver is handed a `Score`,
+    which is the parser's own typed model, and every string in it has already
+    been through MusicXML serialisation.
+    """
+    engraving = inspection.notation
+    if engraving is None or not engraving.pages:
+        stage = next((s for s in inspection.stages if s.name == "engrave notation"), None)
+        why = f"the {stage.name} stage {stage.status}" if stage else "it was not reached"
+        return f'<p class="stopped">No notation — {_text(why)}. See the Debug tab.</p>'
+    omitted = ""
+    if engraving.omitted:
+        omitted = (
+            f'<p class="meta">Showing {len(engraving.pages)} of {engraving.total} pages; '
+            f"the rest are omitted to keep the report a size worth opening.</p>"
+        )
+    pages = "".join(f'<div class="page">{page}</div>' for page in engraving.pages)
+    return f'<div class="score">{pages}</div>{omitted}'
+
+
 def render_html(inspection: Inspection) -> str:
     """One self-contained page. No network, no build step, no external assets.
 
@@ -671,7 +700,8 @@ def render_html(inspection: Inspection) -> str:
         '<nav><button data-pane="music">Music</button>'
         '<button data-pane="records">Records</button>'
         '<button data-pane="debug">Debug</button></nav>'
-        '<section id="music"></section><section id="records"></section>'
+        f'<section id="music">{_notation(inspection)}<div id="music-tree"></div></section>'
+        '<section id="records"></section>'
         '<section id="debug">'
         "<h2>File</h2>"
         f'<p class="meta">{meta}</p>{notes}'
