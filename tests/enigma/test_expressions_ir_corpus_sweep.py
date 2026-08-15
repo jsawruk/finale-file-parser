@@ -32,18 +32,19 @@ CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
-READ = 11462
+READ = 11642
 """Expressions `expressions_by_measure` returns across the corpus.
 
-Was 11,543. The 81 fewer are score-wide copies of a marking the same measure
-already assigns to a real staff, which the reader now drops as redundant.
+Was 11,462. The 180 more are dynamics the file names in `descStr` but has no
+expression text for; they were dropped for having nothing to print, and
+`<dynamics><mp/></dynamics>` never needed a character.
 """
 
-PLACED = 11145
+PLACED = 11277
 """Expressions that reach a `Measure` in the IR.
 
-Was 10,630. The 515 recovered are score expressions, now placed on the topmost
-part instead of being dropped for naming staff -1.
+Was 11,145. The 132 more are textless dynamics; the other 48 of the 180
+recovered land on a staff with no notes and are lost downstream instead.
 """
 
 SCORE_WIDE = 515
@@ -58,7 +59,7 @@ Pinned as a *placed* count rather than a lost one -- if it falls, score
 expressions have stopped arriving again.
 """
 
-DROPPED_ON_A_SILENT_STAFF = 317
+DROPPED_ON_A_SILENT_STAFF = 365
 """Assigned to a staff that holds no notes anywhere in the document.
 
 `build_score` builds one `Part` per staff that has music, so a staff carrying
@@ -178,6 +179,13 @@ def test_every_score_wide_marking_lands_on_the_top_part(reading: _Reading) -> No
 
 
 def test_most_expressions_do_reach_the_ir(reading: _Reading) -> None:
-    """The gap is a known edge, not the common case: 97% arrive."""
-    assert reading.placed / reading.read > 0.97
+    """The gap is a known edge, not the common case: 96.9% arrive.
+
+    Was 97.2%. It slipped because recovering the textless dynamics added 180 to
+    the numerator's input and only 132 to the numerator -- 48 of them are
+    assigned to a staff with no notes, so they join the one remaining cause. A
+    ratio that falls while the absolute count rises is not a regression, which is
+    why the exact counts above are the real guard and this is only a floor.
+    """
+    assert reading.placed / reading.read > 0.96
     assert reading.affected < reading.documents, "some document must place all of its markings"

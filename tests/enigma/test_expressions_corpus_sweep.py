@@ -32,6 +32,7 @@ class _Reading:
         self.documents = 0
         self.documents_with_a_dynamic = 0
         self.empty_text = 0
+        self.empty_and_unnamed = 0
         self.staves: set[int] = set()
         self.layers: Counter[str] = Counter()
 
@@ -55,6 +56,8 @@ def reading() -> _Reading:
                 out.layers[str(expression.layer)] += 1
                 if not expression.text:
                     out.empty_text += 1
+                    if not expression.marking:
+                        out.empty_and_unnamed += 1
                 if expression.marking:
                     out.markings[expression.marking] += 1
                     has_dynamic = True
@@ -69,10 +72,19 @@ def test_the_sweep_reaches_the_whole_corpus(reading: _Reading) -> None:
     assert reading.documents_with_a_dynamic >= 300
 
 
-def test_nothing_placed_has_empty_text(reading: _Reading) -> None:
-    """An expression with nothing to print is dropped at the reader, so none
-    should survive to here -- otherwise a consumer prints a blank direction."""
-    assert reading.empty_text == 0
+def test_empty_text_survives_only_when_something_names_it(reading: _Reading) -> None:
+    """Empty text is legitimate now, but only with a marking beside it.
+
+    180 corpus dynamics have no expression text record while their definition
+    says `'mezzo piano (velocity = 62)'`. Those are kept, because a consumer
+    renders `<dynamics><mp/></dynamics>` from the marking and never needed the
+    character. What must not survive is an expression with **neither** -- that is
+    a blank direction, and 461 corpus assignments are that shape.
+    """
+    assert reading.empty_text == 180
+    assert reading.empty_and_unnamed == 0, (
+        f"{reading.empty_and_unnamed} expressions have nothing to print and nothing to call them"
+    )
 
 
 def test_the_distribution_is_a_score_not_a_library(reading: _Reading) -> None:
