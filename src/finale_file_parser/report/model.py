@@ -35,6 +35,7 @@ from finale_file_parser.export.musicxml import to_musicxml
 from finale_file_parser.formats.layouts import Layout, layout_for
 from finale_file_parser.formats.tags import name_for
 from finale_file_parser.report.ladder import Ladder, Stage
+from finale_file_parser.report.notation import Engraving, engrave
 from finale_file_parser.report.summary import (
     DocumentSummary,
     MusicTree,
@@ -114,6 +115,15 @@ class Inspection:
     way round gives a number, not an error, so the order has to travel with the
     layouts rather than be assumed by whatever reads them. Empty for a `.musx`,
     which has no bytes to read.
+    """
+
+    notation: Engraving | None = None
+    """The score engraved as inline SVG pages, when Verovio could lay it out.
+
+    Not in the JSON island with everything else: this is markup, it goes
+    straight into the page, and putting half a megabyte of SVG through
+    `json.dumps` only to have JavaScript write it back out would cost twice
+    and gain nothing.
     """
 
     notes: list[str] = field(default_factory=list)
@@ -677,11 +687,13 @@ def _finish(ladder: Ladder, document: EnigmaDocument | None, inspection: Inspect
     if document is None:
         ladder.run("build score", _unreachable)
         ladder.run("export MusicXML", _unreachable)
+        ladder.run("engrave notation", _unreachable)
         return
     inspection.document = summarise_document(document)
     score = ladder.run("build score", lambda: build_score(document))
     if score is None:
         ladder.run("export MusicXML", _unreachable)
+        ladder.run("engrave notation", _unreachable)
         return
     inspection.stats = summarise_score(score)
     inspection.music = music_tree(score, _mirrored_cells(document))
@@ -690,6 +702,19 @@ def _finish(ladder: Ladder, document: EnigmaDocument | None, inspection: Inspect
         lambda: to_musicxml(score),
         lambda data: {"bytes": str(len(data))},
     )
+    # `halt=False`: engraving is the last rung and the one most likely to fail
+    # on a document the rest of the pipeline handled, since it depends on a
+    # third-party layout engine. A report whose notation could not be drawn
+    # still has its music tree, its records and its ladder, and the stage says
+    # which of those happened.
+    engraving = ladder.run(
+        "engrave notation",
+        lambda: engrave(score),
+        lambda e: {"pages": str(len(e.pages)), "of": str(e.total)},
+        halt=False,
+    )
+    if engraving is not None:
+        inspection.notation = engraving
 
 
 def _mirrored_cells(document: EnigmaDocument) -> dict[tuple[int, int, int], list[int]]:

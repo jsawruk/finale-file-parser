@@ -23,7 +23,16 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
 ]
-dependencies = ["defusedxml>=0.7.1"]
+dependencies = [
+    "defusedxml>=0.7.1",
+    # Engraves the score shown in the inspection report's Music tab. **LGPL-3.0**,
+    # where this project is MIT: it is an ordinary install dependency, imported
+    # and never vendored or statically linked, so the library's own licence is
+    # unaffected -- but anyone redistributing a bundled application carries the
+    # LGPL's obligations for it. See THIRD-PARTY-NOTICES.md and the 2026-08-15
+    # entry in docs/DECISIONS.md.
+    "verovio>=5",
+]
 
 [project.urls]
 Homepage = "https://github.com/jsawruk/finale-file-parser"
@@ -43,11 +52,7 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.8",
     "types-defusedxml>=0.7",
-    # Engraves the pitch examples in docs/formats/finale-formats.pdf. A
-    # build-time tool like the browser that prints the PDF -- not a dependency
-    # of the parser, and nothing it produces is linked into the library. The
-    # document still builds without it; the examples are simply omitted.
-    "verovio>=5",
+    # verovio is an install dependency now, not a dev one -- see [project].
 ]
 
 [tool.setuptools.packages.find]

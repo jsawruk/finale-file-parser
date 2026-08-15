@@ -1,13 +1,36 @@
 # Third-party notices
 
 `finale-file-parser` is MIT licensed (see `LICENSE`). It vendors no third-party
-code as a dependency at runtime — its only install dependency is `defusedxml`.
-Two modules were written *from* third-party work, and this file carries the
-notices that work asks to be carried.
+code: its install dependencies are `defusedxml` and `verovio`, both used as
+ordinary imported packages. Two modules were written *from* third-party work,
+and this file carries the notices that work asks to be carried.
 
 `docs/REFERENCES.md` records every source consulted, including ones that
 imposed no obligation. This file is narrower: it is the set of notices that
 travel with a redistribution.
+
+## `verovio` — score engraving, LGPL-3.0
+
+The inspection report's Music tab shows the parsed score as notation, engraved
+by [Verovio](https://www.verovio.org/), which is **LGPL-3.0** where this project
+is MIT.
+
+Nothing of Verovio is copied into this repository. It is installed as a separate
+package and imported at runtime — `report/notation.py` calls its toolkit and
+embeds the SVG it returns. That is the arrangement the LGPL is written for, and
+it leaves this project's own licence unchanged: MIT code may depend on an LGPL
+library.
+
+**What it means for a redistributor.** Shipping this library on its own, or
+telling users to `pip install finale-file-parser`, carries no new obligation —
+Verovio arrives as its own package under its own licence. Bundling it into a
+single distributed artifact (a frozen application, a container image presented
+as one program) does carry the LGPL's obligations for the Verovio portion:
+notably that recipients can replace it with their own build. If that is the
+plan, read the licence rather than this paragraph.
+
+The SVG Verovio produces is output, not a derivative of Verovio's code, and is
+this project's to embed freely.
 
 ## `enigma/blast.py` — PKWARE DCL decompression
 
