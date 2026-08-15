@@ -35,6 +35,9 @@ Translated:
 | others | `repeatPassList` (206) | `act` — the passes the ending is taken on, a u16 array |
 | details | `staffGroup` (1057) | `startInst`, `endInst`, `bracket.id`, `fullID`, the barline bit |
 | texts | `verse` | the `^verse(N)…^end` sections of the text stream |
+| texts | `expression` | the `^expression(N)…^end` sections of the same stream |
+| others | `textExprDef` (241) | `textIDKey`, `value`, `descStr` |
+| others | `measExprAssign` (177) | `textExprID`, `staffAssign`, offsets; per 24-byte slot |
 
 Every field above is confirmed against paired `.musx` files; see
 `docs/formats/mus-binary-notes.md` for the evidence behind each.
@@ -73,11 +76,13 @@ from finale_file_parser.enigma.mus_others import (
     TAG_CLEF_OPTIONS,
     TAG_FRAME_SPEC,
     TAG_INST_USED,
+    TAG_MEAS_EXPR_ASSIGN,
     TAG_MEAS_SPEC,
     TAG_REPEAT_BACK,
     TAG_REPEAT_ENDING_START,
     TAG_REPEAT_PASS_LIST,
     TAG_STAFF_SPEC,
+    TAG_TEXT_EXPR_DEF,
     MusOther,
     read_mus_others,
 )
@@ -109,15 +114,21 @@ UNTRANSLATED = (
     "root cause as the transposition gap above -- the value lives with the "
     "instrument, not in the file.",
     "measSpec display time signatures (useDisplayTimesig, dispBeats, dispDivbeat).",
-    "Expressions -- dynamics, tempo and technique markings. A .musx places them "
-    "with measExprAssign, which names a textExprDef and a staff; enigma.expressions "
-    "reads 11,543 of them across the 401-document .musx corpus. The DCL era "
-    "spells the assignment ^DY and the definition ^DT, and ^DT has exactly one "
-    "decoded field -- the uint16 playback value at +4. Which offset holds the "
-    "category, and how an assignment reaches its text, are both unknown, so a "
-    ".mus carries no expressions at all rather than guessed ones. This closes "
-    "when DT is decoded against the 95 paired 2011 documents. See "
-    "docs/formats/expressions-and-dynamics.md.",
+    "Expressions in a 2001-2005 document. The 2011 era IS read -- others 241 is "
+    "the definition and 177 the assignment, giving 3,022 markings across 186 "
+    "documents that agree with the paired .musx on 1,464 of 1,476 "
+    "(staff, measure, marking) triples. The DCL era spells them ^DT and ^DY. "
+    "Only one DT field is decoded: the uint16 playback value at +4, confirmed "
+    "434 times out of 434 by the record's own description, which states the "
+    "velocity in words. DT's remaining offsets do not reproduce the 2011 layout "
+    "-- no offset separates the 'Below Staff' descriptions from the rest -- and "
+    "^DY is not decoded at all, so a DCL document carries no expressions rather "
+    "than guessed ones. See docs/formats/expressions-and-dynamics.md.",
+    "Expression category and layer, in every .mus era. The 241 record's "
+    "categoryID is not identified (its best offset agrees 20.3% of the time, "
+    "which is noise) and layer collides with staffAssign at +8. A .mus "
+    "expression therefore reports no category and no layer. Its dynamics are "
+    "still named, from descStr, which is the stronger signal anyway.",
     "Final barlines: measSpec's flags byte at +10 holds the barline style in its "
     "high nibble, and 1 (normal) and 2 (double) ARE read -- see enigma.barlines. "
     "A final bar is not: nibble 3 is the obvious reading and it does not occur "
@@ -236,7 +247,7 @@ _LYRIC_WEXT = 8
 _TEXT_STREAM = 3
 """The payload stream holding ETF tagged text (`^verse(1)...^end`)."""
 
-_TEXT_SECTION = re.compile(rb"\^(verse|chorus|section)\((\d+)\)(.*?)\^end", re.DOTALL)
+_TEXT_SECTION = re.compile(rb"\^(verse|chorus|section|expression)\((\d+)\)(.*?)\^end", re.DOTALL)
 """One tagged text section. The body keeps its markup; `plain_text` strips it."""
 
 _FALLBACK_ENCODING = {"MAC": "mac_roman", "WIN": "cp1252"}
@@ -322,7 +333,14 @@ def read_mus_document(path: str | os.PathLike[str]) -> EnigmaDocument:
         header=Pool(records=_EMPTY),
         mappings=Pool(records=_EMPTY),
         options=OptionsPool(records=tuple(_options_records(others, _banner_year(path)))),
-        others=OthersPool(records=tuple(_others_records(others))),
+        others=OthersPool(
+            records=tuple(
+                _others_records(
+                    others,
+                    _FALLBACK_ENCODING.get(_banner_platform(path) or "", "cp1252"),
+                )
+            )
+        ),
         details=DetailsPool(records=tuple(_details_records(details))),
         entries=EntriesPool(records=read_mus_entry_records(path)),
         texts=TextsPool(records=tuple(_texts_records(path))),
@@ -721,7 +739,82 @@ a slot are not decoded. See `mus_others.TAG_INST_USED`.
 """
 
 
-def _others_records(records: tuple[MusOther, ...]) -> list[Record]:
+_EXPR_ASSIGN_SLOT = 24
+"""Bytes per marking inside a `measExprAssign` payload. Measured; see
+`mus_others.TAG_MEAS_EXPR_ASSIGN`."""
+
+_EXPR_DEF_DESC = 36
+"""Where a `textExprDef` payload's description begins, NUL-terminated.
+
+The wording is identical to the `.musx` `descStr` -- `'forte (velocity = 88)'` --
+which is what lets one reader name a dynamic from either container.
+"""
+
+
+def _text_expr_def(
+    payload: bytes, fallback: str
+) -> dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]]:
+    """The two fields an expression definition needs, plus its description.
+
+    Only what is confirmed at 100% against the paired corpus. `categoryID` is
+    absent because it is not identified, so a `.mus` expression has no category
+    and `enigma.expressions` names its dynamics from the description instead --
+    the stronger signal anyway.
+    """
+    fields: dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]] = {
+        "textIDKey": str(_u16(payload, 0)),
+    }
+    value = _u16(payload, 4)
+    if value:
+        # A definition with no playback level writes zero; the `.musx` omits the
+        # field entirely, and `expressions` reads absent as "no level".
+        fields["value"] = str(value)
+    description = _decode(payload[_EXPR_DEF_DESC:].split(b"\x00")[0], fallback).strip()
+    if description:
+        fields["descStr"] = description
+    return fields
+
+
+_EXPR_ASSIGN_SHAPE = 0x20
+"""Bit of the flags byte at `+11` that marks a **shape** assignment.
+
+A shape assignment names a drawn shape rather than an expression, so its `+0` is
+a `shapeExprID` and reading it as a `textExprID` places whatever definition
+happens to share that number -- 44 spurious markings across the paired corpus
+before this was found.
+
+The bit separates the two groups completely: across 1,554 slots joined to a
+paired `.musx`, it is set on all 57 that name a shape and on none of the 1,497
+that name an expression. Every shape slot in the corpus carries exactly `0x20`
+and nothing else, so the bit test is a small generalisation of what is seen.
+"""
+
+
+def _is_shape_assignment(slot: bytes) -> bool:
+    return bool(slot[11] & _EXPR_ASSIGN_SHAPE)
+
+
+def _meas_expr_assign(
+    slot: bytes,
+) -> dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]]:
+    """One placed marking. `staffAssign` is signed: -1 means a staff list."""
+    fields: dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]] = {
+        "textExprID": str(_u16(slot, 0)),
+        "staffAssign": str(_s16(slot, 8)),
+    }
+    for name, offset in (("horzEduOff", 2), ("horzEvpuOff", 4), ("vertOff", 6)):
+        value = _s16(slot, offset)
+        if value:
+            fields[name] = str(value)
+    return fields
+
+
+def _s16(data: bytes, offset: int) -> int:
+    value = _u16(data, offset)
+    return value - 0x10000 if value >= 0x8000 else value
+
+
+def _others_records(records: tuple[MusOther, ...], fallback: str) -> list[Record]:
     out: list[Record] = []
     for record in records:
         attrs = {"cmper": str(record.cmper)}
@@ -784,6 +877,34 @@ def _others_records(records: tuple[MusOther, ...]) -> list[Record]:
                         attrs={**attrs, "inci": str(inci)},
                         text="",
                         fields={"inst": str(staff)},
+                    )
+                )
+        elif record.tag == TAG_TEXT_EXPR_DEF and len(record.payload) >= _EXPR_DEF_DESC:
+            out.append(
+                Record(
+                    tag="textExprDef",
+                    attrs=attrs,
+                    text="",
+                    fields=_text_expr_def(record.payload, fallback),
+                )
+            )
+        elif record.tag == TAG_MEAS_EXPR_ASSIGN and len(record.payload) >= _EXPR_ASSIGN_SLOT:
+            # One Record per 24-byte slot, keyed by `inci` -- the shape a `.musx`
+            # writes, so `enigma.expressions` reads both without knowing which
+            # container it came from.
+            for inci in range(len(record.payload) // _EXPR_ASSIGN_SLOT):
+                at = inci * _EXPR_ASSIGN_SLOT
+                slot = record.payload[at : at + _EXPR_ASSIGN_SLOT]
+                if _is_shape_assignment(slot):
+                    # Its id names a shape, not an expression; emitting it as a
+                    # textExprID places an unrelated definition.
+                    continue
+                out.append(
+                    Record(
+                        tag="measExprAssign",
+                        attrs={**attrs, "inci": str(inci)},
+                        text="",
+                        fields=_meas_expr_assign(slot),
                     )
                 )
         elif record.tag == TAG_REPEAT_PASS_LIST and len(record.payload) >= 2:

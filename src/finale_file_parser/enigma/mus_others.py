@@ -47,8 +47,10 @@ __all__ = [
     "TAG_CLEF_OPTIONS",
     "TAG_INST_USED",
     "TAG_FRAME_SPEC",
+    "TAG_MEAS_EXPR_ASSIGN",
     "TAG_MEAS_SPEC",
     "TAG_STAFF_SPEC",
+    "TAG_TEXT_EXPR_DEF",
     "MusOther",
     "read_mus_others",
 ]
@@ -114,6 +116,68 @@ pairing stopped choosing a `.musx` by directory-walk order.
 
 What the other 22 bytes of a slot hold is not decoded; only the staff number is
 read, because that is all the layout order needs.
+"""
+
+TAG_TEXT_EXPR_DEF = 241
+"""`textExprDef` — an expression definition: its playback level and its own
+description in words.
+
+Found by asking the record to name itself. A `.musx` `textExprDef` carries a
+`descStr` reading `'fortissimo (velocity = 101)'`, so the tag was located by
+searching every 2011 payload for that shape of text: **exactly one tag matched**,
+958 records across 85 documents.
+
+Decoded against the 97 paired documents, little-endian, by **exact equality**
+rather than by a fitted mapping:
+
+| offset | field | agreement |
+| --- | --- | --- |
+| `+0` u16 | `textIDKey` | 7180/7180 |
+| `+4` u16 | `value` — the playback level | 2107/2107 |
+| `+6` u16 | `auxdata1` | 457/457 |
+| `+8` u16 | `playPass` | 34/34 |
+| `+12` u16 | `horzMeasExprAlign` | 4 values, clean over 6892 rows |
+| `+24` u16 | `vertMeasExprAlign` | 4 values, clean over 5147 rows |
+| `+30` s16 | `yAdjustBaseline` | 4700/4700 |
+| `+32` s16 | `yAdjustEntry` | 5079/5079 |
+| `+36` | the description, NUL-terminated | wording identical to the `.musx` |
+
+`categoryID` is **not** identified: its best offset agrees 20.3% of the time,
+which is noise. `playType` partitions cleanly at no offset. Neither is guessed at,
+so a `.mus` expression has no category — see `mus_document.UNTRANSLATED`.
+
+`+4` also matches `execShape` at 100% (234/234), which is a coincidence of
+coverage: the records carrying `execShape` are a subset of those carrying no
+`value`. `value` is the reading, independently confirmed by the dynamics ladder
+appearing there and by the description stating the same number.
+"""
+
+TAG_MEAS_EXPR_ASSIGN = 177
+"""`measExprAssign` — an expression placed at a measure, on a staff.
+
+The payload is an **array of 24-byte slots**, one per marking, so a measure
+carrying two dynamics is one 48-byte record. The stride is measured, not assumed:
+read at 24 bytes, a slot's first u16 is an expression id the paired `.musx`
+assigns at that same measure in 96.3% of 1,555 slots; read at 12 it is 48.1%,
+and the count of slots stops matching the count of assignments.
+
+| offset | field | agreement |
+| --- | --- | --- |
+| `+0` u16 | `textExprID` — names a `textExprDef` | 1044/1044 |
+| `+2` s16 | `horzEduOff` | 400/401 |
+| `+4` s16 | `horzEvpuOff` | 975/976 |
+| `+6` s16 | `vertOff` | 981/982 |
+| `+8` s16 | `staffAssign` — **-1 means a staff list** | 1044/1044 |
+| `+12` u16 | `staffGroup` | 57/57 |
+| `+14` u16 | `staffList` | 57/57 |
+
+`layer` is not identified: its best offset is `+8`, which `staffAssign` already
+holds at 100%, so it is packed somewhere this has not found. A `.mus` expression
+therefore names no layer.
+
+The 58 slots whose `+0` is not an assigned expression id are the shape
+expressions: those carry a `shapeExprID` instead, and this reader emits nothing
+for them.
 """
 
 TAG_CLEF_OPTIONS = 109

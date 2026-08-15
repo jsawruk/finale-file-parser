@@ -67,12 +67,17 @@ def pools(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
         entries: tuple[Record, ...] = (),
         texts: tuple[Record, ...] = (),
         year: int | None = 2011,
+        platform: str | None = "WIN",
     ) -> None:
         monkeypatch.setattr(adapter, "read_mus_others", lambda _p: others)
         monkeypatch.setattr(adapter, "read_mus_details", lambda _p: details)
         monkeypatch.setattr(adapter, "read_mus_entry_records", lambda _p: entries)
         monkeypatch.setattr(adapter, "_texts_records", lambda _p: list(texts))
         monkeypatch.setattr(adapter, "_banner_year", lambda _p: year)
+        # Stubbed for the same reason as the year: it reads the banner off disk,
+        # and these tests never open a file. It fixes the encoding a
+        # `textExprDef` description is decoded with.
+        monkeypatch.setattr(adapter, "_banner_platform", lambda _p: platform)
 
     return install
 
@@ -846,3 +851,121 @@ def test_a_2011_frame_without_a_start_time_is_unchanged(
     assert record is not None
     assert (record.fields["startEntry"], record.fields["endEntry"]) == ("9", "12")
     assert "startTime" not in record.fields
+
+
+TEXT_EXPR_DEF = 241
+MEAS_EXPR_ASSIGN = 177
+
+
+def text_expr_def_payload(*, text_id: int, value: int, description: bytes) -> bytes:
+    payload = bytearray(36 + len(description) + 1)
+    payload[0:2] = text_id.to_bytes(2, "little")
+    payload[4:6] = value.to_bytes(2, "little")
+    payload[36 : 36 + len(description)] = description
+    return bytes(payload)
+
+
+def meas_expr_assign_slot(*, expr_id: int, staff: int, flags: int = 0x02) -> bytes:
+    slot = bytearray(24)
+    slot[0:2] = expr_id.to_bytes(2, "little")
+    slot[8:10] = staff.to_bytes(2, "little", signed=True)
+    slot[11] = flags
+    return bytes(slot)
+
+
+def test_a_mus_expression_definition_carries_its_value_and_description(
+    pools: Callable[..., None],
+) -> None:
+    """The description is what names a dynamic in a `.mus`: the container has no
+    `^fontMus` markup and its category is not decoded."""
+    pools(
+        others=(
+            MusOther(
+                tag=TEXT_EXPR_DEF,
+                cmper=4,
+                part=0,
+                payload=text_expr_def_payload(
+                    text_id=17, value=88, description=b"forte (velocity = 88)"
+                ),
+            ),
+        )
+    )
+    (record,) = [r for r in read_mus_document(PATH).others.records if r.tag == "textExprDef"]
+    assert record.attrs == {"cmper": "4"}
+    assert record.fields["value"] == "88"
+    assert record.fields["descStr"] == "forte (velocity = 88)"
+    assert record.fields["textIDKey"] == "17"
+    assert "categoryID" not in record.fields, "not identified, so it must not be invented"
+
+
+def test_a_definition_with_no_playback_level_omits_the_field(pools: Callable[..., None]) -> None:
+    """Zero is how the record writes "no level"; the `.musx` omits the field, and
+    `expressions` reads absent as None rather than as a velocity of nought."""
+    pools(
+        others=(
+            MusOther(
+                tag=TEXT_EXPR_DEF,
+                cmper=11,
+                part=0,
+                payload=text_expr_def_payload(text_id=24, value=0, description=b"forte piano"),
+            ),
+        )
+    )
+    (record,) = [r for r in read_mus_document(PATH).others.records if r.tag == "textExprDef"]
+    assert "value" not in record.fields
+    assert record.fields["descStr"] == "forte piano"
+
+
+def test_two_markings_in_one_measure_become_two_assignments(pools: Callable[..., None]) -> None:
+    """The payload is an array of 24-byte slots. Reading only the first would
+    lose the second marking in any measure that carries two."""
+    pools(
+        others=(
+            MusOther(
+                tag=MEAS_EXPR_ASSIGN,
+                cmper=9,
+                part=0,
+                payload=meas_expr_assign_slot(expr_id=4, staff=1)
+                + meas_expr_assign_slot(expr_id=7, staff=2),
+            ),
+        )
+    )
+    found = [r for r in read_mus_document(PATH).others.records if r.tag == "measExprAssign"]
+    assert [(r.attrs["inci"], r.fields["textExprID"], r.fields["staffAssign"]) for r in found] == [
+        ("0", "4", "1"),
+        ("1", "7", "2"),
+    ]
+
+
+def test_a_shape_assignment_is_not_read_as_an_expression(pools: Callable[..., None]) -> None:
+    """Its id names a drawn shape, so emitting it as a `textExprID` places
+    whatever definition happens to share that number -- 44 spurious markings
+    across the paired corpus before the flag at +11 was found."""
+    pools(
+        others=(
+            MusOther(
+                tag=MEAS_EXPR_ASSIGN,
+                cmper=3,
+                part=0,
+                payload=meas_expr_assign_slot(expr_id=4, staff=1, flags=0x20),
+            ),
+        )
+    )
+    assert [r for r in read_mus_document(PATH).others.records if r.tag == "measExprAssign"] == []
+
+
+def test_a_staff_list_assignment_keeps_its_negative_staff(pools: Callable[..., None]) -> None:
+    """-1 is a sentinel, not a staff, and it must survive the read as one: the
+    downstream sweep counts how many markings it costs."""
+    pools(
+        others=(
+            MusOther(
+                tag=MEAS_EXPR_ASSIGN,
+                cmper=1,
+                part=0,
+                payload=meas_expr_assign_slot(expr_id=72, staff=-1),
+            ),
+        )
+    )
+    (record,) = [r for r in read_mus_document(PATH).others.records if r.tag == "measExprAssign"]
+    assert record.fields["staffAssign"] == "-1"
