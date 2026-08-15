@@ -37,6 +37,21 @@ identical sequences and could be swapped without the evidence noticing. A name
 carrying this tier is a lead worth following, not a fact to build on.
 """
 
+LABELLED = "labelled"
+"""Named because its own payload spells out what it holds.
+
+A `^RT` record contains the text "D.C. al Fine"; a `^FN` record contains
+"Maestro" and "Helvetica". No pairing, no inference and no key-sequence
+argument is involved -- the record says what it is about, in words, and the
+only judgement is reading them.
+
+Stronger than `MATCHED`, which establishes a record's shape and not its
+meaning. Weaker than `DECODED` in a different direction: this says what a
+record *holds*, and nothing whatever about where its fields sit. The 2001-2005
+cohort has no paired `.musx` anywhere, so `DECODED` is not reachable for these
+by the method that earned it elsewhere.
+"""
+
 SOURCES = {
     "spec": "the ETF specification",
     "lily": "the LilyPond project's ETF notes",
@@ -58,7 +73,11 @@ class TagName:
     description: str = ""
     tier: str = DECODED
     documents: int = 0
-    """`MATCHED` only: how many paired documents agreed on this name."""
+    """How many corpus documents the evidence rests on.
+
+    For `MATCHED`, how many paired documents agreed on the key sequence. For
+    `LABELLED`, how many carry the record with text naming what it holds.
+    """
 
     source: str = ""
     """`DOCUMENTED` only: a key into `SOURCES`."""
@@ -317,7 +336,73 @@ _DOCUMENTED: tuple[TagName, ...] = (
     ),
 )
 
-TAG_NAMES: tuple[TagName, ...] = _DECODED + _MATCHED + _DOCUMENTED
+# Named from the text in their own payloads, read across the DCL cohort. The
+# sample strings in each description are verbatim from corpus records; the
+# counts are of documents carrying the tag, out of the 38 that read as
+# 2001-2005 rows. Several correspond to a 2011 tag that key-sequence matching
+# named -- ^FN to fontName, ^fI to fretInst, ^DL to drumLibName -- and reading
+# the payload is by some distance the better evidence of the two.
+_LABELLED: tuple[TagName, ...] = (
+    TagName(
+        "DL",
+        "others",
+        "drum library",
+        "names drum sets: 'General MIDI Entry & Playback', 'Cymbals', 'Agogo Bells'",
+        LABELLED,
+        documents=38,
+    ),
+    TagName(
+        "FN",
+        "others",
+        "font names",
+        "'Maestro', 'Times', 'Chicago', 'Helvetica', 'Jazz'",
+        LABELLED,
+        documents=38,
+    ),
+    TagName(
+        "RT",
+        "others",
+        "text repeat",
+        "the printed text of a jump: 'D.C. al Fine', "
+        "'D.C. al Coda', 'D.S. al Fine', 'D.S. al Coda'",
+        LABELLED,
+        documents=38,
+    ),
+    TagName(
+        "fI",
+        "others",
+        "fretted instrument",
+        "'Standard Guitar', 'Guitar - 7 String', 'Guitar - DADGAD'",
+        LABELLED,
+        documents=38,
+    ),
+    TagName(
+        "fg",
+        "others",
+        "chord shape",
+        "'Simple Major Triad', 'Minor Triad Seville', 'dim triad', '7 Seville'",
+        LABELLED,
+        documents=34,
+    ),
+    TagName(
+        "ft",
+        "others",
+        "fretboard style",
+        "'Seville', 'Seville 5 Frets', 'Seville With Shapes', 'Jazz'",
+        LABELLED,
+        documents=38,
+    ),
+    TagName(
+        "DN",
+        "details",
+        "percussion note map",
+        "'Acoustic Bass Drum', 'Side Stick', 'Snare (Acoustic)', 'Hand Clap'",
+        LABELLED,
+        documents=38,
+    ),
+)
+
+TAG_NAMES: tuple[TagName, ...] = _DECODED + _MATCHED + _DOCUMENTED + _LABELLED
 
 
 def _index() -> dict[tuple[str, str], TagName]:

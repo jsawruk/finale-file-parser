@@ -585,6 +585,30 @@ the high and low words of the entry number.</p>
 <table><thead><tr><th>Tag</th><th>Name</th><th>Carries</th>
 <th>Source</th></tr></thead><tbody><tr><td><code>^ac</code></td><td>Performance data</td><td>MIDI velocity and duration, per note</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^ED</code></td><td>Staff Expression</td><td>one per expression on the entry</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^CD</code></td><td>Cross Staffing</td><td>note moved to another staff</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^IM</code></td><td>Articulation</td><td>positions a mark; names an IX</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^CH</code></td><td>Chord</td><td>chord symbol on the entry</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^CN</code></td><td>Notehead Mods</td><td>per-note custom attributes</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^ve</code></td><td>Lyric: verse</td><td>syllable offset into a raw text record</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^ch</code></td><td>Lyric: chorus</td><td>syllable offset, as for a verse</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^se</code></td><td>Lyric: section</td><td>syllable offset, as for a verse</td><td class=sz>ETF&nbsp;spec</td></tr></tbody></table>
 
+<h4>Tags that name themselves</h4>
+<p>A record whose payload contains readable text often says what it is for. No
+pairing and no inference is involved &mdash; the words are in the file, and the
+only judgement is reading them. This is stronger evidence than the key-sequence
+matching of Tier&nbsp;B, and it establishes what a record <em>holds</em> while
+saying nothing about where its fields sit.</p>
+
+<p>It matters most for the 2001&ndash;2005 era, which has <strong>no paired
+<code>.musx</code> anywhere in this corpus</strong>, so the method that earned
+Tier&nbsp;A elsewhere is unavailable. Counts are documents carrying the tag, out
+of the 38 that read as DCL rows.</p>
+<table><thead><tr><th>Tag</th><th>Holds</th><th>Text found in the payload</th>
+<th>Docs</th></tr></thead><tbody><tr><td><code>^DL</code></td><td>drum library</td><td>names drum sets: 'General MIDI Entry & Playback', 'Cymbals', 'Agogo Bells'</td><td class=sz>38</td></tr><tr><td><code>^FN</code></td><td>font names</td><td>'Maestro', 'Times', 'Chicago', 'Helvetica', 'Jazz'</td><td class=sz>38</td></tr><tr><td><code>^RT</code></td><td>text repeat</td><td>the printed text of a jump: 'D.C. al Fine', 'D.C. al Coda', 'D.S. al Fine', 'D.S. al Coda'</td><td class=sz>38</td></tr><tr><td><code>^fI</code></td><td>fretted instrument</td><td>'Standard Guitar', 'Guitar - 7 String', 'Guitar - DADGAD'</td><td class=sz>38</td></tr><tr><td><code>^fg</code></td><td>chord shape</td><td>'Simple Major Triad', 'Minor Triad Seville', 'dim triad', '7 Seville'</td><td class=sz>34</td></tr><tr><td><code>^ft</code></td><td>fretboard style</td><td>'Seville', 'Seville 5 Frets', 'Seville With Shapes', 'Jazz'</td><td class=sz>38</td></tr><tr><td><code>^DN</code></td><td>percussion note map</td><td>'Acoustic Bass Drum', 'Side Stick', 'Snare (Acoustic)', 'Hand Clap'</td><td class=sz>38</td></tr></tbody></table>
+
+<div class=note><strong><code>^RT</code> corrects a claim this project
+published.</strong> The reader's own list of gaps stated that the corpus offered
+no evidence at all for identifying the text-repeat tag &mdash; &ldquo;not a
+little, none&rdquo;. It had reasoned entirely about paired documents, found the
+candidates were mispairings, and concluded the corpus was silent. The DCL cohort
+was never searched, and 411 <code>^RT</code> records across all 38 of its
+documents carry the text verbatim. What remains missing is narrower: the
+assignment attaching a repeat to a measure, and the action telling a player
+where to go.</div>
+
 <div class=note><strong><code>^FB</code> and <code>^GT</code> were identified by
 structure, not by a document.</strong> Neither appears in any source consulted.
 They were matched because <code>FB</code> holds <strong>exactly 192 records in
