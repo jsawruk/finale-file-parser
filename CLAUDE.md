@@ -36,7 +36,8 @@ make install   # sync dependencies (uv sync)
 make test      # run the test suite (pytest)
 make lint      # ruff check
 make fmt       # ruff format
-make check     # lint + format-check + typecheck + test  <- the pre-push gate
+make check      # lint + format-check + typecheck + tests, no corpus sweeps (~1 min)
+make check-full # the above plus the 28 corpus sweeps (~9 min)  <- run before pushing
 ```
 
 ## Guardrails — do not violate
