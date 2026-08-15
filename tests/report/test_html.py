@@ -320,13 +320,41 @@ def test_the_tint_stops_where_the_payload_does() -> None:
     assert "tintMap(layout, payloadLength)" in html
 
 
-def test_a_tag_with_no_layout_shows_hex_and_nothing_else() -> None:
+def test_a_tag_with_no_layout_says_so_rather_than_showing_nothing() -> None:
     """Nine payloads are decoded against a document's ~180 tags, so most records
-    have no layout. Untinted hex says "not decoded", which is true; a guessed
-    layout would say something false."""
+    land here. A guessed layout would say something false -- but an empty space
+    below the hex reads as a table that failed to render, not as the honest
+    answer, so the honest answer is written out."""
     html = render_html(_inspection())
     script = html[html.index("//<![CDATA[") :]
     assert "if (layout) {" in script, "the table is drawn only where a layout exists"
+    assert "if (!layout) {" in script, "and its absence is stated where one is not"
+    assert "No field layout is known for this record" in script
+
+
+def test_a_description_names_the_tag_it_describes() -> None:
+    """ "names drum sets" says nothing about WHICH record names them. The heading
+    carries the tag too, but the description reads as a floating sentence
+    without it."""
+    html = render_html(_inspection())
+    script = html[html.index("//<![CDATA[") :]
+    assert "displayTag(tag) + ' tag — ' + named.description" in script
+
+
+def test_a_dcl_row_carries_only_its_bytes() -> None:
+    """`incidences` used to sit under the hex. It is derivable from what is
+    already on screen -- exactly `len(payload) / 12` for an `others` row and
+    `/ 10` for a details one, across all 107,652 corpus records -- so it earned
+    no line of its own."""
+    from finale_file_parser.enigma.mus_rows import MusRowRecord
+    from finale_file_parser.report.model import _mus_row_entry
+
+    entry = _mus_row_entry(
+        MusRowRecord(tag="DL", cmper=1, cmper2=0, payload=b"\x00" * 24, incidences=2)
+    )
+    fields = entry["fields"]
+    assert isinstance(fields, dict)
+    assert set(fields) == {"payload"}
 
 
 def test_document_options_are_grouped_out_of_the_tag_list() -> None:

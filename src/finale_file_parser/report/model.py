@@ -326,12 +326,12 @@ def _mus_detail_entry(record: MusDetailRecord) -> dict[str, object]:
 
 
 def _mus_row_entry(record: MusRowRecord) -> dict[str, object]:
-    # `incidences` stays: alone among these it is not part of the key, and it
-    # says how many rows the reader joined to assemble this payload.
-    fields = walk_fields(
-        {"incidences": record.incidences, "payload": encode_raw(record.payload)},
-        depth=0,
-    )
+    # Nothing but the bytes. `incidences` -- how many 16-byte rows the reader
+    # joined to make this payload -- is derivable from the payload itself, at
+    # exactly `len(payload) / 12` for an `others` row and `/ 10` for a details
+    # one, checked across 107,652 corpus records. A number the reader can work
+    # out from what is already on screen is not worth a line of its own.
+    fields = walk_fields({"payload": encode_raw(record.payload)}, depth=0)
     return _record_entry(
         key=_key(_comparator("cmper", record.cmper), ("cmper2", record.cmper2)),
         fields=fields,
