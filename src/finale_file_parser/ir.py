@@ -194,7 +194,15 @@ class Expression:
 
     text: str
     """What is printed. For most dynamics this is a single music-font character
-    rather than letters -- `marking` is the readable form."""
+    rather than letters -- `marking` is the readable form.
+
+    **Empty where the file has no text for it but names it anyway.** 180 corpus
+    dynamics are this shape: the definition's description says
+    `'mezzo piano (velocity = 62)'` while the expression text record it points at
+    is absent. `marking` carries the answer, and a consumer needs no character to
+    render `<dynamics><mp/></dynamics>`. Empty text with no `marking` never
+    reaches here -- an expression with neither is dropped at the reader.
+    """
 
     category: str
     """The document's own `categoryType`: `dynamics`, `tempoMarks`,

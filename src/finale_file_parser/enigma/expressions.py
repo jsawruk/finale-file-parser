@@ -58,7 +58,7 @@ text is still carried, so nothing is lost.
 
 ## Score expressions, and what still does not reach the IR
 
-This module returns 11,462 markings and **11,145 reach a `Measure`**.
+This module returns 11,642 markings and **11,277 reach a `Measure`**.
 
 **596 of them name no staff at all.** `staffAssign = -1` means the marking belongs
 to a **staff list**, and the file says so: all 746 corpus assignments carrying it
@@ -69,7 +69,7 @@ the remaining **515 are placed on the topmost part** by
 `to_ir._place_score_wide`, which explains why that is a convention rather than a
 reading. `Expression.score_wide` records the fact so it is not lost in the move.
 
-**317 remain dropped**, all one cause: they are assigned to a staff that holds no
+**365 remain dropped**, all one cause: they are assigned to a staff that holds no
 notes anywhere in the document, and one `Part` is built per staff *with music*, so
 there is nowhere to put them. Whether such a staff should become an empty part is
 a question about part construction, not about expressions.
@@ -171,28 +171,31 @@ def expressions_by_measure(
         if measure is None or staff is None or expr_id is None:
             continue
         definition = definitions.get(expr_id)
-        found = texts.get(expr_id)
-        # An expression with nothing to print is not a marking: 306 corpus
-        # assignments resolve to a definition whose text record is absent.
-        if definition is None or found is None or not found[0]:
+        if definition is None:
             continue
         if staff == SCORE_WIDE_STAFF and (measure, expr_id) in on_a_staff:
             # The same expression is already placed on a real staff in this
             # measure, so the score-wide copy would print it twice. 102 of the
             # corpus's 746 list assignments are this shape.
             continue
-        text, in_music_font = found
+        text, in_music_font = texts.get(expr_id, ("", False))
         category = categories.get(_int(definition.fields.get("categoryID")), "")
+        marking = _marking(
+            text,
+            category=category,
+            in_music_font=in_music_font,
+            description=str(definition.fields.get("descStr") or ""),
+        )
+        # Keep it if there is something to print *or* something to call it. An
+        # expression with neither is not a marking -- 461 corpus assignments
+        # resolve to a definition with no text record and no naming description.
+        if not text and marking is None:
+            continue
         out.setdefault((staff, measure), []).append(
             Expression(
                 text=text,
                 category=category,
-                marking=_marking(
-                    text,
-                    category=category,
-                    in_music_font=in_music_font,
-                    description=str(definition.fields.get("descStr") or ""),
-                ),
+                marking=marking,
                 velocity=_int(definition.fields.get("value")),
                 score_wide=staff == SCORE_WIDE_STAFF,
                 layer=_int(record.fields.get("layer")),

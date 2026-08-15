@@ -157,9 +157,26 @@ claimed when the glyph is in the table *and* either the text is set in a music
 font or the document's own category is `dynamics`; the 129 rows with neither
 signal are carried as text and left unnamed.
 
-### Score expressions, and the 317 that still do not reach the IR
+### A dynamic the file names but has no character for
 
-Read: 11,462. Reaching a `Measure`: **11,145**.
+180 assignments resolve to a definition whose `descStr` reads
+`'mezzo piano (velocity = 62)'` while the expression text record it points at is
+**absent**. They used to be dropped for having nothing to print.
+
+They should not have been. MusicXML renders a dynamic from the marking —
+`<dynamics><mp/></dynamics>` — and never needed the character. So an expression
+is kept when it has printable text **or** a marking, and `Expression.text` is
+empty for these rather than carrying an invented glyph.
+
+    mp 96 · mf 33 · ff 15 · fff 12 · f 12 · ffff 12
+
+What is still dropped is an expression with **neither**: no text record and no
+naming description, 461 assignments. Nothing to print and nothing to call it is
+not a marking, and keeping it would emit a blank direction.
+
+### Score expressions, and the 365 that still do not reach the IR
+
+Read: 11,642. Reaching a `Measure`: **11,277**.
 
 **A score expression names no staff.** `staffAssign = -1` means it belongs to a
 staff list — 746 corpus assignments — and the file says so, since all of them
@@ -196,8 +213,9 @@ recoverable information; eighteen copies would be an invention. `<sound>`-style
 score-wide direction does not exist in MusicXML, so a part had to be chosen, and
 the top staff is where such a marking is engraved.
 
-**The 317 still dropped** are all one cause: assigned to a staff holding no notes,
-so no `Part` exists for them. All of these counts are pinned in both directions by
+**The 365 still dropped** are all one cause: assigned to a staff holding no notes,
+so no `Part` exists for them. (It was 317; 48 of the newly recovered textless
+dynamics land on such a staff.) All of these counts are pinned in both directions by
 `tests/enigma/test_expressions_ir_corpus_sweep.py`.
 
 ### What the exporter does with them
