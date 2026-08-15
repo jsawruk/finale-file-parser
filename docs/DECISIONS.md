@@ -526,3 +526,38 @@ first?".
 
 **Reopen if** a field carrying mirror direction or a per-mirror transposition is
 identified, at which point the offset in `UNTRANSLATED` closes too.
+
+## A record's own text is evidence, and its own tier
+
+**Decided 2026-08-14.** The tag catalogue kept three tiers apart because
+conflating them is how a lead becomes a fact: `decoded` (payload read and
+checked against a paired `.musx`), `documented` (the vendor named it), and
+`matched` (its key sequence matches a named record's, which establishes shape
+and not meaning).
+
+None of the three fits a record whose payload contains the words
+`D.C. al Fine`. That is not a pairing, not a vendor document, and not an
+inference — the file says what the record is for, and the only judgement is
+reading it. Such names now carry a fourth tier, `labelled`, quoting the text
+found and counting the documents carrying it.
+
+Two reasons it earns its own tier rather than being folded into an existing one:
+
+- **It is stronger than `matched` and differently sourced from `documented`.**
+  Recording `^FN` as "matched" would understate it; as "documented" would claim
+  a source that does not exist.
+- **It establishes what a record *holds*, and nothing about where its fields
+  sit.** A `labelled` name must never imply a payload layout. `layout_for` still
+  returns nothing for all seven, and a test pins that.
+
+This matters most for the 2001–2005 era, which has **no paired `.musx` anywhere
+in this corpus**, so `decoded` is unreachable there by the method that earned it
+elsewhere. Reading payload text is the strongest evidence that cohort can offer.
+
+Consequence: the `UNTRANSLATED` entry claiming the corpus held no evidence for
+the text-repeat tag was wrong, and is corrected. It had reasoned only about
+paired documents and never searched the DCL cohort, where 411 `^RT` records
+across all 38 documents carry the text verbatim.
+
+**Reopen if** a `labelled` name is ever contradicted by a decoded payload, which
+would mean the words in a record describe something other than the record.

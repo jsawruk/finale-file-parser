@@ -12,6 +12,7 @@ import pytest
 from finale_file_parser.formats.tags import (
     DECODED,
     DOCUMENTED,
+    LABELLED,
     MATCHED,
     SOURCES,
     TAG_NAMES,
@@ -23,7 +24,7 @@ from finale_file_parser.formats.tags import (
 
 @pytest.mark.parametrize("entry", TAG_NAMES, ids=lambda e: f"{e.pool}/{e.tag}")
 def test_every_name_carries_its_tier(entry: TagName) -> None:
-    assert entry.tier in {DECODED, MATCHED, DOCUMENTED}
+    assert entry.tier in {DECODED, MATCHED, DOCUMENTED, LABELLED}
     assert entry.name, f"{entry.tag} has no name"
     assert entry.pool in {"others", "details", "entries"}
 
@@ -36,6 +37,11 @@ def test_a_tier_carries_the_evidence_that_tier_requires(entry: TagName) -> None:
         assert entry.documents > 0, f"{entry.name} claims a match but names no documents"
     if entry.tier == DOCUMENTED and entry.source:
         assert entry.source in SOURCES, f"{entry.name} cites an unknown source"
+    if entry.tier == LABELLED:
+        # The words in the payload ARE the evidence, so a labelled name without
+        # them quoted is a claim with nothing behind it.
+        assert entry.documents > 0, f"{entry.name} names no documents"
+        assert entry.description, f"{entry.name} quotes no text from the payload"
 
 
 def test_a_decoded_name_wins_over_a_documented_one() -> None:

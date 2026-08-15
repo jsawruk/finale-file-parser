@@ -406,6 +406,16 @@ _SOURCE = {
 }
 
 
+def _labelled_rows() -> str:
+    """Tags named by the text in their own payloads."""
+    return "".join(
+        f"<tr><td><code>^{e.tag}</code></td><td>{e.name}</td>"
+        f"<td>{e.description}</td><td class=sz>{e.documents}</td></tr>"
+        for e in TAGS.TAG_NAMES
+        if e.tier == TAGS.LABELLED
+    )
+
+
 def _etf_rows(pool: str) -> str:
     """The documented ETF tags of one pool, in catalogue order."""
     return "".join(
@@ -446,6 +456,30 @@ and <code>^ac</code> is performance data; <code>^CH</code> is a chord and
 the high and low words of the entry number.</p>
 <table><thead><tr><th>Tag</th><th>Name</th><th>Carries</th>
 <th>Source</th></tr></thead><tbody>{_etf_rows("entries")}</tbody></table>
+
+<h4>Tags that name themselves</h4>
+<p>A record whose payload contains readable text often says what it is for. No
+pairing and no inference is involved &mdash; the words are in the file, and the
+only judgement is reading them. This is stronger evidence than the key-sequence
+matching of Tier&nbsp;B, and it establishes what a record <em>holds</em> while
+saying nothing about where its fields sit.</p>
+
+<p>It matters most for the 2001&ndash;2005 era, which has <strong>no paired
+<code>.musx</code> anywhere in this corpus</strong>, so the method that earned
+Tier&nbsp;A elsewhere is unavailable. Counts are documents carrying the tag, out
+of the 38 that read as DCL rows.</p>
+<table><thead><tr><th>Tag</th><th>Holds</th><th>Text found in the payload</th>
+<th>Docs</th></tr></thead><tbody>{_labelled_rows()}</tbody></table>
+
+<div class=note><strong><code>^RT</code> corrects a claim this project
+published.</strong> The reader's own list of gaps stated that the corpus offered
+no evidence at all for identifying the text-repeat tag &mdash; &ldquo;not a
+little, none&rdquo;. It had reasoned entirely about paired documents, found the
+candidates were mispairings, and concluded the corpus was silent. The DCL cohort
+was never searched, and 411 <code>^RT</code> records across all 38 of its
+documents carry the text verbatim. What remains missing is narrower: the
+assignment attaching a repeat to a measure, and the action telling a player
+where to go.</div>
 
 <div class=note><strong><code>^FB</code> and <code>^GT</code> were identified by
 structure, not by a document.</strong> Neither appears in any source consulted.
