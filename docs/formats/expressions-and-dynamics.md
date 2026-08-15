@@ -157,32 +157,48 @@ claimed when the glyph is in the table *and* either the text is set in a music
 font or the document's own category is `dynamics`; the 129 rows with neither
 signal are carried as text and left unnamed.
 
-### 913 of them do not reach the IR
+### Score expressions, and the 317 that still do not reach the IR
 
-Read: 11,543. Reaching a `Measure`: **10,630**. The gap is 913 markings in 267
-documents, and it was invisible for a release because the sweep that was supposed
-to prove the feature asked the reader whether the reader had read — never once
-going through `build_score`. Two causes:
+Read: 11,462. Reaching a `Measure`: **11,145**.
 
-| cause | count | why |
+**A score expression names no staff.** `staffAssign = -1` means it belongs to a
+staff list — 746 corpus assignments — and the file says so, since all of them
+also carry `staffGroup` *and* `staffList` where a positive-staff assignment
+almost never does (138 of 11,687). 81 are a redundant second copy of a marking
+already placed on a real staff and are dropped; the other **515 are placed on the
+topmost part**.
+
+**What the staff list selects is still not decoded**, and the placement is
+therefore a *convention*, not a reading. The list record is now understood
+structurally: `others` **306** for the score and **304** for the parts, a
+**six-slot `uint16` array** where zero fills an unused slot.
+
+| pattern | tag 306 | tag 304 |
 | --- | --- | --- |
-| assigned to a staff **list** (`staffAssign = -1`) | 596 | needs `categoryStaffListScore`; see below |
-| assigned to a staff holding **no notes** | 317 | one `Part` per staff *with music*, so nowhere to put it |
+| `(-1, 0, 0, 0, 0, 0)` | 1486 | 1546 |
+| `(2, 0, 0, 0, 0, 0)` | 88 | — |
+| `(-1, 1, 0, 0, 0, 0)` | — | 28 |
+| `(-1, 3, 0, 0, 0, 0)` | 8 | 8 |
+| `(-1, 2, 0, 0, 0, 0)` | 2 | 2 |
 
-**Why the list is not resolved.** `staffAssign = -1` is the sentinel for "this
-belongs to a staff list", and the file says so itself: all 746 assignments
-carrying it also carry `staffGroup` *and* `staffList`, where a positive-staff
-assignment almost never does (138 of 11,687). `staffList` selects a
-`categoryStaffListScore`, whose repeated `inst` field is `-1` in 6,215 of 6,419
-incidences — but the remainder name real staves, and `-1` appears *beside* them
-in tuples such as `('-1', '9', '13')`. Reading `-1` as "every staff" would place
-a marking on staves the list may exclude, so it is left alone. This closes when
-`inst` is decoded, not by looking harder at the assignment.
+That kills the reading I could not previously rule out: **zero is the empty-slot
+filler, so `-1` is a value rather than an end-of-list marker.** What it stands for
+is still unestablished — `(2, 0, …)` shows a slot can hold a real staff with no
+`-1` present at all, and `(-1, 3, …)` shows `-1` sitting beside one.
 
-All three counts are pinned in both directions by
-`tests/enigma/test_expressions_ir_corpus_sweep.py`: growth means a new way to
-lose a marking, and a fall means one of these causes was fixed and the constants
-should say so.
+**The key is `staffList`, not `categoryID`.** Those differ in **all 746** cases,
+and `categoryID` reaches values (25, 26, 29) for which no list record exists —
+custom categories. The tag name `categoryStaffList*` misleads.
+
+Placing on every staff was rejected on measurement: it would turn 596 markings
+into **2,481**, printing a dynamic on staves the list may exclude. One part is
+recoverable information; eighteen copies would be an invention. `<sound>`-style
+score-wide direction does not exist in MusicXML, so a part had to be chosen, and
+the top staff is where such a marking is engraved.
+
+**The 317 still dropped** are all one cause: assigned to a staff holding no notes,
+so no `Part` exists for them. All of these counts are pinned in both directions by
+`tests/enigma/test_expressions_ir_corpus_sweep.py`.
 
 ### What the exporter does with them
 

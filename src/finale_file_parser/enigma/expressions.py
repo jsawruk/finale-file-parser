@@ -56,28 +56,27 @@ with neither signal are left unmarked: a bare `f` in `misc` with no font at all
 is as likely to be a label as a dynamic, and this project does not guess. The
 text is still carried, so nothing is lost.
 
-## Not everything read reaches the IR
+## Score expressions, and what still does not reach the IR
 
-This module returns 11,543 markings. **10,630 of them reach a `Measure`**; 913,
-in 267 documents, do not, because `build_score` keys them by staff and those
-name a staff it built no `Part` for. Two causes, both measured, neither guessed:
+This module returns 11,462 markings and **11,145 reach a `Measure`**.
 
-* **596 are assigned to a staff *list*.** `staffAssign = -1` is the sentinel, and
-  the file says so: all 746 corpus assignments carrying it also carry
-  `staffGroup` *and* `staffList`, where a positive-staff assignment almost never
-  does (138 of 11,687). `staffList` selects a `categoryStaffListScore`, whose
-  repeated `inst` is `-1` in 6,215 of 6,419 incidences -- but the rest name real
-  staves, and `-1` turns up *beside* them in tuples like `('-1', '9', '13')`. So
-  `-1` cannot be read as "every staff" without risking a marking on a staff the
-  list excludes. Unresolved on purpose.
-* **317 are assigned to a staff that holds no notes at all.** One `Part` is built
-  per staff with music, so a staff carrying only an expression has nowhere to put
-  it. Whether it should become an empty part is a question about part
-  construction, not about expressions.
+**596 of them name no staff at all.** `staffAssign = -1` means the marking belongs
+to a **staff list**, and the file says so: all 746 corpus assignments carrying it
+also carry `staffGroup` *and* `staffList`, where a positive-staff assignment
+almost never does (138 of 11,687). 81 are a second copy of a marking the same
+measure already places on a real staff, and this module drops those as redundant;
+the remaining **515 are placed on the topmost part** by
+`to_ir._place_score_wide`, which explains why that is a convention rather than a
+reading. `Expression.score_wide` records the fact so it is not lost in the move.
 
-`tests/enigma/test_expressions_ir_corpus_sweep.py` pins all three numbers in both
-directions. It exists because the sweep beside it does not catch this: that one
-asks `expressions_by_measure` what `expressions_by_measure` found, which is a
+**317 remain dropped**, all one cause: they are assigned to a staff that holds no
+notes anywhere in the document, and one `Part` is built per staff *with music*, so
+there is nowhere to put them. Whether such a staff should become an empty part is
+a question about part construction, not about expressions.
+
+`tests/enigma/test_expressions_ir_corpus_sweep.py` pins every number here, in
+both directions. It exists because the sweep beside it does not catch this: that
+one asks `expressions_by_measure` what `expressions_by_measure` found, which is a
 reader confirming itself. Measure the delivered object.
 
 ## What is not read
@@ -117,7 +116,17 @@ from finale_file_parser.formats.dynamics import (
 )
 from finale_file_parser.ir import Expression
 
-__all__ = ["expressions_by_measure"]
+__all__ = ["SCORE_WIDE_STAFF", "expressions_by_measure"]
+
+SCORE_WIDE_STAFF = -1
+"""The `staffAssign` a score expression carries instead of a staff number.
+
+It means "this belongs to a **staff list**", and the file says so: all 746 corpus
+assignments carrying it also carry `staffGroup` *and* `staffList`, where a
+positive-staff assignment almost never does (138 of 11,687). Kept as the key so
+`to_ir` can decide where a score-wide marking goes; nothing downstream should
+treat it as a staff.
+"""
 
 _ASSIGN = "measExprAssign"
 _DEF = "textExprDef"
@@ -148,6 +157,8 @@ def expressions_by_measure(
     definitions = _definitions(document)
     texts = _texts(document)
 
+    on_a_staff = _staffed(document)
+
     out: dict[tuple[int, int], list[Expression]] = {}
     for record in document.others.of_tag(_ASSIGN):
         # A linked part repeats every assignment. Counting those doubles each
@@ -165,6 +176,11 @@ def expressions_by_measure(
         # assignments resolve to a definition whose text record is absent.
         if definition is None or found is None or not found[0]:
             continue
+        if staff == SCORE_WIDE_STAFF and (measure, expr_id) in on_a_staff:
+            # The same expression is already placed on a real staff in this
+            # measure, so the score-wide copy would print it twice. 102 of the
+            # corpus's 746 list assignments are this shape.
+            continue
         text, in_music_font = found
         category = categories.get(_int(definition.fields.get("categoryID")), "")
         out.setdefault((staff, measure), []).append(
@@ -178,10 +194,30 @@ def expressions_by_measure(
                     description=str(definition.fields.get("descStr") or ""),
                 ),
                 velocity=_int(definition.fields.get("value")),
+                score_wide=staff == SCORE_WIDE_STAFF,
                 layer=_int(record.fields.get("layer")),
             )
         )
     return {where: tuple(items) for where, items in out.items()}
+
+
+def _staffed(document: EnigmaDocument) -> set[tuple[int, int]]:
+    """(measure, expression id) pairs already assigned to a real staff.
+
+    A score expression is drawn once; where the document also assigns the same
+    expression to a staff in that measure, the score-wide copy is redundant.
+    """
+    out: set[tuple[int, int]] = set()
+    for record in document.others.of_tag(_ASSIGN):
+        if "part" in record.attrs:
+            continue
+        staff = _int(record.fields.get("staffAssign"))
+        measure = _int(record.attrs.get("cmper"))
+        expr_id = _int(record.fields.get("textExprID"))
+        if staff is None or staff < 0 or measure is None or expr_id is None:
+            continue
+        out.add((measure, expr_id))
+    return out
 
 
 def _categories(document: EnigmaDocument) -> dict[int | None, str]:
