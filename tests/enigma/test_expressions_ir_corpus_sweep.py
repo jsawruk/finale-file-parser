@@ -32,25 +32,29 @@ CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
-READ = 11642
+READ = 11732
 """Expressions `expressions_by_measure` returns across the corpus.
 
-Was 11,462. The 180 more are dynamics the file names in `descStr` but has no
-expression text for; they were dropped for having nothing to print, and
-`<dynamics><mp/></dynamics>` never needed a character.
+Was 11,462, then 11,642 when dynamics the file names in `descStr` but has no
+expression text for stopped being dropped. The 90 more are rehearsal marks, whose
+label is computed from `rehearsalMarkStyle` rather than read.
 """
 
-PLACED = 11277
+PLACED = 11367
 """Expressions that reach a `Measure` in the IR.
 
-Was 11,145. The 132 more are textless dynamics; the other 48 of the 180
-recovered land on a staff with no notes and are lost downstream instead.
+Was 11,145, then 11,277 with the textless dynamics (132 of the 180 recovered; the
+other 48 land on a staff with no notes). The 90 more are rehearsal marks, and
+every one of those reaches a `Measure`.
 """
 
-SCORE_WIDE = 515
+SCORE_WIDE = 563
 """Markings the file attaches to a staff list rather than a staff, as delivered.
 
-Not 596. That was the count before redundant copies were dropped: 746 corpus
+Not 596, and no longer 515: 48 rehearsal marks are score-wide too, and they are
+placed by the same route. The 515 figure came from dynamics alone.
+
+596 was the count before redundant copies were dropped: 746 corpus
 assignments carry `staffAssign = -1`, 596 of them survived the reader's other
 checks, and 81 of those were a second copy of a marking the same measure already
 places on a real staff. 515 remain, and every one reaches the top part.

@@ -7,7 +7,7 @@ from fractions import Fraction
 import pytest
 from defusedxml import ElementTree as DET
 
-from finale_file_parser.export.musicxml import ExportError, to_musicxml
+from finale_file_parser.export.musicxml import ExportError, prints_as_words, to_musicxml
 from finale_file_parser.formats.dynamics import DYNAMICS
 from finale_file_parser.ir import (
     Beam,
@@ -651,3 +651,15 @@ def test_velocity_is_not_exported() -> None:
     percentage of MIDI velocity 90, and that conversion is unverified here."""
     root = _tree(_score(_note(), expressions=(_expr(velocity=88),)))
     assert root.find(".//sound") is None
+
+
+def test_a_rehearsal_mark_is_not_words() -> None:
+    """`<rehearsal>` and `<words>` are different elements and consumers treat
+    them differently -- a rehearsal mark is a navigation target."""
+    mark = Expression(text="A", category="rehearsalMarks", is_rehearsal=True)
+    root = _tree(_score(_note(), expressions=(mark,)))
+    direction = root.find("./part/measure/direction")
+    assert direction is not None
+    assert direction.findtext("./direction-type/rehearsal") == "A"
+    assert direction.find("./direction-type/words") is None
+    assert prints_as_words(mark) is False

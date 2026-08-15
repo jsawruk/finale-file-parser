@@ -58,14 +58,14 @@ text is still carried, so nothing is lost.
 
 ## Score expressions, and what still does not reach the IR
 
-This module returns 11,642 markings and **11,277 reach a `Measure`**.
+This module returns 11,732 markings and **11,367 reach a `Measure`**.
 
 **596 of them name no staff at all.** `staffAssign = -1` means the marking belongs
 to a **staff list**, and the file says so: all 746 corpus assignments carrying it
 also carry `staffGroup` *and* `staffList`, where a positive-staff assignment
 almost never does (138 of 11,687). 81 are a second copy of a marking the same
 measure already places on a real staff, and this module drops those as redundant;
-the remaining **515 are placed on the topmost part** by
+the remaining **563 are placed on the topmost part** by
 `to_ir._place_score_wide`, which explains why that is a convention rather than a
 reading. `Expression.score_wide` records the fact so it is not lost in the move.
 
@@ -78,6 +78,15 @@ a question about part construction, not about expressions.
 both directions. It exists because the sweep beside it does not catch this: that
 one asks `expressions_by_measure` what `expressions_by_measure` found, which is a
 reader confirming itself. Measure the delivered object.
+
+## Rehearsal marks
+
+Their label is not in the file: the expression text is the bare `^rehearsal()`
+insert, so `plain_text` yields nothing and all 113 corpus assignments were
+dropped for having nothing to print. `rehearsalMarkStyle` says how to work it out
+-- `measNum` for 99 of them, where the label is the measure number and no
+convention is involved, `letters` for 12, numbered by position. See
+`_rehearsal_labels`. 90 marks are placed across 10 documents.
 
 ## What is not read
 
@@ -106,6 +115,7 @@ dynamics are still named, because the description does that on its own.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
 from finale_file_parser.enigma.document import EnigmaDocument, Record
 from finale_file_parser.enigma.text import plain_text
@@ -133,6 +143,20 @@ _DEF = "textExprDef"
 _CATEGORY = "markingsCategory"
 _TEXT = "expression"
 
+_REHEARSAL = re.compile(r"\^rehearsal\(\)")
+"""The insert that stands where a rehearsal mark's label would be.
+
+The label is not in the file. The expression text is this command and nothing
+else, so `plain_text` yields `""` -- correctly, since it has no literal text --
+and every one of the corpus's 113 marks was dropped for having nothing to print.
+What the file gives instead is `rehearsalMarkStyle`, which says how to work the
+label out. See `_rehearsal_labels`.
+"""
+
+_MEASURE_NUMBER_STYLE = "measNum"
+_LETTER_STYLE = "letters"
+_NUMBER_STYLE = "numbers"
+
 _MUSIC_FONT = re.compile(r"\^fontMus\(")
 """EnigmaXML's marker for text set in a music font.
 
@@ -158,6 +182,7 @@ def expressions_by_measure(
     texts = _texts(document)
 
     on_a_staff = _staffed(document)
+    labels = _rehearsal_labels(document, definitions, texts)
 
     out: dict[tuple[int, int], list[Expression]] = {}
     for record in document.others.of_tag(_ASSIGN):
@@ -178,17 +203,23 @@ def expressions_by_measure(
             # measure, so the score-wide copy would print it twice. 102 of the
             # corpus's 746 list assignments are this shape.
             continue
-        text, in_music_font = texts.get(expr_id, ("", False))
+        found = texts.get(expr_id)
+        printed = found.printed if found is not None else ""
+        # A rehearsal mark prints a label the file does not store; everything
+        # else prints what its text record says.
+        label = labels.get(measure) if found is not None and found.is_rehearsal else None
+        text = label if label is not None else printed
         category = categories.get(_int(definition.fields.get("categoryID")), "")
         marking = _marking(
-            text,
+            printed,
             category=category,
-            in_music_font=in_music_font,
+            in_music_font=found.in_music_font if found is not None else False,
             description=str(definition.fields.get("descStr") or ""),
         )
         # Keep it if there is something to print *or* something to call it. An
         # expression with neither is not a marking -- 461 corpus assignments
-        # resolve to a definition with no text record and no naming description.
+        # resolve to a definition with no text record and no naming description,
+        # and a rehearsal mark whose style is unreadable has no label to print.
         if not text and marking is None:
             continue
         out.setdefault((staff, measure), []).append(
@@ -198,10 +229,69 @@ def expressions_by_measure(
                 marking=marking,
                 velocity=_int(definition.fields.get("value")),
                 score_wide=staff == SCORE_WIDE_STAFF,
+                is_rehearsal=label is not None,
                 layer=_int(record.fields.get("layer")),
             )
         )
     return {where: tuple(items) for where, items in out.items()}
+
+
+def _rehearsal_labels(
+    document: EnigmaDocument, definitions: dict[int, Record], texts: dict[int, _Text]
+) -> dict[int, str]:
+    """Measure -> the label its rehearsal mark prints.
+
+    A mark placed on several staves of one measure is **one** mark, so the label
+    is keyed by measure: numbering per assignment would give the same bar two
+    different letters.
+
+    Three styles, and only one of them needs a convention:
+
+    * `measNum` -- the label *is* the measure number. 99 of the corpus's 113
+      marks, and nothing is guessed.
+    * `numbers` -- the mark's position, counting from 1.
+    * `letters` -- A, B, C in measure order. 12 corpus marks. This is the
+      convention, and it is Finale's own; past Z it continues AA, AB.
+
+    A mark whose definition gives no style is left out rather than defaulted:
+    two corpus marks are that shape, and inventing a label for them would put a
+    letter in the score that the file does not ask for.
+    """
+    styles: dict[int, str] = {}
+    for record in document.others.of_tag(_ASSIGN):
+        if "part" in record.attrs:
+            continue
+        measure = _int(record.attrs.get("cmper"))
+        expr_id = _int(record.fields.get("textExprID"))
+        if measure is None or expr_id is None or expr_id not in texts:
+            continue
+        if not texts[expr_id].is_rehearsal:
+            continue
+        definition = definitions.get(expr_id)
+        style = str(definition.fields.get("rehearsalMarkStyle")) if definition else ""
+        if style in (_MEASURE_NUMBER_STYLE, _LETTER_STYLE, _NUMBER_STYLE):
+            styles.setdefault(measure, style)
+
+    out: dict[int, str] = {}
+    for position, measure in enumerate(sorted(styles)):
+        style = styles[measure]
+        if style == _MEASURE_NUMBER_STYLE:
+            out[measure] = str(measure)
+        elif style == _NUMBER_STYLE:
+            out[measure] = str(position + 1)
+        else:
+            out[measure] = _letter(position)
+    return out
+
+
+def _letter(position: int) -> str:
+    """A, B, ... Z, AA, AB -- the spreadsheet-column sequence Finale uses."""
+    letters = ""
+    position += 1
+    while position:
+        position, remainder = divmod(position - 1, 26)
+        letters = chr(ord("A") + remainder) + letters
+    return letters
 
 
 def _staffed(document: EnigmaDocument) -> set[tuple[int, int]]:
@@ -277,13 +367,28 @@ def _marking(text: str, *, category: str, in_music_font: bool, description: str)
     return None
 
 
-def _texts(document: EnigmaDocument) -> dict[int, tuple[str, bool]]:
-    """Expression number -> (what it prints, is it set in a music font).
+@dataclass(frozen=True)
+class _Text:
+    """What one expression text record says, once its markup has been read."""
 
-    The font matters because five dynamics are plain letters; the markup is kept
-    long enough to answer that and then discarded.
+    printed: str
+    """The literal characters, markup stripped. Empty for a rehearsal mark,
+    whose text is only an insert command."""
+
+    in_music_font: bool
+    """The font matters because five dynamics are plain letters."""
+
+    is_rehearsal: bool
+    """The text is the `^rehearsal()` insert, so the label has to be worked out."""
+
+
+def _texts(document: EnigmaDocument) -> dict[int, _Text]:
+    """Expression number -> what its text record says.
+
+    The markup is kept long enough to answer both questions it decides -- which
+    font, and whether the label is an insert -- and then discarded.
     """
-    out: dict[int, tuple[str, bool]] = {}
+    out: dict[int, _Text] = {}
     for record in document.texts.records:
         if record.tag != _TEXT or "part" in record.attrs:
             continue
@@ -291,7 +396,11 @@ def _texts(document: EnigmaDocument) -> dict[int, tuple[str, bool]]:
         if number is None:
             continue
         markup = record.text or ""
-        out[number] = (plain_text(markup), bool(_MUSIC_FONT.search(markup)))
+        out[number] = _Text(
+            printed=plain_text(markup),
+            in_music_font=bool(_MUSIC_FONT.search(markup)),
+            is_rehearsal=bool(_REHEARSAL.search(markup)),
+        )
     return out
 
 

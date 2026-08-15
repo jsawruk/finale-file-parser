@@ -176,7 +176,7 @@ not a marking, and keeping it would emit a blank direction.
 
 ### Score expressions, and the 365 that still do not reach the IR
 
-Read: 11,642. Reaching a `Measure`: **11,277**.
+Read: 11,732. Reaching a `Measure`: **11,367**.
 
 **A score expression names no staff.** `staffAssign = -1` means it belongs to a
 staff list — 746 corpus assignments — and the file says so, since all of them
@@ -217,6 +217,38 @@ the top staff is where such a marking is engraved.
 so no `Part` exists for them. (It was 317; 48 of the newly recovered textless
 dynamics land on such a staff.) All of these counts are pinned in both directions by
 `tests/enigma/test_expressions_ir_corpus_sweep.py`.
+
+### Rehearsal marks: the label is computed, not stored
+
+113 assignments carry an expression whose text is the bare insert
+`^fontTxt(Times New Roman,4096)^size(12)^nfx(65)^rehearsal()`. There is no letter
+in it. `plain_text` yields `""` — correctly, since the block has no literal text
+— and every one of them was dropped for having nothing to print.
+
+Finale works the label out when it draws, and the file says **how**:
+`rehearsalMarkStyle`.
+
+| style | corpus | label |
+| --- | --- | --- |
+| `measNum` | 99 | the measure number — **a fact, not a convention** |
+| `letters` | 12 | A, B, C in measure order — the one convention here |
+| absent | 2 | none; the mark is dropped rather than given a made-up letter |
+
+For the great majority the label is simply the bar the mark sits at, so nothing
+is invented. Only the twelve `letters` marks are numbered by position, and that
+is Finale's own sequence (past Z it continues AA, AB).
+
+**One mark, one label.** A mark drawn across a system is several assignments —
+the corpus has one on staff `-1` and on staves 9 and 13 of the same measure — so
+the label is keyed by measure. Numbering per assignment would give one bar two
+different letters.
+
+**90 marks are placed**, in 10 documents, and all 90 reach the IR. The other 23
+are accounted for: 21 are a score-wide copy of a mark the same measure already
+places on a real staff, and 2 have no readable style.
+
+They export as `<rehearsal>`, not `<words>` — different elements, and a consumer
+treats a rehearsal mark as a navigation target.
 
 ### What the exporter does with them
 
