@@ -109,6 +109,15 @@ UNTRANSLATED = (
     "root cause as the transposition gap above -- the value lives with the "
     "instrument, not in the file.",
     "measSpec display time signatures (useDisplayTimesig, dispBeats, dispDivbeat).",
+    "Expressions -- dynamics, tempo and technique markings. A .musx places them "
+    "with measExprAssign, which names a textExprDef and a staff; enigma.expressions "
+    "reads 11,543 of them across the 401-document .musx corpus. The DCL era "
+    "spells the assignment ^DY and the definition ^DT, and ^DT has exactly one "
+    "decoded field -- the uint16 playback value at +4. Which offset holds the "
+    "category, and how an assignment reaches its text, are both unknown, so a "
+    ".mus carries no expressions at all rather than guessed ones. This closes "
+    "when DT is decoded against the 95 paired 2011 documents. See "
+    "docs/formats/expressions-and-dynamics.md.",
     "Final barlines: measSpec's flags byte at +10 holds the barline style in its "
     "high nibble, and 1 (normal) and 2 (double) ARE read -- see enigma.barlines. "
     "A final bar is not: nibble 3 is the obvious reading and it does not occur "

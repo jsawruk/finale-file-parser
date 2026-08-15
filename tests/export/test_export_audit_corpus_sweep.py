@@ -35,7 +35,7 @@ from defusedxml import ElementTree as DET
 
 from finale_file_parser.enigma.location import locate_entries
 from finale_file_parser.enigma.mus_document import read_mus_document
-from finale_file_parser.export.musicxml import to_musicxml
+from finale_file_parser.export.musicxml import prints_as_words, to_musicxml
 from finale_file_parser.ir import Part, Score
 
 CORPUS = Path(__file__).parent.parent.parent / "corpus"
@@ -196,9 +196,21 @@ def test_nothing_the_ir_holds_is_dropped_on_the_way_out(
         totals["xml beams"] += len(list(doc.iter("beam")))
         totals["ir articulations"] += _count(score, "articulations")
         totals["xml articulations"] += sum(len(list(a)) for a in doc.iter("articulations"))
-        totals["ir directions"] += sum(len(m.directions) for p in score.parts for m in p.measures)
-        totals["xml directions"] += len(list(doc.iter("direction")))
-    for name in ("lyrics", "beams", "articulations", "directions"):
+        measures = [m for p in score.parts for m in p.measures]
+        expressions = [e for m in measures for e in m.expressions]
+        # Two things become a <direction>, and they are counted apart so that
+        # losing one cannot be masked by the other: a text repeat always prints
+        # as words, an expression prints as a <dynamics> element when it is a
+        # named dynamic and as words when it reads as words. An expression that
+        # is an unidentified music-font glyph prints as nothing on purpose --
+        # `prints_as_words` is the exporter's own rule, asked once here so the
+        # count means "everything printable was printed".
+        totals["ir words"] += sum(len(m.directions) for m in measures)
+        totals["ir words"] += sum(1 for e in expressions if prints_as_words(e))
+        totals["xml words"] += len(list(doc.iter("words")))
+        totals["ir dynamics"] += sum(1 for e in expressions if e.marking)
+        totals["xml dynamics"] += len(list(doc.iter("dynamics")))
+    for name in ("lyrics", "beams", "articulations", "words", "dynamics"):
         assert totals[f"ir {name}"] == totals[f"xml {name}"], f"{name} lost between IR and XML"
         assert totals[f"ir {name}"] > 0, f"no {name} in the corpus; that path is untested here"
 
