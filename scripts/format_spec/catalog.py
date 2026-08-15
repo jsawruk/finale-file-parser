@@ -74,22 +74,50 @@ def meas_spec() -> Struct:
 
 
 def frame_spec() -> Struct:
-    base = LAY.FRAME_SPEC_BASE_2005
-    buf = bytearray(base + 8)
-    buf[base : base + 4] = le32(101)
-    buf[base + 4 : base + 8] = le32(108)
+    # Two slots, the shape 15 corpus records take: a startTime slot, then the
+    # entry pair in the last one. The single-slot shape the other 10,275 take is
+    # the second half of this on its own.
+    slot = LAY.FRAME_SLOT
+    buf = bytearray(slot * 2)
+    buf[0:4] = le32(3584)  # startTime, EDU from the start of the measure
+    buf[8:12] = le32(8)  # constant in all 15 records carrying a leading slot
+    buf[slot : slot + 4] = le32(101)  # startEntry
+    buf[slot + 4 : slot + 8] = le32(108)  # endEntry
     return Struct.of(
         LAY.FRAME_SPEC,
         data=bytes(buf),
-        caption="frameSpec &mdash; a run of entries forming one layer of one measure. "
-        "2011 tag 146; DCL tag <code>^FR</code>.",
+        extra=[
+            Field(slot, 4, "startEntry", "uint32", "first entry number in this frame"),
+            Field(slot + 4, 4, "endEntry", "uint32", "last entry number, inclusive"),
+        ],
+        caption=f"frameSpec &mdash; a run of entries forming one layer of one measure. "
+        f"2011 tag 146; DCL tag <code>^FR</code>. The payload is an array of "
+        f"{slot}-byte slots; the example shows two.",
         notes=[
-            "<strong>The base offset differs by era: 4 for 2001, 6 for 2005.</strong> The "
-            "reader distinguishes them by incidence count &mdash; a three-incidence spec "
-            "is the 2001 shape. Reading the wrong base yields entry numbers that look "
-            "plausible and are wrong, which is the worst kind of error this format offers.",
-            "When a spec has more than one incidence, a <code>startTime</code> u32 sits at "
-            "+0, in EDU from the start of the measure.",
+            "<strong>The entry pair is in the LAST slot, at +0 and +4.</strong> A reader "
+            "takes it from <code>(incidences &minus; 1) &times; 12</code>. Where it sits "
+            "therefore depends on the individual record's length, and not on the era.",
+            "<strong>Measured, because this document previously said otherwise.</strong> "
+            "Across 10,290 frameSpec records in paired documents, every candidate offset "
+            "was compared against the <code>startEntry</code>/<code>endEntry</code> the "
+            "paired <code>.musx</code> states. The pair matched at the last slot in all "
+            "10,290 and at +6 in none. Two shapes occur &mdash; 12-byte single-slot "
+            "(10,275) and 24-byte two-slot (15) &mdash; and the 2001&ndash;2005 cohort "
+            "carries exactly the same two, 4,571 and 27, so the offset does not vary by "
+            "era either.",
+            "<strong>What this entry used to say, and why it was wrong.</strong> It drew a "
+            "6-byte lead-in with <code>startEntry</code> at +6, and annotated it &ldquo;the "
+            "base offset differs by era: 4 for 2001, 6 for 2005&rdquo;. Those two numbers "
+            "are real and belong to <code>gfhold</code>, whose frame slots do sit at an era "
+            "base &mdash; they had been attached to the wrong record. Nothing supported "
+            "them here: the vendored ETF documentation does not describe this record at "
+            "all. A specification stating an offset its own parser does not use is the "
+            "failure this project moved its layouts into the library to prevent.",
+            "When a spec has more than one slot, the leading one carries a "
+            "<code>startTime</code> u32 at +0, in EDU from the start of the measure. Its "
+            "remaining bytes are not decoded: +4 is zero and +8 holds a constant 8 in all "
+            "15 records, too few to read anything into.",
+            "The last slot's own +8 is zero in all 10,465 corpus records.",
         ],
     )
 
