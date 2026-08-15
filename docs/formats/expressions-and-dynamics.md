@@ -78,3 +78,53 @@ The tell was a **constant offset in a supposed foreign key** — 1→14, 2→15,
 3→16. That is a join error, not a fact about the format, and it survived a
 first reading because tempo text under a Dynamics heading is odd enough to look
 like a real discovery.
+
+## `^DT` — the 2001–2005 text expression, partly decoded
+
+`DT` is the DCL spelling of `textExprDef`. Payloads are 36, 48, 60 or 72
+bytes — every one a multiple of 12, the row data width, so the length says
+nothing about structure on its own.
+
+**`+4` is a `uint16` playback value.** Confirmed two ways. A velocity from the
+dynamics ladder appears there in 405 of 1,794 records (22.6%), which is the
+share of expressions that are dynamics — in a `.musx`, about 21% of
+`textExprDef` records fall in that category. And three consecutive records read
+straight off:
+
+    00 13 00 00 00 7f …   →  +4 = 0x007f = 127
+    00 14 00 00 00 72 …   →  +4 = 0x0072 = 114
+    00 15 00 00 00 65 …   →  +4 = 0x0065 = 101
+
+the top three rungs of the ladder, in order. `+0` is a plain counter — `0x13`,
+`0x14`, `0x15`.
+
+**Read it in the document's byte order.** 37 corpus documents are big-endian,
+where `+4` read little-endian gives 32,512 rather than 127.
+
+### What the other offsets look like, and what is not claimed
+
+Measured across 1,794 records. These are *shapes*, not identifications — the
+`.musx` `textExprDef` carries `categoryID`, `playType`, `horzMeasExprAlign`,
+`vertMeasExprAlign` and `yAdjustBaseline`, and any of them could be here:
+
+| offset | observed | reading |
+| --- | --- | --- |
+| `+2`, `+6`, `+8`, `+16` | zero in 96–100% | padding, or fields this corpus never sets |
+| `+10` | 0 ×608, 2 ×406, 3 ×62 | small enum |
+| `+12` | 3 ×1240, 0 ×326, 1 ×165, 4 ×63 | small enum |
+| `+14` | 0 ×1275, 1 ×519 | flag |
+| `+18` | 1 ×921, 4 ×444, 0 ×410, 5 ×19 | small enum |
+
+**No offset holds the record's own cmper** — the best is 2.1%, which is noise.
+So `DT` carries no `textIDKey`-style pointer to its text, and the link to the
+`^expression(n)` section is likely positional. That is untested.
+
+### How to finish it
+
+The 2011 era has **95 paired documents**, so its numeric equivalent can be
+decoded field by field against the `.musx` twin that names them — the method
+that settled the clef table. Then check whether `DT` shares the layout.
+
+Two traps, both hit already: `textIDKey` is `cmper + 13`, so joining through it
+yields coherent nonsense; and the enum offsets above will look meaningless read
+in the wrong byte order.
