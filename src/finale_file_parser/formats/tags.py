@@ -89,7 +89,13 @@ class TagName:
 # Decoded and payload-confirmed. Both spellings of each are registered below,
 # so a document of either era finds the same name.
 _DECODED: tuple[TagName, ...] = (
-    TagName("109", "others", "clefOptions", "Clef definition table, read as a strided array"),
+    TagName(
+        "109",
+        "others",
+        "clefOptions",
+        "Clef definition table, read as a strided array",
+        etf="95",
+    ),
     TagName("121", "others", "articDef", "An articulation's definition; charMain is the glyph"),
     TagName("146", "others", "frameSpec", "Entry range for one layer of one measure", etf="FR"),
     TagName("159", "others", "instUsed", "The staves the score lays out, in layout order"),

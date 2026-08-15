@@ -11,6 +11,7 @@ Report counts only -- never a corpus filename, title, or record value.
 from __future__ import annotations
 
 import collections
+import statistics
 from pathlib import Path
 
 import pytest
@@ -35,6 +36,21 @@ EXPECTED_SCORES = 132
 Was 131. The document that joined is `Bach Concerto.MUS`, whose 42 mirrored
 spans made it the last DCL failure attributable to the reader rather than to
 the file. See `MIRRORED_ENTRIES` below.
+"""
+
+EXPECTED_CLEFS = {"G": 282, "F": 112, "C": 9, "percussion": 1}
+"""First-measure clef across the cohort's 416 parts, by sign.
+
+**Before `^95` was identified this was 416 parts with no clef at all.** The
+cohort exported no `<clef>` element, and a consumer given none assumes treble,
+so every bass staff read an octave and a half wrong. See `_ROWS_CLEF_OPTIONS`.
+
+Pinned by sign rather than as a total because the distribution is the evidence
+that the table is being read correctly, and a total would survive every clef
+coming out treble. The independent check is pitch: the clef takes no part in
+decoding a note, yet the parts assigned F sound at a median MIDI 52, those
+assigned C at 62 and those assigned G at 67 -- each in the middle of its own
+staff, in the order the clefs mean.
 """
 
 EXPECTED_PARTS = 416
@@ -197,6 +213,57 @@ def test_the_reader_discards_only_dead_pool_space() -> None:
             continue
         dead += len(read_mus_entry_records(path)) - len(document.entries.records)
     assert dead == EXPECTED_DEAD_ENTRIES
+
+
+def test_the_cohort_reads_its_clefs() -> None:
+    """See `EXPECTED_CLEFS`. Counted on each part's first measure."""
+    signs: collections.Counter[str] = collections.Counter()
+    for path in _dcl_files():
+        try:
+            score = build_score(read_mus_document(path))
+        except (CorruptScoreError, MalformedScoreError):
+            continue
+        for part in score.parts:
+            if part.measures and part.measures[0].clef_sign:
+                signs[part.measures[0].clef_sign] += 1
+    assert dict(signs) == EXPECTED_CLEFS
+
+
+def test_a_bass_clef_part_really_does_sound_lower_than_a_treble_one() -> None:
+    """The clef takes no part in decoding a pitch, so the two are independent:
+    if the table or the indices were being read wrongly, the clef a part is
+    given would not predict the notes it contains. It does.
+
+    This is what stops the clef pin above from being satisfied by a plausible
+    distribution of wrong answers.
+    """
+    step = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+    heard: dict[str, list[float]] = {"G": [], "F": []}
+    for path in _dcl_files():
+        try:
+            score = build_score(read_mus_document(path))
+        except (CorruptScoreError, MalformedScoreError):
+            continue
+        for part in score.parts:
+            sign = part.measures[0].clef_sign if part.measures else None
+            if sign not in heard:
+                continue
+            midi = [
+                (pitch.octave + 1) * 12 + step[pitch.step] + pitch.alteration
+                for measure in part.measures
+                for voice in measure.voices
+                for event in voice.events
+                for pitch in event.pitches
+            ]
+            if midi:
+                heard[sign].append(statistics.median(midi))
+
+    assert heard["G"] and heard["F"]
+    treble, bass = statistics.median(heard["G"]), statistics.median(heard["F"])
+    assert bass < treble - 6, (
+        f"parts given a bass clef sound at a median MIDI {bass}, treble at {treble}; "
+        "a clef that does not predict its own pitches is not being read correctly"
+    )
 
 
 def test_the_cohort_draws_its_double_barlines() -> None:
