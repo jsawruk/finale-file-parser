@@ -7,12 +7,15 @@
 PY ?= uv run
 CODE ?= src tests scripts
 
-.PHONY: help install hooks test lint fmt typecheck check clean
+.PHONY: help install hooks test test-sweeps lint fmt typecheck check check-full clean
 
 help:
 	@echo "Targets:"
 	@echo "  install    create the venv, install dependencies (uv sync), and enable git hooks"
 	@echo "  hooks      point git at .githooks/ (blocks direct pushes to main)"
+	@echo "  check      lint + format + types + tests, no corpus sweeps (~1 min)"
+	@echo "  check-full check plus the corpus sweeps (~9 min); run before pushing"
+	@echo "  test-sweeps  the corpus sweeps on their own"
 	@echo "  test       run the test suite (pytest, parallel; JOBS=0 for serial)"
 	@echo "  lint       ruff check"
 	@echo "  fmt        auto-format with ruff"
@@ -39,7 +42,16 @@ hooks:
 JOBS ?= auto
 PYTEST_ARGS ?= $(if $(filter 0,$(JOBS)),,-n $(JOBS) --dist loadfile)
 
+# The 28 *_corpus_sweep.py files read every one of the 639 corpus documents.
+# They hold this project's hardest-won evidence and they cost about nine
+# minutes; everything else runs in ten seconds. Splitting them out is what makes
+# a gate worth running between edits.
+SWEEPS = --ignore-glob=*_corpus_sweep.py
+
 test:
+	$(PY) pytest $(PYTEST_ARGS) $(SWEEPS)
+
+test-sweeps:
 	$(PY) pytest $(PYTEST_ARGS)
 
 lint:
@@ -51,10 +63,27 @@ fmt:
 typecheck:
 	$(PY) mypy $(CODE)
 
+# Two gates, because one that takes nine minutes is a gate people skip.
+#
+# `check` is the one to run between edits: lint, format, types and every test
+# that does not read the corpus. About a minute.
+#
+# `check-full` adds the corpus sweeps and is the gate before a push. The hook in
+# .githooks/ only blocks direct pushes to main -- it does not run tests -- so
+# this one is a habit rather than an enforcement. Keep it: the sweeps are where
+# a wrong offset or a dropped record actually shows up, and several of this
+# project's real defects were caught by nothing else.
+#
 # Repeats the commands rather than depending on the targets so the order and
-# output stay fixed -- but it must pass PYTEST_ARGS too, or the gate everyone
+# output stay fixed -- but they must pass PYTEST_ARGS too, or the gate everyone
 # actually runs is the one place that never gets the parallelism.
 check:
+	$(PY) ruff check $(CODE)
+	$(PY) ruff format --check $(CODE)
+	$(PY) mypy $(CODE)
+	$(PY) pytest $(PYTEST_ARGS) $(SWEEPS)
+
+check-full:
 	$(PY) ruff check $(CODE)
 	$(PY) ruff format --check $(CODE)
 	$(PY) mypy $(CODE)

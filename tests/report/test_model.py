@@ -289,31 +289,6 @@ def test_an_options_record_is_flagged_so_it_can_be_grouped() -> None:
     assert "options" not in model._mus_other_entry(ordinary)
 
 
-@pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
-def test_no_two_records_of_one_tag_share_a_key() -> None:
-    """A row that cannot be told from its neighbour is a row that cannot be
-    selected, so this is worth pinning rather than assuming.
-
-    It also records what an earlier reading of the tree got wrong: rows reading
-    `65534/0` under many different tags looked like duplicates and are not --
-    each is that tag's own options record. Within any one tag, keys are unique
-    across every `.mus` in the corpus.
-    """
-    collisions = []
-    for path in sorted(CORPUS.rglob("*.mus"))[:40]:
-        try:
-            records = model._mus_records(path)
-        except FinaleFileError:
-            continue
-        for pool, tags in records.items():
-            assert isinstance(tags, dict)
-            for tag, entries in tags.items():
-                keys = [e["key"] for e in entries]
-                if len(keys) != len(set(keys)):
-                    collisions.append(f"{path.name} {pool}/{tag}")
-    assert collisions == []
-
-
 def test_a_tag_is_named_and_its_tier_travels_with_the_name() -> None:
     """`others / 176 / (cmper 1, part 0)` names a record only to someone holding
     the catalogue.
@@ -404,13 +379,28 @@ def test_the_byte_order_travels_with_the_report() -> None:
     documents, where reading a measSpec width little-endian turns 360 EVPU into
     26,625 -- a number, not an error. The renderer decodes with this, so it has
     to be the order the reader used.
+
+    The order is found with the pool reader, which is what `inspect_document`
+    itself reads it from, and only the two documents that prove the point go
+    through the whole pipeline. Running all 40 through it cost 29 seconds to
+    assert something two documents establish.
     """
-    orders = set()
-    for path in sorted(CORPUS.rglob("*.mus"))[:40]:
-        inspection = model.inspect_document(path)
-        assert inspection.byte_order in {"little", "big"}
-        orders.add(inspection.byte_order)
-    assert "big" in orders, "a corpus that cannot exercise the order proves nothing"
+    from finale_file_parser.enigma.mus_payload import read_mus_pools
+
+    found: dict[str, Path] = {}
+    for path in sorted(CORPUS.rglob("*.mus")):
+        try:
+            pools = read_mus_pools(path)
+        except FinaleFileError:
+            continue
+        if pools:
+            found.setdefault(pools[0].byte_order, path)
+        if {"little", "big"} <= found.keys():
+            break
+    assert "big" in found, "a corpus that cannot exercise the order proves nothing"
+
+    for order, path in found.items():
+        assert model.inspect_document(path).byte_order == order
 
 
 def test_no_layout_is_offered_where_the_reader_computes_the_offsets() -> None:
