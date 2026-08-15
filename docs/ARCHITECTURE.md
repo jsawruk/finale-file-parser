@@ -459,9 +459,22 @@ present and wrong. `enigma.UNTRANSLATED` names each remaining gap and its conseq
 **The clef table** comes from `others` tag 109 under cmper `0xFFFE`, Enigma's sentinel for a
 document-wide option. Its entry stride is set by the banner year — 2011 uses 18 bytes, 2012 uses 20
 and moves `clefYDisp` and `shapeID` — which is the same era split `mus_payload` uses to choose a
-codec. All four fields match the paired `.musx` on 1,512 of 1,512 entries. Deriving the stride from
-the payload length instead would be ambiguous: 324 and 360 are both divisible by 18 and 20, and
-reading a 360-byte table as 20 entries of 18 rather than 18 of 20 puts every field two bytes out.
+codec. All four fields match the paired `.musx` on 1,512 of 1,512 entries.
+
+**The 2001–2005 era carries the same table under tag `^95`**, again under the `0xFFFE` sentinel.
+It is the same table and not merely a similar one: the DCL payload is byte-for-byte identical to
+the 2011 one over all 288 of its bytes in 98 of the 102 little-endian documents that carry it, and
+identical again in 24 of the 37 big-endian ones once each field is read in the document's own
+order — 288 bytes being 16 entries of the same 18-byte stride, and the 324-byte payloads 18 of
+them. Reading it closed the gap that left the whole DCL cohort exporting **no clef at all**: 132
+documents and 416 parts, where a consumer given none assumes treble and a bass staff reads an
+octave and a half wrong. The clef plays no part in decoding a pitch, so the result checks itself —
+parts now given F sound at a median MIDI 52, C at 62 and G at 67, each in the middle of its own
+staff. See `_ROWS_CLEF_OPTIONS`.
+
+Deriving the stride from the payload length instead would be ambiguous: 324 and 360 are both
+divisible by 18 and 20, and reading a 360-byte table as 20 entries of 18 rather than 18 of 20 puts
+every field two bytes out.
 
 Three translations are omissions rather than values, and all three matter:
 

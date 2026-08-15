@@ -393,7 +393,7 @@ def _rows_document(path: str | os.PathLike[str]) -> EnigmaDocument:
         version=_VERSION,
         header=Pool(records=_EMPTY),
         mappings=Pool(records=_EMPTY),
-        options=OptionsPool(records=_EMPTY),
+        options=OptionsPool(records=tuple(_rows_options(rows))),
         others=OthersPool(records=tuple(_rows_others(rows, frames))),
         details=DetailsPool(records=tuple(gfholds)),
         entries=EntriesPool(records=kept),
@@ -497,6 +497,47 @@ def _frame_span(
     # as measSpec.key and gfhold.clefID.
     start_time = _u32(payload, 0, order) if incidences > 1 else 0
     return start, end, start_time or None
+
+
+_ROWS_CLEF_OPTIONS = "95"
+"""The 2001-2005 tag holding the clef table -- `clefOptions` in the later era.
+
+Identified by its bytes, not by inference. The payload of this record is
+**byte-for-byte identical** to the 2011 era's `clefOptions` (tag 176's
+neighbour, 109) in 98 of the 102 little-endian corpus documents that carry it,
+over all 288 bytes; and identical again in 24 of the 37 big-endian ones once
+each field is read in the document's own order, with the rest differing in a
+handful of bytes as one document's table differs from another's.
+
+The 288-byte payload is 16 entries of the 18-byte stride the 2011 era uses, and
+the 324-byte one is 18 of them -- the same entries, the same layout, one era
+earlier. Without this the whole 2001-2005 cohort exported no clef at all: 132
+documents and 416 parts, where a consumer given no clef assumes treble and a
+bass staff reads an octave and a half wrong.
+"""
+
+_ROWS_CLEF_STRIDE = 18
+"""Bytes per clef entry in a 2001-2005 table. Not derived from the payload
+length -- 288 and 324 are both divisible by 18 and by 12 -- but from the byte
+identity above: these are the 2011 era's own 18-byte entries."""
+
+
+def _rows_options(rows: MusRows) -> list[Record]:
+    """The document-wide options the 2001-2005 reader can translate: the clef
+    table, so far -- and, until this, nothing at all."""
+    record = rows.others.get((_ROWS_CLEF_OPTIONS, OPTIONS_CMPER))
+    if record is None or not record.payload:
+        return []
+    if len(record.payload) % _ROWS_CLEF_STRIDE:
+        # The stride is known; a payload that is not a whole number of entries
+        # means this is not the table after all. Emit nothing rather than a
+        # mis-strided one, which would produce plausible wrong clefs.
+        return []
+    definitions = tuple(
+        _clef_def(record.payload[at : at + _ROWS_CLEF_STRIDE], _ROWS_CLEF_STRIDE, rows.byte_order)
+        for at in range(0, len(record.payload), _ROWS_CLEF_STRIDE)
+    )
+    return [Record(tag="clefOptions", attrs={}, text="", fields={"clefDef": definitions})]
 
 
 def _rows_others(rows: MusRows, frames: dict[int, tuple[int, int, int | None]]) -> list[Record]:
@@ -640,18 +681,22 @@ def _options_records(records: tuple[MusOther, ...], year: int | None) -> list[Re
     return []
 
 
-def _clef_def(entry: bytes, stride: int) -> Record:
+def _clef_def(entry: bytes, stride: int, order: ByteOrder = "little") -> Record:
     """One clef-table entry.
 
     A zero `clefChar` or `shapeID` is written as an absent field, not as "0":
     `clef_definitions` reads absent as "there is no character/shape", and a
     clef with neither is what makes `Clef.sign` report UNKNOWN rather than
     inventing a G clef.
+
+    `order` is the document's, not a constant: the 2001-2005 era carries this
+    same table big-endian in 37 corpus documents, where reading it little-endian
+    turns every clef character into a different one.
     """
     fields: dict[str, str | tuple[str, ...] | Record | tuple[Record, ...]] = {}
     for name, offset in _CLEF_FIELD_OFFSETS[stride].items():
         raw = entry[offset : offset + 2]
-        value = int.from_bytes(raw, "little", signed=name in _CLEF_SIGNED)
+        value = int.from_bytes(raw, order, signed=name in _CLEF_SIGNED)
         if value or name in _CLEF_SIGNED:
             fields[name] = str(value)
     return Record(tag="clefDef", attrs={}, text="", fields=fields)
