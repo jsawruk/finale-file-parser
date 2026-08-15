@@ -309,3 +309,76 @@ def test_a_score_wide_marking_survives_when_nothing_else_places_it() -> None:
     )
     found = expressions_by_measure(doc)
     assert set(found) == {(2, 7), (SCORE_WIDE_STAFF, 7)}
+
+
+REHEARSAL_TEXT = "^fontTxt(Times New Roman,4096)^size(12)^nfx(65)^rehearsal()"
+"""Verbatim from the corpus: the label is an insert, so there is no literal text."""
+
+
+def rehearsal(cmper: int, style: str | None) -> tuple[Record, ...]:
+    fields = {"categoryID": "6"}
+    if style is not None:
+        fields["rehearsalMarkStyle"] = style
+    return (
+        Record(tag="textExprDef", attrs={"cmper": str(cmper)}, text="", fields=fields),
+        text(cmper, REHEARSAL_TEXT),
+    )
+
+
+def test_a_rehearsal_mark_in_measure_number_style_prints_its_measure() -> None:
+    """99 of the corpus's 113 marks are this style, and the label is then a fact
+    rather than a convention: it is the bar the mark sits at."""
+    doc = document(
+        category(6, "rehearsalMarks"),
+        *rehearsal(40, "measNum"),
+        assignment(17, 40, layer=None),
+    )
+    (found,) = expressions_by_measure(doc)[(1, 17)]
+    assert found.is_rehearsal is True
+    assert found.text == "17"
+
+
+def test_rehearsal_marks_in_letter_style_run_in_measure_order() -> None:
+    """The one convention here, and it is Finale's own. Ordered by measure, not
+    by the order the assignments happen to appear in the file."""
+    doc = document(
+        category(6, "rehearsalMarks"),
+        *rehearsal(40, "letters"),
+        assignment(79, 40, inci=2, layer=None),
+        assignment(27, 40, inci=0, layer=None),
+        assignment(53, 40, inci=1, layer=None),
+    )
+    found = expressions_by_measure(doc)
+    assert [found[(1, m)][0].text for m in (27, 53, 79)] == ["A", "B", "C"]
+
+
+def test_one_mark_on_several_staves_shares_one_label() -> None:
+    """A mark drawn across a system is one mark. Numbering per assignment would
+    give the same bar two different letters -- the corpus has exactly this shape,
+    with a mark on staff -1 and on staves 9 and 13 of the same measure."""
+    doc = document(
+        category(6, "rehearsalMarks"),
+        *rehearsal(40, "letters"),
+        assignment(27, 40, staff=9, inci=0, layer=None),
+        assignment(27, 40, staff=13, inci=1, layer=None),
+        assignment(53, 40, staff=9, inci=2, layer=None),
+    )
+    found = expressions_by_measure(doc)
+    assert found[(9, 27)][0].text == "A"
+    assert found[(13, 27)][0].text == "A", "the same bar must not get two letters"
+    assert found[(9, 53)][0].text == "B"
+
+
+def test_a_mark_whose_style_is_unreadable_is_not_given_a_label() -> None:
+    """Two corpus marks carry no `rehearsalMarkStyle`. Defaulting one would put a
+    letter in the score the file does not ask for, so it is dropped instead."""
+    doc = document(
+        category(6, "rehearsalMarks"), *rehearsal(40, None), assignment(9, 40, layer=None)
+    )
+    assert expressions_by_measure(doc) == {}
+
+
+def test_the_letter_sequence_continues_past_z() -> None:
+    from finale_file_parser.enigma.expressions import _letter
+
+    assert [_letter(i) for i in (0, 1, 25, 26, 27)] == ["A", "B", "Z", "AA", "AB"]

@@ -216,6 +216,21 @@ class Expression:
     attaches it to the staff rather than to one layer -- which is how 1,708 of
     the corpus's 6,672 assigned dynamics are placed."""
 
+    is_rehearsal: bool = False
+    """A rehearsal mark, whose `text` this project computed rather than read.
+
+    The file stores no letter: the expression text is the bare insert command
+    `^rehearsal()`, and Finale works the label out when it draws. What the file
+    *does* say is the style -- `rehearsalMarkStyle` -- and for 99 of the corpus's
+    113 marks that style is `measNum`, so the label is the measure number and no
+    convention is involved. The 12 `letters` marks are numbered A, B, C in
+    measure order, which is a convention and the only one here.
+
+    Kept as a flag because `text` alone cannot distinguish the mark `A` from the
+    word "A": MusicXML writes the first as `<rehearsal>` and the second as
+    `<words>`.
+    """
+
     score_wide: bool = False
     """The file attached this to a **staff list** rather than to one staff.
 

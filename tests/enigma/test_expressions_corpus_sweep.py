@@ -34,6 +34,9 @@ class _Reading:
         self.empty_text = 0
         self.staves: set[int] = set()
         self.layers: Counter[str] = Counter()
+        self.rehearsal = 0
+        self.rehearsal_documents = 0
+        self.rehearsal_labels: set[str] = set()
 
 
 @pytest.fixture(scope="module")
@@ -47,6 +50,7 @@ def reading() -> _Reading:
         out.documents += 1
         found = expressions_by_measure(document)
         has_dynamic = False
+        marks_here = 0
         for (staff, _measure), items in found.items():
             for expression in items:
                 out.total += 1
@@ -55,10 +59,15 @@ def reading() -> _Reading:
                 out.layers[str(expression.layer)] += 1
                 if not expression.text:
                     out.empty_text += 1
+                if expression.is_rehearsal:
+                    marks_here += 1
+                    out.rehearsal_labels.add(expression.text)
                 if expression.marking:
                     out.markings[expression.marking] += 1
                     has_dynamic = True
         out.documents_with_a_dynamic += has_dynamic
+        out.rehearsal += marks_here
+        out.rehearsal_documents += marks_here > 0
     return out
 
 
@@ -126,3 +135,41 @@ def test_most_markings_name_a_layer_and_many_do_not(reading: _Reading) -> None:
     layer 1, and one attached to the staff with no layer at all."""
     assert reading.layers["1"] > 1000
     assert reading.layers["None"] > 500
+
+
+REHEARSAL_MARKS = 90
+"""Rehearsal marks the corpus places, of 113 assignments carrying `^rehearsal()`.
+
+The other 23 are accounted for: 21 are a score-wide copy of a mark the same
+measure already places on a real staff, and 2 carry no readable
+`rehearsalMarkStyle` and so have no label to print.
+"""
+
+REHEARSAL_DOCUMENTS = 10
+
+
+def test_rehearsal_marks_are_labelled_from_the_style_the_file_gives(
+    reading: _Reading,
+) -> None:
+    """The label is not in the file -- the text is the bare `^rehearsal()` insert
+    and `plain_text` correctly yields nothing, which is why all 113 were dropped
+    before this existed.
+
+    `rehearsalMarkStyle` says how to work it out, and for `measNum` -- 99 of the
+    113 -- the answer is the measure number, so no convention is involved. Only
+    the `letters` marks are numbered by position, and this asserts both kinds
+    actually appear, so a change that silently reduced the feature to one style
+    would fail.
+    """
+    assert reading.rehearsal == REHEARSAL_MARKS
+    assert reading.rehearsal_documents == REHEARSAL_DOCUMENTS
+    numeric = {label for label in reading.rehearsal_labels if label.isdigit()}
+    lettered = {label for label in reading.rehearsal_labels if not label.isdigit()}
+    assert numeric, "no measure-number rehearsal mark reached the sweep"
+    assert lettered >= {"A", "B", "C"}, f"the letter sequence is missing: {sorted(lettered)}"
+
+
+def test_a_rehearsal_mark_always_carries_a_label(reading: _Reading) -> None:
+    """`<rehearsal>` with no text is not a rehearsal mark. A mark whose style is
+    unreadable is dropped at the reader rather than emitted empty."""
+    assert "" not in reading.rehearsal_labels
