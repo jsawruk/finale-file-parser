@@ -26,7 +26,8 @@ from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.mus_others import TAG_STAFF_SPEC, read_mus_others
 from finale_file_parser.enigma.mus_payload import read_mus_streams
 from finale_file_parser.enigma.score import score_xml
-from finale_file_parser.enigma.text import plain_text
+from finale_file_parser.enigma.text import plain_text, staff_names
+from finale_file_parser.errors import FinaleFileError
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
@@ -241,3 +242,132 @@ def test_one_id_is_evidenced_by_ten_independent_documents() -> None:
         if any(name_id == 2 and text_id.get("2") == 30 for name_id in ids.values()):
             sizes.add(len(read_mus_entries(mus_path)))
     assert len(sizes) == INDEPENDENT_DOCUMENTS_FOR_ID_TWO
+
+
+ANCHOR_VALIDITY = {"valid": 25, "block absent": 116, "wrong text": 3}
+"""Why only 25 of 144 candidate anchors can test the id-to-block relation.
+
+A candidate is a `.mus` name id paired with the block number the `.musx` reaches
+through `staffSpec.fullName -> textBlock -> textID`. There are 144 of those, and
+it is tempting to treat them all as evidence -- I did, and briefly concluded from
+them that the id-to-block map is per-document after all. It is not; the anchors
+were junk.
+
+**A candidate is only an anchor if the block exists in the `.mus` and holds that
+staff's name.** Measured:
+
+* **116 name a block absent from the `.mus` stream.** The `.musx` was re-saved
+  and renumbered its text blocks, so its `textID` points at a block this `.mus`
+  does not have. Of those 116, the name text appears in *no* block at all in 65
+  cases -- the `.mus` genuinely does not carry that name.
+* **3 land on a block that exists but holds different text.**
+* **25 are valid**, which is the figure §3d rests on and the same number reached
+  by a completely different route.
+
+Pinned because inflating this set is the specific mistake available here, and it
+produces a confident wrong answer rather than a visible failure.
+"""
+
+RECOVERY_DELTAS = 10
+"""Distinct `textID - block` deltas among candidates recovered by name text.
+
+The obvious way to rescue the 116 is to find the staff's name among the blocks and
+take the difference as a renumbering offset. 47 resolve to exactly one block that
+way, and their deltas are 1, 2, 21, 16, 20, 22, 17, 3, 5, 23 -- ten values with no
+rule, and only 37 of 42 documents are even self-consistent. Worse, the method is
+the palette trap: a staff called `Flute` matches the template's `Flute` block
+rather than its own. Recorded so the route is not tried a fourth time.
+"""
+
+LOOKUP_BEST = 0.20
+"""Best score for any record acting as the id-to-block lookup: 19.4%.
+
+Searched two ways over the 144 candidates, both failing:
+
+* a record keyed at the name id holding the block at any even offset -- best
+  tag 183 at `+0`, 28 of 144;
+* the `(id, block)` pair written adjacently as two `uint16`s **anywhere** in any
+  `others` payload, any `details` payload, or any stream -- absent in 129 of 144,
+  and the 15 hits are spread across four unrelated tags.
+
+The pair is not stored. That is now a measured negative rather than a failed
+search.
+"""
+
+
+def test_only_a_quarter_of_the_candidate_anchors_are_real() -> None:
+    """The validity criterion, asserted rather than assumed.
+
+    See `ANCHOR_VALIDITY`. This is the guard against the mistake of counting all
+    144: it fails if the valid set is ever reported as larger than it is.
+    """
+    valid = 0
+    absent = 0
+    wrong = 0
+    for mus_path, musx_path in oracle_pairs():
+        try:
+            blocks = _blocks(mus_path)
+            musx = parse_enigma(score_xml(musx_path))
+        except (CorruptScoreError, FinaleFileError, OSError, ValueError):
+            continue
+        if not blocks:
+            continue
+        text_id: dict[str, int] = {}
+        for text_block in musx.others.of_tag("textBlock"):
+            value = text_block.fields.get("textID")
+            if "part" not in text_block.attrs and isinstance(value, str) and value.isdigit():
+                text_id[str(text_block.attrs["cmper"])] = int(value)
+        spec = {
+            int(str(r.attrs["cmper"])): r
+            for r in musx.others.records
+            if r.tag == "staffSpec"
+            and "part" not in r.attrs
+            and str(r.attrs.get("cmper", "")).isdigit()
+        }
+        names = staff_names(musx)
+        for staff, ids in _name_id_pairs(mus_path).items():
+            reference = spec.get(staff)
+            if reference is None or staff not in names:
+                continue
+            for name_id, field, wanted in (
+                (ids[0], "fullName", names[staff].full),
+                (ids[1], "abbrvName", names[staff].abbreviated),
+            ):
+                value = reference.fields.get(field)
+                block = text_id.get(str(value)) if value is not None else None
+                if not name_id or block is None or not wanted:
+                    continue
+                if block not in blocks:
+                    absent += 1
+                elif _same(blocks[block], wanted):
+                    valid += 1
+                else:
+                    wrong += 1
+    assert valid == ANCHOR_VALIDITY["valid"], f"{valid} valid anchors, not 25"
+    assert absent == ANCHOR_VALIDITY["block absent"]
+    assert wrong == ANCHOR_VALIDITY["wrong text"]
+    assert valid + absent + wrong == 144
+
+
+def _name_id_pairs(path: object) -> dict[int, tuple[int, int]]:
+    """staff -> (full name id, abbreviated name id), from `staffSpec` +30 and +32.
+
+    Distinct from `_name_ids`, which returns the full-name id alone and is what
+    the older tests here read.
+    """
+    out: dict[int, tuple[int, int]] = {}
+    for record in read_mus_others(path):  # type: ignore[arg-type]
+        if record.tag != TAG_STAFF_SPEC or record.part or len(record.payload) < 34:
+            continue
+        out[record.cmper] = (
+            int.from_bytes(record.payload[30:32], "little"),
+            int.from_bytes(record.payload[32:34], "little"),
+        )
+    return out
+
+
+def _same(found: str, wanted: str) -> bool:
+    return (
+        re.sub(r"\s+", " ", found).strip().casefold()
+        == re.sub(r"\s+", " ", wanted).strip().casefold()
+    )
