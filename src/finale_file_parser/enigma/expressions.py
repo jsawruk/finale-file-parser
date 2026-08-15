@@ -56,6 +56,30 @@ with neither signal are left unmarked: a bare `f` in `misc` with no font at all
 is as likely to be a label as a dynamic, and this project does not guess. The
 text is still carried, so nothing is lost.
 
+## Not everything read reaches the IR
+
+This module returns 11,543 markings. **10,630 of them reach a `Measure`**; 913,
+in 267 documents, do not, because `build_score` keys them by staff and those
+name a staff it built no `Part` for. Two causes, both measured, neither guessed:
+
+* **596 are assigned to a staff *list*.** `staffAssign = -1` is the sentinel, and
+  the file says so: all 746 corpus assignments carrying it also carry
+  `staffGroup` *and* `staffList`, where a positive-staff assignment almost never
+  does (138 of 11,687). `staffList` selects a `categoryStaffListScore`, whose
+  repeated `inst` is `-1` in 6,215 of 6,419 incidences -- but the rest name real
+  staves, and `-1` turns up *beside* them in tuples like `('-1', '9', '13')`. So
+  `-1` cannot be read as "every staff" without risking a marking on a staff the
+  list excludes. Unresolved on purpose.
+* **317 are assigned to a staff that holds no notes at all.** One `Part` is built
+  per staff with music, so a staff carrying only an expression has nowhere to put
+  it. Whether it should become an empty part is a question about part
+  construction, not about expressions.
+
+`tests/enigma/test_expressions_ir_corpus_sweep.py` pins all three numbers in both
+directions. It exists because the sweep beside it does not catch this: that one
+asks `expressions_by_measure` what `expressions_by_measure` found, which is a
+reader confirming itself. Measure the delivered object.
+
 ## What is not read
 
 **Placement.** `horzEvpuOff` and `vertOff` carry the offsets Finale drew the
