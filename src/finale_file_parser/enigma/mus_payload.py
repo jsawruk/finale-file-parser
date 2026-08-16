@@ -73,14 +73,38 @@ def u16_le(data: bytes, offset: int) -> int:
 
     **Named for the byte order it assumes, because it does assume one.** The
     `others` and `details` pool readers both read their record headers this
-    way regardless of the container's own byte order, and 37 corpus documents
-    are big-endian -- so the assumption is worth seeing at the call site rather
-    than buried in a two-line helper each module kept its own copy of.
+    way regardless of the container's own byte order, so the assumption is
+    worth seeing at the call site rather than buried in a two-line helper each
+    module kept its own copy of.
 
-    Whether fixed little-endian is right for those headers is not settled here:
-    this is the behaviour those readers have always had, and the corpus sweeps
-    pin what it produces. `mus_document` and `mus_entries` keep their own
-    order-aware readers, which is the other half of the same open question.
+    **Measured, and correct -- but for a reason outside these readers.** The
+    corpus splits cleanly:
+
+        era          container byte order   documents   others pool
+        2011+        little                        99   read
+        2001-2005    big                           37   rejected
+        2001-2005    little                       102   rejected
+
+    Every big-endian document is DCL-era, and these readers reject all 139
+    DCL documents by design -- that era is a table of fixed 16-byte rows and
+    belongs to `mus_rows`. The cohort this walk actually accepts is 99
+    documents, and all 99 are little-endian. So fixed little-endian is not a
+    latent bug; it is right for everything that reaches it.
+
+    What makes it *safe* rather than merely lucky is the failure mode. Nothing
+    in the format guarantees a 2011-era file is little-endian; the corpus
+    merely holds no counter-example. If one appeared, a big-endian length read
+    little-endian is astronomically large, the record walk fails its own tiling
+    check, and the reader raises `CorruptScoreError` instead of returning
+    records assembled from transposed bytes. Verified twice: on a real 2011
+    pool, byte-swapping its 1,464 record headers turns 2,578 records into a
+    rejection, and
+    `tests/enigma/test_mus_others.py::test_rejects_a_big_endian_pool_rather_than_misreading_it`
+    pins it with a little-endian control beside it.
+
+    `mus_document` and `mus_entries` keep their own order-aware readers, and
+    that is not the same question: they read *payload* fields, in both eras,
+    where the document's byte order does apply.
     """
     return int.from_bytes(data[offset : offset + 2], "little")
 
