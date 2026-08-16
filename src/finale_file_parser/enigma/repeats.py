@@ -36,7 +36,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from finale_file_parser.enigma.document import EnigmaDocument, Record
+from finale_file_parser.enigma.document import EnigmaDocument, Record, field_int
 from finale_file_parser.ir import Ending
 
 __all__ = ["MeasureRepeats", "Repeats", "repeats_for"]
@@ -134,7 +134,7 @@ def _measure_flags(document: EnigmaDocument) -> dict[int, _Flags]:
     for record in document.others.of_tag(_MEASURE):
         if "part" in record.attrs:
             continue
-        measure = _int(record.attrs.get("cmper"))
+        measure = field_int(record.attrs.get("cmper"))
         if measure is None:
             continue
         out[measure] = _Flags(
@@ -151,8 +151,8 @@ def _backward_passes(document: EnigmaDocument) -> dict[int, int]:
     for record in document.others.of_tag(_BACK):
         if "part" in record.attrs:
             continue
-        measure = _int(record.attrs.get("cmper"))
-        actuate = _int(record.fields.get("actuate"))
+        measure = field_int(record.attrs.get("cmper"))
+        actuate = field_int(record.fields.get("actuate"))
         if measure is None:
             continue
         out[measure] = actuate if actuate and actuate > 0 else DEFAULT_PASSES
@@ -180,7 +180,8 @@ def _ending_starts(document: EnigmaDocument) -> set[int]:
     return {
         measure
         for record in document.others.of_tag(_ENDING_START)
-        if "part" not in record.attrs and (measure := _int(record.attrs.get("cmper"))) is not None
+        if "part" not in record.attrs
+        and (measure := field_int(record.attrs.get("cmper"))) is not None
     }
 
 
@@ -190,11 +191,11 @@ def _pass_lists(document: EnigmaDocument) -> dict[int, tuple[int, ...]]:
     for record in document.others.of_tag(_PASS_LIST):
         if "part" in record.attrs:
             continue
-        measure = _int(record.attrs.get("cmper"))
+        measure = field_int(record.attrs.get("cmper"))
         if measure is None:
             continue
         numbers = tuple(
-            number for raw in _acts(record) if (number := _int(raw)) is not None and number > 0
+            number for raw in _acts(record) if (number := field_int(raw)) is not None and number > 0
         )
         if numbers:
             out[measure] = numbers
@@ -208,10 +209,3 @@ def _acts(record: Record) -> tuple[str, ...]:
     if isinstance(value, tuple):
         return tuple(str(item) for item in value)
     return () if value is None else (str(value),)
-
-
-def _int(value: object) -> int | None:
-    try:
-        return int(str(value))
-    except (TypeError, ValueError):
-        return None

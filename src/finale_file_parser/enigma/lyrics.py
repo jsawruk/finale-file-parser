@@ -26,7 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from finale_file_parser.enigma.document import EnigmaDocument, Record
+from finale_file_parser.enigma.document import EnigmaDocument, Record, field_int
 from finale_file_parser.enigma.text import plain_text
 
 __all__ = ["Lyric", "LyricKind", "Syllabic", "lyrics_by_entry", "verse_syllables"]
@@ -112,9 +112,9 @@ def _resolve(
     kind: LyricKind,
     cache: dict[tuple[LyricKind, int], tuple[tuple[str, bool], ...]],
 ) -> tuple[int, Lyric] | None:
-    number = _int(record.fields.get("lyricNumber"))
-    index = _int(record.fields.get("syll"))
-    entnum = _int(record.attrs.get("entnum"))
+    number = field_int(record.fields.get("lyricNumber"))
+    index = field_int(record.fields.get("syll"))
+    entnum = field_int(record.attrs.get("entnum"))
     if number is None or index is None or entnum is None:
         # A detail carrying only positioning: real in the corpus, and not a
         # syllable assignment.
@@ -171,12 +171,3 @@ def _tokenise(
             last = position == len(parts) - 1
             out.append((part, trailing if last else True))
     return tuple(out)
-
-
-def _int(value: object) -> int | None:
-    if not isinstance(value, str):
-        return None
-    try:
-        return int(value)
-    except ValueError:
-        return None

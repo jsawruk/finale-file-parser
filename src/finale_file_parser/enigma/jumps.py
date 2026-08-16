@@ -42,7 +42,7 @@ which is a gap rather than a disagreement -- see `mus_document.UNTRANSLATED`.
 
 from __future__ import annotations
 
-from finale_file_parser.enigma.document import EnigmaDocument
+from finale_file_parser.enigma.document import EnigmaDocument, field_int
 from finale_file_parser.enigma.text import plain_text
 
 __all__ = ["jumps_by_measure"]
@@ -65,8 +65,8 @@ def jumps_by_measure(document: EnigmaDocument) -> dict[int, tuple[str, ...]]:
     for record in document.others.of_tag(_ASSIGN):
         if "part" in record.attrs:
             continue
-        measure = _int(record.attrs.get("cmper"))
-        repnum = _int(record.fields.get("repnum"))
+        measure = field_int(record.attrs.get("cmper"))
+        repnum = field_int(record.fields.get("repnum"))
         if measure is None or repnum is None:
             continue
         text = words.get(repnum)
@@ -81,7 +81,7 @@ def _definitions(document: EnigmaDocument) -> dict[int, str]:
     for record in document.others.of_tag(_TEXT):
         if "part" in record.attrs:
             continue
-        cmper = _int(record.attrs.get("cmper"))
+        cmper = field_int(record.attrs.get("cmper"))
         raw = record.fields.get("rptText")
         if cmper is None or not isinstance(raw, str):
             continue
@@ -93,10 +93,3 @@ def _definitions(document: EnigmaDocument) -> dict[int, str]:
 
 def _is_glyph(text: str) -> bool:
     return len(text) <= _MAX_GLYPH and not any(character.isalnum() for character in text)
-
-
-def _int(value: object) -> int | None:
-    try:
-        return int(str(value))
-    except (TypeError, ValueError):
-        return None

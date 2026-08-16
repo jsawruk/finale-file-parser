@@ -63,7 +63,32 @@ __all__ = [
     "read_mus_payload",
     "read_mus_pools",
     "read_mus_streams",
+    "u16_le",
+    "u32_le",
 ]
+
+
+def u16_le(data: bytes, offset: int) -> int:
+    """A little-endian `uint16` at `offset`.
+
+    **Named for the byte order it assumes, because it does assume one.** The
+    `others` and `details` pool readers both read their record headers this
+    way regardless of the container's own byte order, and 37 corpus documents
+    are big-endian -- so the assumption is worth seeing at the call site rather
+    than buried in a two-line helper each module kept its own copy of.
+
+    Whether fixed little-endian is right for those headers is not settled here:
+    this is the behaviour those readers have always had, and the corpus sweeps
+    pin what it produces. `mus_document` and `mus_entries` keep their own
+    order-aware readers, which is the other half of the same open question.
+    """
+    return int.from_bytes(data[offset : offset + 2], "little")
+
+
+def u32_le(data: bytes, offset: int) -> int:
+    """A little-endian `uint32` at `offset`. See `u16_le`."""
+    return int.from_bytes(data[offset : offset + 4], "little")
+
 
 MAX_MUS_PAYLOAD = 64 * 1024 * 1024
 """Refuse output past 64 MiB, counted across the whole chain.

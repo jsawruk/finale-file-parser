@@ -22,7 +22,7 @@ plainly. See `mus_document.UNTRANSLATED`.
 
 from __future__ import annotations
 
-from finale_file_parser.enigma.document import EnigmaDocument
+from finale_file_parser.enigma.document import EnigmaDocument, field_int
 
 __all__ = ["BARLINE_STYLES", "barline_styles"]
 
@@ -44,7 +44,7 @@ def barline_styles(document: EnigmaDocument) -> dict[int, str]:
         # would give the score a double bar it does not have.
         if "part" in record.attrs:
             continue
-        measure = _int(record.attrs.get("cmper"))
+        measure = field_int(record.attrs.get("cmper"))
         name = record.fields.get("barline")
         if measure is None or not isinstance(name, str):
             continue
@@ -52,10 +52,3 @@ def barline_styles(document: EnigmaDocument) -> dict[int, str]:
         if style is not None:
             out[measure] = style
     return out
-
-
-def _int(value: object) -> int | None:
-    try:
-        return int(str(value))
-    except (TypeError, ValueError):
-        return None
