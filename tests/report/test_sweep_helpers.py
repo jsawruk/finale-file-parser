@@ -21,14 +21,34 @@ from __future__ import annotations
 import pytest
 
 from finale_file_parser.report import Inspection
-from finale_file_parser.report.ladder import CRASHED, OK, REFUSED, Stage
+from finale_file_parser.report.ladder import CRASHED, OK, REFUSED, SKIPPED, Stage
 from report.test_inspect_corpus_sweep import (
+    CorpusDigest,
     _all_have_ladders,
     _count_built,
     _count_crashed,
+    _count_documents,
+    _count_engraved,
     _guarded,
+    _is_failing,
     _render_check,
+    _rungs,
 )
+
+
+def _digest(*inspections: Inspection) -> CorpusDigest:
+    """A digest built the way the corpus fixture builds one.
+
+    Goes through `_rungs` and `_is_failing` rather than hand-writing the tuples,
+    so these tests exercise the same reduction the sweep runs and cannot drift
+    from it.
+    """
+    first_failing = next((i for i in inspections if _is_failing(i)), None)
+    return CorpusDigest(
+        ladders=tuple(_rungs(i) for i in inspections),
+        first_failing=first_failing,
+    )
+
 
 LEAK_CANARY = "LEAK_CANARY.mus"
 """Distinctive enough that its presence anywhere is never a coincidence."""
@@ -63,46 +83,106 @@ def _no_ladder() -> Inspection:
     return Inspection(file={"name": LEAK_CANARY})
 
 
+def test_count_documents_counts_every_ladder() -> None:
+    assert _count_documents(_digest(_built(), _refused(), _crashed())) == 3
+    assert _count_documents(_digest()) == 0
+
+
 def test_count_built_counts_only_ok_build_score_stages() -> None:
-    assert _count_built([_built(), _refused(), _crashed()]) == 1
-    assert _count_built([_refused(), _crashed()]) == 0
-    assert _count_built([]) == 0
+    assert _count_built(_digest(_built(), _refused(), _crashed())) == 1
+    assert _count_built(_digest(_refused(), _crashed())) == 0
+    assert _count_built(_digest()) == 0
 
 
 def test_count_crashed_counts_only_crashed_stages() -> None:
-    assert _count_crashed([_built(), _refused(), _crashed()]) == 1
-    assert _count_crashed([_built(), _refused()]) == 0
-    assert _count_crashed([]) == 0
+    assert _count_crashed(_digest(_built(), _refused(), _crashed())) == 1
+    assert _count_crashed(_digest(_built(), _refused())) == 0
+    assert _count_crashed(_digest()) == 0
 
 
 def test_all_have_ladders_is_false_only_when_one_has_no_stages() -> None:
-    assert _all_have_ladders([_built(), _refused()]) is True
-    assert _all_have_ladders([_built(), _no_ladder()]) is False
-    assert _all_have_ladders([]) is True
+    assert _all_have_ladders(_digest(_built(), _refused())) is True
+    assert _all_have_ladders(_digest(_built(), _no_ladder())) is False
+    assert _all_have_ladders(_digest()) is True
 
 
 def test_render_check_finds_the_first_refused_or_crashed_document() -> None:
-    found, renders = _render_check([_built(), _refused()])
+    found, renders = _render_check(_digest(_built(), _refused()))
     assert found is True
     assert renders is True
 
-    found, renders = _render_check([_built(), _crashed()])
+    found, renders = _render_check(_digest(_built(), _crashed()))
     assert found is True
     assert renders is True
 
-    found, renders = _render_check([_built()])
+    found, renders = _render_check(_digest(_built()))
     assert found is False
     assert renders is False
 
 
+def test_a_ladder_reduces_to_names_and_statuses_and_nothing_else() -> None:
+    """The reduction is what keeps 639 documents out of memory, and it is also
+    what keeps corpus text out of `ladders`. Both halves are worth pinning: an
+    `Inspection` carries the document's filename, its record values and its
+    whole music tree, and none of that may survive into the digest.
+    """
+    rungs = _rungs(_built())
+    assert rungs == (("build score", OK),)
+    # Nothing corpus-derived came along for the ride.
+    flattened = " ".join(name + status for name, status in rungs)
+    assert LEAK_CANARY not in flattened
+    assert _CANARY_RECORD_VALUE not in flattened
+    assert _CANARY_SHA not in flattened
+
+
+def _engraved(status: str) -> Inspection:
+    """A document whose engraving rung reached `status`."""
+    return Inspection(
+        file={"name": LEAK_CANARY, "size": "1", "sha256": _CANARY_SHA},
+        stages=[Stage("build score", OK), Stage("engrave notation", status)],
+    )
+
+
+def test_count_engraved_counts_rungs_that_ran_not_rungs_that_were_asked_for() -> None:
+    """The pin that stops the engraving sample silently emptying.
+
+    `SKIPPED` is the status both for "the caller declined this rung" and for
+    "the ladder had already stopped", and neither engraved anything -- so both
+    must be excluded. A counter that trusted the request instead would report
+    full coverage for a sample that never ran.
+    """
+    assert _count_engraved(_digest(_engraved(OK), _engraved(SKIPPED))) == 1
+    assert _count_engraved(_digest(_engraved(SKIPPED), _engraved(SKIPPED))) == 0
+    # A rung that ran and failed still ran: that is a finding, not an absence.
+    assert _count_engraved(_digest(_engraved(CRASHED), _engraved(REFUSED))) == 2
+    # A ladder that never got as far as naming the rung engraved nothing.
+    assert _count_engraved(_digest(_built())) == 0
+    assert _count_engraved(_digest()) == 0
+
+
+def test_only_a_failing_document_is_kept_whole() -> None:
+    """`first_failing` is the one `Inspection` a digest holds -- the render
+    check needs a real one -- so it must be the *first* failing document and
+    must stay absent when every document built."""
+    assert _digest(_built(), _built()).first_failing is None
+
+    refused, crashed = _refused(), _crashed()
+    assert _digest(_built(), refused, crashed).first_failing is refused
+    assert _digest(_built(), crashed).first_failing is crashed
+
+
 @pytest.fixture
-def inspections() -> list[Inspection]:
+def digest() -> CorpusDigest:
     """Shadows `test_inspect_corpus_sweep`'s fixture of the same name, scoped
     to this module only: `_guarded` calls
-    `request.getfixturevalue("inspections")`, and this lets the guard test
+    `request.getfixturevalue("digest")`, and this lets the guard test
     below use the real `pytest.FixtureRequest` machinery -- the same code path
-    the corpus sweep uses -- without needing a corpus or a hand-rolled fake."""
-    return [_built()]
+    the corpus sweep uses -- without needing a corpus or a hand-rolled fake.
+
+    Holds a *failing* document, so `first_failing` is populated: that is the
+    one corpus-derived thing a digest still carries, and so the only thing the
+    guard below can meaningfully be tested against."""
+    return _digest(_refused())
 
 
 def test_guarded_converts_a_raise_into_a_path_free_assertion_error(
@@ -113,16 +193,21 @@ def test_guarded_converts_a_raise_into_a_path_free_assertion_error(
     rather than asserting on a hand-picked message and hoping it matches.
     """
 
-    def _raises(inspections: list[Inspection]) -> int:
+    def _raises(digest: CorpusDigest) -> int:
         # A genuine parameter of this frame, exactly like `_count_built` and
         # its siblings -- the leak this guards against is a crash frame's own
         # parameter list, so the canary must actually be bound as one here.
-        # Read from `inspections` at runtime rather than closing over
+        # Read from `digest` at runtime rather than closing over
         # `LEAK_CANARY` as a literal: a literal would appear in pytest's
         # source-code excerpt regardless of what `_guarded` does, which would
         # test this file's own source listing, not the real risk -- a bug
         # whose exception message embeds a real, runtime-only corpus filename.
-        raise RuntimeError(f"synthetic failure holding {inspections[0].file['name']}")
+        #
+        # It reaches through `first_failing` because that is now the only
+        # corpus-derived thing a digest holds. If that field is ever removed,
+        # this line stops compiling rather than silently testing nothing.
+        assert digest.first_failing is not None
+        raise RuntimeError(f"synthetic failure holding {digest.first_failing.file['name']}")
 
     with pytest.raises(AssertionError) as excinfo:
         _guarded(request, _raises)

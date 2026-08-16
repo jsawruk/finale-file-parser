@@ -19,13 +19,27 @@ from typing import TypeVar
 
 from finale_file_parser.errors import FinaleFileError
 
-__all__ = ["CRASHED", "OK", "REFUSED", "SKIPPED", "Ladder", "Stage"]
+__all__ = ["CRASHED", "NOT_REQUESTED", "OK", "REFUSED", "SKIPPED", "Ladder", "Stage"]
 
 OK = "ok"
 REFUSED = "refused"
 CRASHED = "crashed"
 SKIPPED = "skipped"
-"""Not attempted, because an earlier stage stopped the ladder."""
+"""Not attempted: either an earlier stage stopped the ladder, or the caller
+declined this rung. `Stage.detail` says which -- see `NOT_REQUESTED`.
+
+Both are "we do not know how this stage would have gone", which is why they
+share a status: a consumer counting failures must not count either, and a
+consumer reporting coverage must not claim either."""
+
+NOT_REQUESTED = "the caller did not ask for this stage"
+"""Why a `SKIPPED` rung was skipped, when the ladder itself was still running.
+
+An expensive optional rung -- engraving is the one -- can be declined by a
+caller that only wants to know how far a document got. Recording it keeps
+"skipped because nothing tried" distinguishable from "skipped because the
+pipeline had already stopped", and stops a sweep quietly reporting coverage it
+did not have."""
 
 T = TypeVar("T")
 
@@ -80,6 +94,16 @@ class Ladder:
             return None
         self.stages.append(Stage(name, OK, self._detail(detail, value)))
         return value
+
+    def skip(self, name: str, reason: str) -> None:
+        """Record a rung nobody attempted, and say why.
+
+        Distinct from the `SKIPPED` that `run` records when the ladder has
+        already stopped: this one is a live ladder whose caller declined a
+        stage, so the reason travels with it rather than being inferred from
+        the rungs before it.
+        """
+        self.stages.append(Stage(name, SKIPPED, {"reason": reason}))
 
     @staticmethod
     def _detail(detail: Callable[[T], dict[str, str]] | None, value: T) -> dict[str, str]:
