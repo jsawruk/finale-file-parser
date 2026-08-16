@@ -83,6 +83,11 @@ details.node > summary::marker { color: #999; }
 .hex { white-space: pre; font-size: 13px; line-height: 1.35; overflow-x: auto; }
 .hex .off { color: #999; }
 .hex .txt { color: #666; }
+/* The hex beside a decoded number. Three separations, not one: a real gap that
+   HTML cannot collapse, a lighter colour, and the parentheses the markup adds.
+   The parentheses are what still works in print and in greyscale, where the
+   colour does not -- these tables are read on paper as well as on screen. */
+.hexval { color: #777; margin-left: 0.7rem; }
 .no-bytes { color: #666; max-width: 34rem; }
 .score { overflow-x: auto; margin-bottom: 1rem; }
 .score .page { margin-bottom: 0.5rem; }
@@ -391,8 +396,21 @@ function decode(bin, offset, field, order) {
     value -= Math.pow(2, field.size * 8);
   }
   // Hex alongside: several of these fields pack a sign bit or a nibble beside
-  // their value, and the decimal alone hides that.
-  return (field.size > 1) ? value + '  0x' + (value >>> 0).toString(16) : String(value);
+  // their value, and the decimal alone hides that. Returned as a pair rather
+  // than one string, because the two numbers have to be told apart at a glance
+  // and only the renderer can put real space between them -- see `layoutTable`.
+  //
+  // Width is the field's own, not JavaScript's. `(value >>> 0).toString(16)`
+  // renders an int16 -1 as 0xffffffff, which claims four bytes for a two-byte
+  // field and buries the sign bit this column exists to expose; padding to
+  // `size * 2` digits also makes 0x0006 and 0x06 different-looking values,
+  // which they are.
+  //
+  // Every integer width gets hex, including uint8. Suppressing it for single
+  // bytes hid it from `flags`, whose own note reads "0x20 marks a shape
+  // assignment" -- the one field where the decimal 32 says least.
+  const unsigned = (value < 0) ? value + Math.pow(2, field.size * 8) : value;
+  return {dec: String(value), hex: '0x' + unsigned.toString(16).padStart(field.size * 2, '0')};
 }
 function layoutTable(layout, bin, order) {
   const table = document.createElement('table');
@@ -415,11 +433,28 @@ function layoutTable(layout, bin, order) {
       : (f.size === 1)
         ? '0x' + f.offset.toString(16)
         : '0x' + f.offset.toString(16) + '–0x' + (f.offset + f.size - 1).toString(16);
+    const value = decode(bin, f.offset, f, order);
     const cells = [null, span, f.size ? String(f.size) : 'var', f.type, f.name,
-                   decode(bin, f.offset, f, order), f.note];
+                   value, f.note];
     cells.forEach((text, n) => {
       const td = document.createElement('td');
-      if (n === 0) { td.appendChild(swatch); } else { td.textContent = text; }
+      if (n === 0) {
+        td.appendChild(swatch);
+      } else if (text && typeof text === 'object') {
+        // A decoded number: decimal, then its hex in a span of its own. Written
+        // as two nodes rather than one string because HTML collapses runs of
+        // whitespace -- `value + '  0x' + hex` was laid out with two spaces and
+        // reached the page as "6 0x6", one glyph away from reading as a single
+        // number. The gap and the parentheses come from CSS and markup, which
+        // do not collapse.
+        td.appendChild(document.createTextNode(text.dec));
+        const hex = document.createElement('span');
+        hex.className = 'hexval';
+        hex.textContent = '(' + text.hex + ')';
+        td.appendChild(hex);
+      } else {
+        td.textContent = text;
+      }
       row.appendChild(td);
     });
     table.appendChild(row);
