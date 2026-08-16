@@ -323,16 +323,6 @@ CATALOG = [
     (LAY.MEAS_EXPR_ASSIGN, meas_expr_assign),
 ]
 
-NEW_SINCE_LAST_REVIEW = {
-    "textExprDef": ("TEXT_EXPR_DEF", "TEXT_EXPR_DEF_DCL"),
-    "measExprAssign": ("MEAS_EXPR_ASSIGN",),
-}
-"""Which catalog records are new, so the generator can badge them for review.
-
-Marking is per *record name*, and `textExprDef` appears twice -- once per era --
-so both spellings are badged. Delete this and the `REVIEW_BADGE` uses once the
-additions have been read; a badge that outlives its review is noise.
-"""
 
 PARTIAL = [
     ("articDef", 121, "the glyph an articAssign refers to; character offsets 0 and 2"),
@@ -341,10 +331,6 @@ PARTIAL = [
     ("repeatPassList", 206, "which passes an ending applies to"),
     ("clefOptions", 109, "the clef definition table, read as a strided array"),
 ]
-
-
-REVIEW_BADGE = "<span class=newbadge>NEW</span>"
-"""Marks a section added since the last review. See `NEW_SINCE_LAST_REVIEW`."""
 
 
 def _tag_line(layout: LAY.Layout) -> str:
@@ -362,10 +348,7 @@ def _tag_line(layout: LAY.Layout) -> str:
 def render_catalog() -> str:
     out: list[str] = []
     for layout, fn in CATALOG:
-        badge = REVIEW_BADGE if layout.record in NEW_SINCE_LAST_REVIEW else ""
-        out.append(
-            f"<h3>{layout.record} <span class=meta>&mdash; {_tag_line(layout)}</span>{badge}</h3>"
-        )
+        out.append(f"<h3>{layout.record} <span class=meta>&mdash; {_tag_line(layout)}</span></h3>")
         out.append(render_struct(fn()))
     rows = "".join(
         f"<tr><td><code>{n}</code></td><td>{t}</td><td>{d}</td></tr>" for n, t, d in PARTIAL
