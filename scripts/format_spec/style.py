@@ -43,19 +43,6 @@ a { color: #14507a; }
 .warn { border-color: #c07a3a; background: #fdf6ef; }
 .prov { border-color: #7a9a6a; background: #f4f8f2; font-style: italic; }
 
-/* --- review marks: temporary, and meant to be deleted ------------------
-   Everything added or changed since the last read is badged, so a reviewer
-   can find it without diffing a 200 KB document. Print-safe: the badge is
-   an outline and a word, not a colour fill, so it survives greyscale and a
-   black-and-white printer. Remove these rules with `NEW_SINCE_LAST_REVIEW`
-   once the additions have been read. */
-.newbadge {
-  font-size: 7pt; font-weight: bold; letter-spacing: 0.5pt; vertical-align: 0.35em;
-  border: 0.75pt solid #b03030; color: #b03030; padding: 0.5pt 3pt; margin-left: 6pt;
-  border-radius: 2pt;
-}
-.review { border-color: #b03030; background: #fdf3f3; }
-.review .newbadge { vertical-align: baseline; }
 
 /* --- tables ----------------------------------------------------------- */
 table { border-collapse: collapse; width: 100%; margin: 8pt 0; font-size: 9pt; }
