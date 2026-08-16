@@ -43,7 +43,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from finale_file_parser.enigma.document import EnigmaDocument, Record
+from finale_file_parser.enigma.document import EnigmaDocument, Record, field_int
 from finale_file_parser.enigma.text import plain_text, text_block
 
 __all__ = ["BRACKET_SYMBOLS", "StaffGroup", "staff_groups", "staff_order"]
@@ -108,8 +108,8 @@ def staff_order(document: EnigmaDocument) -> tuple[int, ...]:
         # order the groups are resolved through.
         if "part" in record.attrs:
             continue
-        inci = _int(record.attrs.get("inci"))
-        staff = _int(record.fields.get("inst"))
+        inci = field_int(record.attrs.get("inci"))
+        staff = field_int(record.fields.get("inst"))
         if inci is not None and staff is not None:
             slots.append((inci, staff))
     if slots:
@@ -121,7 +121,8 @@ def _staves(document: EnigmaDocument) -> set[int]:
     return {
         staff
         for record in document.others.of_tag("staffSpec")
-        if "part" not in record.attrs and (staff := _int(record.attrs.get("cmper"))) is not None
+        if "part" not in record.attrs
+        and (staff := field_int(record.attrs.get("cmper"))) is not None
     }
 
 
@@ -141,8 +142,8 @@ def staff_groups(document: EnigmaDocument) -> tuple[StaffGroup, ...]:
         # group, and counting both braces the same staves twice.
         if record.attrs.get("cmper1") != _SCORE_LIST or "part" in record.attrs:
             continue
-        start = _int(record.fields.get("startInst"))
-        end = _int(record.fields.get("endInst"))
+        start = field_int(record.fields.get("startInst"))
+        end = field_int(record.fields.get("endInst"))
         if start is None or end is None or start not in position or end not in position:
             continue
         first, last = position[start], position[end]
@@ -166,20 +167,13 @@ def _bracket_id(record: Record) -> int | None:
     bracket = record.fields.get("bracket")
     if not isinstance(bracket, Record):
         return None
-    return _int(bracket.fields.get("id"))
+    return field_int(bracket.fields.get("id"))
 
 
 def _name(document: EnigmaDocument, field: object) -> str:
     if not isinstance(field, str):
         return ""
-    number = _int(field)
+    number = field_int(field)
     if number is None or number == 0:
         return ""
     return plain_text(text_block(document, number) or "")
-
-
-def _int(value: object) -> int | None:
-    try:
-        return int(str(value))
-    except (TypeError, ValueError):
-        return None

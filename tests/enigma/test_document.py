@@ -5,6 +5,7 @@ from finale_file_parser.enigma.document import (
     MalformedEnigmaError,
     Pool,
     Record,
+    field_int,
     parse_enigma,
 )
 from finale_file_parser.errors import FinaleFileError
@@ -178,3 +179,38 @@ def test_pure_scalar_field_is_still_a_bare_str_not_a_record() -> None:
     assert artic.fields["charMain"] == "46"
     assert isinstance(artic.fields["charMain"], str)
     assert not isinstance(artic.fields["charMain"], Record)
+
+
+def test_field_int_reads_a_scalar_and_refuses_everything_else() -> None:
+    """`field_int` is shared by eight readers, so its edges are pinned here.
+
+    Absence is ordinary in this format -- Enigma omits a field rather than
+    writing a default -- so a missing value is None, not an error.
+    """
+    assert field_int("42") == 42
+    assert field_int("-1") == 0 - 1
+    assert field_int(None) is None
+    assert field_int("") is None
+    assert field_int("not a number") is None
+
+
+def test_field_int_cannot_be_fooled_by_a_non_scalar_field() -> None:
+    """The property that let eight modules keep private copies of this without
+    ever diverging, and that makes one shared copy safe.
+
+    A `Record.fields` value is a str, a Record, or a tuple of either -- never a
+    bare int -- so `int(str(value))` has nothing to succeed on except a scalar.
+    A Record stringifies to its dataclass repr and a tuple to "('1', '2')", and
+    both raise rather than yielding a plausible wrong number.
+
+    Delete the guard by returning `int(value)` for any value and this still
+    passes; what it pins is that the *stringifying* form is not more permissive
+    than the isinstance-guarded form the other two modules used.
+    """
+    nested = Record(tag="x", attrs={}, text="", fields={"a": "1"})
+    assert field_int(nested) is None
+    assert field_int(("1", "2")) is None
+    assert field_int((nested,)) is None
+    # The single-element tuple is the interesting one: it reads as "('1',)",
+    # which contains a digit and still must not decode as 1.
+    assert field_int(("1",)) is None

@@ -39,7 +39,7 @@ import os
 from dataclasses import dataclass
 
 from finale_file_parser.enigma.models import CorruptScoreError
-from finale_file_parser.enigma.mus_payload import read_mus_streams
+from finale_file_parser.enigma.mus_payload import read_mus_streams, u16_le, u32_le
 
 __all__ = [
     "OPTIONS_CMPER",
@@ -278,14 +278,6 @@ def read_mus_others(path: str | os.PathLike[str]) -> tuple[MusOther, ...]:
     )
 
 
-def _u16(data: bytes, offset: int) -> int:
-    return int.from_bytes(data[offset : offset + 2], "little")
-
-
-def _u32(data: bytes, offset: int) -> int:
-    return int.from_bytes(data[offset : offset + 4], "little")
-
-
 def _walk(stream: bytes) -> tuple[MusOther, ...] | None:
     """Walk `stream` as a record pool, or None if it is not one.
 
@@ -298,14 +290,14 @@ def _walk(stream: bytes) -> tuple[MusOther, ...] | None:
     records: list[MusOther] = []
     position = 0
     while position + _HEADER <= len(stream):
-        if _u16(stream, position) in _PADDING:
+        if u16_le(stream, position) in _PADDING:
             position += 2
             continue
-        length = _u32(stream, position + 6)
+        length = u32_le(stream, position + 6)
         payload_end = position + _HEADER + length
         if length > _MAX_PAYLOAD or payload_end + _EXTRA_LENGTH > len(stream):
             return None
-        extra = _u32(stream, payload_end)
+        extra = u32_le(stream, payload_end)
         end = payload_end + _EXTRA_LENGTH + extra
         if extra > _MAX_PAYLOAD or end > len(stream):
             return None
@@ -314,9 +306,9 @@ def _walk(stream: bytes) -> tuple[MusOther, ...] | None:
         payload_at = position + _HEADER
         records.append(
             MusOther(
-                tag=_u16(stream, position),
-                cmper=_u16(stream, position + 2),
-                part=_u16(stream, position + 4),
+                tag=u16_le(stream, position),
+                cmper=u16_le(stream, position + 2),
+                part=u16_le(stream, position + 4),
                 payload=stream[payload_at : payload_at + length],
                 extra=stream[payload_end + _EXTRA_LENGTH : end],
             )

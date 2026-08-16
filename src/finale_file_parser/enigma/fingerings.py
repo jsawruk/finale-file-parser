@@ -38,7 +38,7 @@ that the reading is unfounded.
 
 from __future__ import annotations
 
-from finale_file_parser.enigma.document import EnigmaDocument
+from finale_file_parser.enigma.document import EnigmaDocument, field_int
 
 __all__ = ["FINGERING_CHARACTERS", "fingerings_by_entry"]
 
@@ -68,8 +68,8 @@ def fingerings_by_entry(document: EnigmaDocument) -> dict[int, tuple[str, ...]]:
     out: dict[int, list[str]] = {}
     seen: set[tuple[int, int]] = set()
     for record in document.details.of_tag(_ASSIGN):
-        entnum = _int(record.attrs.get("entnum"))
-        definition = _int(record.fields.get(_DEFINITION))
+        entnum = field_int(record.attrs.get("entnum"))
+        definition = field_int(record.fields.get(_DEFINITION))
         if entnum is None or definition is None or (entnum, definition) in seen:
             continue
         digit = FINGERING_CHARACTERS.get(characters.get(definition, -1))
@@ -86,15 +86,8 @@ def _definitions(document: EnigmaDocument) -> dict[int, int]:
     for record in document.others.of_tag(_DEFINITION):
         if "part" in record.attrs:
             continue
-        cmper = _int(record.attrs.get("cmper"))
-        character = _int(record.fields.get("charMain"))
+        cmper = field_int(record.attrs.get("cmper"))
+        character = field_int(record.fields.get("charMain"))
         if cmper is not None and character is not None:
             out[cmper] = character
     return out
-
-
-def _int(value: object) -> int | None:
-    try:
-        return int(str(value))
-    except (TypeError, ValueError):
-        return None

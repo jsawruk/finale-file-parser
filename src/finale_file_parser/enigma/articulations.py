@@ -25,7 +25,7 @@ not reliably give one. Reading them would make the two containers disagree.
 
 from __future__ import annotations
 
-from finale_file_parser.enigma.document import EnigmaDocument
+from finale_file_parser.enigma.document import EnigmaDocument, field_int
 
 __all__ = ["ARTICULATION_CHARACTERS", "articulations_by_entry"]
 
@@ -64,8 +64,8 @@ def articulations_by_entry(document: EnigmaDocument) -> dict[int, tuple[str, ...
     characters = _definitions(document)
     out: dict[int, list[str]] = {}
     for record in document.details.of_tag(_ASSIGN):
-        entnum = _int(record.attrs.get("entnum"))
-        definition = _int(record.fields.get(_DEFINITION))
+        entnum = field_int(record.attrs.get("entnum"))
+        definition = field_int(record.fields.get(_DEFINITION))
         if entnum is None or definition is None:
             continue
         name = ARTICULATION_CHARACTERS.get(characters.get(definition, -1))
@@ -81,17 +81,8 @@ def _definitions(document: EnigmaDocument) -> dict[int, int]:
     for record in document.others.of_tag(_DEFINITION):
         if "part" in record.attrs:
             continue
-        cmper = _int(record.attrs.get("cmper"))
-        character = _int(record.fields.get("charMain"))
+        cmper = field_int(record.attrs.get("cmper"))
+        character = field_int(record.fields.get("charMain"))
         if cmper is not None and character is not None:
             out[cmper] = character
     return out
-
-
-def _int(value: object) -> int | None:
-    if not isinstance(value, str):
-        return None
-    try:
-        return int(value)
-    except ValueError:
-        return None

@@ -47,6 +47,29 @@ class Record:
     fields: Mapping[str, str | tuple[str, ...] | Record | tuple[Record, ...]]
 
 
+def field_int(value: object) -> int | None:
+    """A field's value as an int, or None if it is not one.
+
+    The readers all want the same thing from `Record.fields`: a number where
+    the document wrote one, and None where it wrote something else or nothing
+    at all. Absence is ordinary here -- Enigma omits a field rather than
+    writing a default -- so this returns None instead of raising.
+
+    It lives beside `Record` because the type above is what makes it correct.
+    A field is a `str`, a `Record`, or a tuple of either, and **never a bare
+    int**, so `int(str(value))` cannot silently succeed on a non-scalar: a
+    `Record` stringifies to its dataclass repr and a tuple to `"('1', '2')"`,
+    and both raise. That is also why eight modules could each carry their own
+    copy of this for so long without the two spellings ever diverging in
+    behaviour -- one guarded on `isinstance(value, str)` first, the other did
+    not, and on every value that can actually reach them they agree.
+    """
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
 @dataclass(frozen=True)
 class Pool:
     """Every record of one top-level pool, in document order."""

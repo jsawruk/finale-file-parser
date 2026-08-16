@@ -41,7 +41,7 @@ import os
 from dataclasses import dataclass
 
 from finale_file_parser.enigma.models import CorruptScoreError
-from finale_file_parser.enigma.mus_payload import read_mus_streams
+from finale_file_parser.enigma.mus_payload import read_mus_streams, u16_le, u32_le
 
 __all__ = [
     "MusDetailRecord",
@@ -185,14 +185,6 @@ def read_mus_details(path: str | os.PathLike[str]) -> tuple[MusDetailRecord, ...
     )
 
 
-def _u16(data: bytes, offset: int) -> int:
-    return int.from_bytes(data[offset : offset + 2], "little")
-
-
-def _u32(data: bytes, offset: int) -> int:
-    return int.from_bytes(data[offset : offset + 4], "little")
-
-
 def _walk(stream: bytes) -> tuple[MusDetailRecord, ...] | None:
     """Walk `stream` as a details pool, or None if it is not one.
 
@@ -207,14 +199,14 @@ def _walk(stream: bytes) -> tuple[MusDetailRecord, ...] | None:
     records: list[MusDetailRecord] = []
     position = 0
     while position + _HEADER <= len(stream):
-        if _u16(stream, position) in _PADDING:
+        if u16_le(stream, position) in _PADDING:
             position += 2
             continue
-        length = _u32(stream, position + 8)
+        length = u32_le(stream, position + 8)
         payload_end = position + _HEADER + length
         if length > _MAX_PAYLOAD or payload_end + _EXTRA_LENGTH > len(stream):
             return None
-        extra = _u32(stream, payload_end)
+        extra = u32_le(stream, payload_end)
         end = payload_end + _EXTRA_LENGTH + extra
         if extra > _MAX_PAYLOAD or end > len(stream):
             return None
@@ -223,10 +215,10 @@ def _walk(stream: bytes) -> tuple[MusDetailRecord, ...] | None:
         payload_at = position + _HEADER
         records.append(
             MusDetailRecord(
-                tag=_u16(stream, position),
-                cmper1=_u16(stream, position + 2),
-                cmper2=_u16(stream, position + 4),
-                inci=_u16(stream, position + 6),
+                tag=u16_le(stream, position),
+                cmper1=u16_le(stream, position + 2),
+                cmper2=u16_le(stream, position + 4),
+                inci=u16_le(stream, position + 6),
                 payload=stream[payload_at : payload_at + length],
                 extra=stream[payload_end + _EXTRA_LENGTH : end],
             )

@@ -117,7 +117,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from finale_file_parser.enigma.document import EnigmaDocument, Record
+from finale_file_parser.enigma.document import EnigmaDocument, Record, field_int
 from finale_file_parser.enigma.text import plain_text
 from finale_file_parser.formats.dynamics import (
     DYNAMICS_CATEGORY,
@@ -190,9 +190,9 @@ def expressions_by_measure(
         # marking: 20,606 of the corpus's 33,039 records carry a `part`.
         if "part" in record.attrs:
             continue
-        measure = _int(record.attrs.get("cmper"))
-        staff = _int(record.fields.get("staffAssign"))
-        expr_id = _int(record.fields.get("textExprID"))
+        measure = field_int(record.attrs.get("cmper"))
+        staff = field_int(record.fields.get("staffAssign"))
+        expr_id = field_int(record.fields.get("textExprID"))
         if measure is None or staff is None or expr_id is None:
             continue
         definition = definitions.get(expr_id)
@@ -209,7 +209,7 @@ def expressions_by_measure(
         # else prints what its text record says.
         label = labels.get(measure) if found is not None and found.is_rehearsal else None
         text = label if label is not None else printed
-        category = categories.get(_int(definition.fields.get("categoryID")), "")
+        category = categories.get(field_int(definition.fields.get("categoryID")), "")
         marking = _marking(
             printed,
             category=category,
@@ -227,10 +227,10 @@ def expressions_by_measure(
                 text=text,
                 category=category,
                 marking=marking,
-                velocity=_int(definition.fields.get("value")),
+                velocity=field_int(definition.fields.get("value")),
                 score_wide=staff == SCORE_WIDE_STAFF,
                 is_rehearsal=label is not None,
-                layer=_int(record.fields.get("layer")),
+                layer=field_int(record.fields.get("layer")),
             )
         )
     return {where: tuple(items) for where, items in out.items()}
@@ -261,8 +261,8 @@ def _rehearsal_labels(
     for record in document.others.of_tag(_ASSIGN):
         if "part" in record.attrs:
             continue
-        measure = _int(record.attrs.get("cmper"))
-        expr_id = _int(record.fields.get("textExprID"))
+        measure = field_int(record.attrs.get("cmper"))
+        expr_id = field_int(record.fields.get("textExprID"))
         if measure is None or expr_id is None or expr_id not in texts:
             continue
         if not texts[expr_id].is_rehearsal:
@@ -304,9 +304,9 @@ def _staffed(document: EnigmaDocument) -> set[tuple[int, int]]:
     for record in document.others.of_tag(_ASSIGN):
         if "part" in record.attrs:
             continue
-        staff = _int(record.fields.get("staffAssign"))
-        measure = _int(record.attrs.get("cmper"))
-        expr_id = _int(record.fields.get("textExprID"))
+        staff = field_int(record.fields.get("staffAssign"))
+        measure = field_int(record.attrs.get("cmper"))
+        expr_id = field_int(record.fields.get("textExprID"))
         if staff is None or staff < 0 or measure is None or expr_id is None:
             continue
         out.add((measure, expr_id))
@@ -323,7 +323,7 @@ def _categories(document: EnigmaDocument) -> dict[int | None, str]:
     for record in document.others.of_tag(_CATEGORY):
         kind = record.fields.get("categoryType")
         if isinstance(kind, str):
-            out[_int(record.attrs.get("cmper"))] = kind
+            out[field_int(record.attrs.get("cmper"))] = kind
     return out
 
 
@@ -332,7 +332,7 @@ def _definitions(document: EnigmaDocument) -> dict[int, Record]:
     for record in document.others.of_tag(_DEF):
         if "part" in record.attrs:
             continue
-        cmper = _int(record.attrs.get("cmper"))
+        cmper = field_int(record.attrs.get("cmper"))
         if cmper is not None:
             out[cmper] = record
     return out
@@ -392,7 +392,7 @@ def _texts(document: EnigmaDocument) -> dict[int, _Text]:
     for record in document.texts.records:
         if record.tag != _TEXT or "part" in record.attrs:
             continue
-        number = _int(record.attrs.get("number"))
+        number = field_int(record.attrs.get("number"))
         if number is None:
             continue
         markup = record.text or ""
@@ -402,10 +402,3 @@ def _texts(document: EnigmaDocument) -> dict[int, _Text]:
             is_rehearsal=bool(_REHEARSAL.search(markup)),
         )
     return out
-
-
-def _int(value: object) -> int | None:
-    try:
-        return int(str(value))
-    except (TypeError, ValueError):
-        return None
