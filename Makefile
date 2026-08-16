@@ -14,7 +14,7 @@ help:
 	@echo "  install    create the venv, install dependencies (uv sync), and enable git hooks"
 	@echo "  hooks      point git at .githooks/ (blocks direct pushes to main)"
 	@echo "  check      lint + format + types + tests, no corpus sweeps (~1 min)"
-	@echo "  check-full check plus the corpus sweeps (~9 min); run before pushing"
+	@echo "  check-full check plus the corpus sweeps (~10 min); run before pushing"
 	@echo "  test-sweeps  the corpus sweeps on their own"
 	@echo "  test       run the test suite (pytest, parallel; JOBS=0 for serial)"
 	@echo "  lint       ruff check"
@@ -42,10 +42,19 @@ hooks:
 JOBS ?= auto
 PYTEST_ARGS ?= $(if $(filter 0,$(JOBS)),,-n $(JOBS) --dist loadfile)
 
-# The 28 *_corpus_sweep.py files read every one of the 639 corpus documents.
-# They hold this project's hardest-won evidence and they cost about nine
+# The 35 *_corpus_sweep.py files read every one of the 639 corpus documents.
+# They hold this project's hardest-won evidence and they cost about ten
 # minutes; everything else runs in ten seconds. Splitting them out is what makes
 # a gate worth running between edits.
+#
+# Both numbers were stale and are now measured: the count said 28 when `find
+# tests -name '*_corpus_sweep.py'` returns 35, and the runtime said nine minutes
+# against four timed runs of 606s, 658s, 720s and 865s. That spread is the
+# number worth knowing -- wall-clock here varies by minutes between identical
+# runs, so treat it as "about ten" and never as a regression signal on its own.
+# What does not vary is the floor: `--dist loadfile` keeps a file on one worker,
+# so the suite can never finish faster than its slowest single test, which is
+# the report sweep at ~444s.
 SWEEPS = --ignore-glob=*_corpus_sweep.py
 
 test:

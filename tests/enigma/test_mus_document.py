@@ -289,9 +289,26 @@ def test_reads_the_transposition_key_alteration(
 
 
 def test_a_negative_alteration_is_sign_and_magnitude(pools: Callable[..., None]) -> None:
-    """Bit 3 is the sign, as `eeppd.txt` documents for a note TCD -- not two's
-    complement, under which 0x9 would read as -7 rather than -1. Every corpus
-    value is positive, so nothing in the corpus distinguishes these."""
+    """Bit 3 is the sign, not a two's-complement sign: `0x9` reads as -1 rather
+    than the -7 two's complement would give.
+
+    **This convention is borrowed, and the vendored specification does not
+    state it.** Both `eeppd.txt` and `etfspec.pdf` say only that the alteration
+    occupies "the low order nybble (four bits) as a signed quantity" -- the same
+    sentence in both, since the two documents carry the same TCD text -- and
+    they name no encoding. Read as two's complement, which is how "signed" in
+    four bits ordinarily reads, `0x9` would be -7.
+
+    Sign-and-magnitude is this project's own finding, and it was measured
+    somewhere else: on note alterations in the entry pool, where the corpus
+    contradicts the two's-complement reading. See
+    `tests/enigma/test_mus_entries.py::test_alteration_is_sign_and_magnitude`.
+
+    Applying it *here*, to a `staffSpec` transposition, is an assumption. Every
+    corpus value in this field is positive, so nothing in the corpus
+    distinguishes the two encodings for `staffSpec` -- this test pins the
+    behaviour the reader has, and names the evidence it does not have.
+    """
     pools(others=(MusOther(TAG_STAFF_SPEC, 1, 0, staff_spec_payload(0x0009)),))
     record = read_mus_document(PATH).others.get("staffSpec", 1)
     assert record is not None
