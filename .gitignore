@@ -235,3 +235,13 @@ __marimo__/
 
 # --- Superpowers scratch (SDD ledger, briefs, review packages) ---
 /.superpowers/
+
+# --- Generated artifacts: outputs, not sources. Regenerate, never commit. ---
+#   An inspection report is one `finale-parser inspect <file> --report <out>`
+#   away and runs to hundreds of KB apiece, most of it an embedded engraving.
+#   Anchored to the root because that is where an ad-hoc one lands; the two
+#   committed pages under docs/ are written by `make spec` and stay tracked.
+/*.html
+#   A knowledge graph built from this repo: ~8 MB, and stale the moment the
+#   code moves.
+/graphify-out/
