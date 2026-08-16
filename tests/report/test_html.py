@@ -501,3 +501,48 @@ def test_the_hex_view_builds_its_newline_rather_than_escaping_one() -> None:
     html = render_html(_inspection())
     script = html[html.index("//<![CDATA[") :]
     assert "String.fromCharCode(10)" in script
+
+
+def test_the_xml_pane_is_absent_entirely_for_a_document_that_has_no_source() -> None:
+    """A `.mus` holds binary records and reconstructs its document model, so it
+    has no source text. The pane is not rendered empty -- it is not rendered.
+
+    Absent rather than empty because an empty pane reads as a failure: it
+    invites the reader to ask what went wrong when nothing did.
+    """
+    html = render_html(_inspection())
+    assert 'data-pane="xml"' not in html
+    assert '<section id="xml">' not in html
+    # The panes that do not depend on the container are still there.
+    assert 'data-pane="music"' in html
+    assert 'data-pane="records"' in html
+
+
+def test_the_xml_pane_carries_the_source_entire_and_escaped() -> None:
+    """The whole document, never a prefix: a truncated XML reads as a complete
+    one right up to where it stops."""
+    source = '<?xml version="1.0"?><finale><measure n="1"/></finale>'
+    html = render_html(_inspection(xml=source))
+    assert 'data-pane="xml"' in html
+    assert '<section id="xml">' in html
+    # Escaped, so the source's own tags are shown rather than parsed as this
+    # page's markup -- which is also what keeps the page well-formed.
+    assert "&lt;finale&gt;&lt;measure n=&quot;1&quot;/&gt;" in html
+    assert "<finale>" not in html
+
+
+def test_the_source_is_embedded_once_not_twice() -> None:
+    """The other panes are built from the JSON island, which is both embedded
+    and rendered. At a corpus median of 2.77 MB the source is far the largest
+    thing in the report, so it goes in the page body only.
+    """
+    marker = "UNIQUE_XML_MARKER_9137"
+    html = render_html(_inspection(xml=f"<finale>{marker}</finale>"))
+    assert html.count(marker) == 1
+
+
+def test_a_hostile_source_cannot_break_out_of_the_xml_pane() -> None:
+    """The source is untrusted input like everything else the file supplies."""
+    html = render_html(_inspection(xml='</pre></section><script>alert("x")</script>'))
+    assert "</pre></section><script>" not in html
+    assert "&lt;/pre&gt;&lt;/section&gt;" in html

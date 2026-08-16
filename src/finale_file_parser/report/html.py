@@ -89,6 +89,11 @@ details.node > summary::marker { color: #999; }
    colour does not -- these tables are read on paper as well as on screen. */
 .hexval { color: #777; margin-left: 0.7rem; }
 .no-bytes { color: #666; max-width: 34rem; }
+/* The source pane. `pre-wrap` rather than `pre`: EnigmaXML runs to long lines
+   and a horizontal scrollbar on a multi-megabyte document is unusable. */
+.xmlsrc { white-space: pre-wrap; word-break: break-word; font-size: 12px;
+          line-height: 1.35; background: #fafafa; border: 1px solid #eee;
+          padding: 0.6rem; }
 .score { overflow-x: auto; margin-bottom: 1rem; }
 .score .page { margin-bottom: 0.5rem; }
 .score svg { max-width: 100%; height: auto; }
@@ -777,6 +782,40 @@ def _notation(inspection: Inspection) -> str:
     return f'<div class="score">{pages}</div>{omitted}'
 
 
+def _xml_button(inspection: Inspection) -> str:
+    """The XML tab, or nothing at all.
+
+    Absent rather than empty. A `.mus` has no source text -- it holds binary
+    records and its document model is reconstructed from them -- so a pane
+    saying "no XML here" would invite the reader to wonder what went wrong,
+    when the answer is that nothing did and this container simply has none.
+    """
+    return '<button data-pane="xml">XML</button>' if inspection.xml else ""
+
+
+def _xml_pane(inspection: Inspection) -> str:
+    """The document's EnigmaXML, entire.
+
+    Written into the page rather than into the JSON island, which the other
+    panes are built from. The island is embedded *and* rendered, so anything
+    put there is carried twice; at a corpus median of 2.77 MB this is far the
+    largest thing in the report and paying for it once matters.
+
+    `_text` escapes it, which is what makes an XML document safe to nest inside
+    an XML-well-formed page at all: its own tags become entities and are shown
+    as the characters they are, rather than parsed as this document's markup.
+    """
+    if not inspection.xml:
+        return ""
+    size = f"{len(inspection.xml.encode('utf-8')):,} bytes"
+    return (
+        '<section id="xml">'
+        f'<p class="meta">score.dat, decrypted and decompressed — {size}, entire.</p>'
+        f'<pre class="xmlsrc">{_text(inspection.xml)}</pre>'
+        "</section>"
+    )
+
+
 def render_html(inspection: Inspection) -> str:
     """One self-contained page. No network, no build step, no external assets.
 
@@ -816,9 +855,11 @@ def render_html(inspection: Inspection) -> str:
         f"<h1>{name}</h1>"
         '<nav><button data-pane="music">Music</button>'
         '<button data-pane="records">Records</button>'
+        f"{_xml_button(inspection)}"
         '<button data-pane="debug">Debug</button></nav>'
         f'<section id="music">{_notation(inspection)}<div id="music-tree"></div></section>'
         '<section id="records"></section>'
+        f"{_xml_pane(inspection)}"
         '<section id="debug">'
         "<h2>File</h2>"
         f'<p class="meta">{meta}</p>{notes}'
