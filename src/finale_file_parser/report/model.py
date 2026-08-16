@@ -518,7 +518,7 @@ def _tag_names(records: dict[str, object]) -> dict[str, object]:
 def _layouts_present(records: dict[str, object]) -> dict[str, object]:
     """The layout of every tag in `records` that has one, by pool and tag.
 
-    Two of the nine known layouts are left out, and the omission is the point.
+    Two of the twelve known layouts are left out, and the omission is the point.
     A `frameSpec` keeps its entry pair in its *last* 12-byte slot and a `gfhold`
     puts its frame slots at an era base of 4 or 6, so for both of them the
     reader works out where a field sits from the record in front of it. Laying

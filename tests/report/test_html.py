@@ -320,6 +320,22 @@ def test_the_tint_stops_where_the_payload_does() -> None:
     assert "tintMap(layout, payloadLength)" in html
 
 
+def test_a_variable_length_tail_is_tinted_and_read_to_the_record_s_end() -> None:
+    """A field of size 0 runs to the end of the payload -- a `textExprDef`
+    description does, and it is the field a reader most wants to see.
+
+    Multiplying by `f.size` would tint nothing and decode nothing for exactly
+    that field, and the untinted bytes would say "not decoded", which is the one
+    thing they are not. The payload length is what bounds the span, since it is
+    the only thing that can.
+    """
+    html = render_html(_inspection())
+    assert "const width = f.size || Math.max(0, limit - (base + f.offset));" in html
+    assert "const width = field.size || (bin.length - offset);" in html
+    # And the table says "0x24–end" rather than a span ending before it starts.
+    assert "'–end'" in html
+
+
 def test_a_tag_with_no_layout_says_so_rather_than_showing_nothing() -> None:
     """Nine payloads are decoded against a document's ~180 tags, so most records
     land here. A guessed layout would say something false -- but an empty space

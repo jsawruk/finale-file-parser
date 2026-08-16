@@ -292,6 +292,11 @@ function hexRows(bin) {
 // so `limit` stops the tint at the payload's end -- past it lie the record's
 // `extra` bytes, which the layout says nothing about. A strided layout
 // describes one slot and the payload repeats it, so the spans repeat too.
+//
+// A field of size 0 is a variable-length tail: it claims every byte from its
+// offset to the end of this payload. `limit` is what bounds it -- a tail is
+// exactly the field whose width the layout cannot state, and the record in
+// front of us is the only thing that can.
 function tintMap(layout, limit) {
   const map = [];
   if (!layout) { return map; }
@@ -300,7 +305,8 @@ function tintMap(layout, limit) {
   for (let slot = 0; slot < slots; slot++) {
     const base = slot * stride;
     layout.fields.forEach((f, i) => {
-      for (let b = 0; b < f.size; b++) {
+      const width = f.size || Math.max(0, limit - (base + f.offset));
+      for (let b = 0; b < width; b++) {
         const at = base + f.offset + b;
         if (at < limit) { map[at] = i; }
       }
@@ -357,9 +363,13 @@ function hexBlock(bin, map) {
 // than an error.
 function decode(bin, offset, field, order) {
   if (offset + field.size > bin.length) { return '—'; }
+  // A size-0 field is a variable-length tail: read to the record's end, and let
+  // the NUL below stop it. Reading `field.size` bytes would show nothing at all
+  // for the one field here whose text is the point.
+  const width = field.size || (bin.length - offset);
   const bytes = [];
-  for (let i = 0; i < field.size; i++) { bytes.push(bin.charCodeAt(offset + i)); }
-  if (field.type === 'char[]') {
+  for (let i = 0; i < width; i++) { bytes.push(bin.charCodeAt(offset + i)); }
+  if (field.type === 'char[]' || field.type === 'string') {
     // A name, NUL-terminated. Latin-1 because that is what the era wrote and
     // what the tag decoder already assumes; a byte over 127 is a character
     // here, not a decoding failure.
@@ -398,10 +408,14 @@ function layoutTable(layout, bin, order) {
     const swatch = document.createElement('span');
     swatch.className = 'swatch';
     swatch.style.background = PALETTE[i % PALETTE.length];
-    const span = (f.size === 1)
-      ? '0x' + f.offset.toString(16)
-      : '0x' + f.offset.toString(16) + '–0x' + (f.offset + f.size - 1).toString(16);
-    const cells = [null, span, String(f.size), f.type, f.name,
+    // A tail has no last byte to name -- `f.offset + f.size - 1` would print a
+    // span ending before it starts.
+    const span = (f.size === 0)
+      ? '0x' + f.offset.toString(16) + '–end'
+      : (f.size === 1)
+        ? '0x' + f.offset.toString(16)
+        : '0x' + f.offset.toString(16) + '–0x' + (f.offset + f.size - 1).toString(16);
+    const cells = [null, span, f.size ? String(f.size) : 'var', f.type, f.name,
                    decode(bin, f.offset, f, order), f.note];
     cells.forEach((text, n) => {
       const td = document.createElement('td');
