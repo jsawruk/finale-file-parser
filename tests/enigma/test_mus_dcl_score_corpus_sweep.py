@@ -11,16 +11,20 @@ Report counts only -- never a corpus filename, title, or record value.
 from __future__ import annotations
 
 import collections
+import functools
 import statistics
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
+from finale_file_parser.enigma.document import EnigmaDocument
 from finale_file_parser.enigma.location import MalformedScoreError, locate_entries
 from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.mus_document import read_mus_document
 from finale_file_parser.enigma.mus_entries import read_mus_entry_records
 from finale_file_parser.enigma.to_ir import build_score
+from finale_file_parser.ir import Score
 from finale_file_parser.version import mus as mus_header
 
 CORPUS = Path(__file__).parent.parent.parent / "corpus"
@@ -113,28 +117,85 @@ measures but no music, and building one yields a Score with no parts, which is
 not valid MusicXML."""
 
 
-def _dcl_files() -> list[Path]:
-    """Case-insensitive: a case-sensitive glob drops the whole Windows cohort."""
+@functools.cache
+def _dcl_files() -> tuple[Path, ...]:
+    """Case-insensitive: a case-sensitive glob drops the whole Windows cohort.
+
+    Reads the 160-byte header, not the file. This was
+    `path.read_bytes()[:MUS_METADATA_SIZE]`, which pulls every byte of every
+    `.mus` in the corpus off disk to look at its first 160 -- and the nine tests
+    in this file each asked for the walk, so the whole cohort was read nine
+    times over to answer a question about its headers.
+
+    Cached for the same reason.
+    """
     out = []
     for path in sorted(p for p in CORPUS.rglob("*") if p.is_file() and p.suffix.lower() == ".mus"):
-        year = mus_header.parse(path.read_bytes()[: mus_header.MUS_METADATA_SIZE]).year
+        with path.open("rb") as handle:
+            head = handle.read(mus_header.MUS_METADATA_SIZE)
+        year = mus_header.parse(head).year
         if year is not None and year <= LAST_DCL_YEAR:
             out.append(path)
-    return out
+    return tuple(out)
 
 
-def test_the_cohort_builds_scores_with_music_in_them() -> None:
+@dataclass(frozen=True)
+class DclRead:
+    """One document of the cohort, read once: what it yielded or how it failed.
+
+    `document` is `None` exactly when `read_mus_document` raised
+    `CorruptScoreError`; `score` is `None` when either stage raised. The two
+    flags say which, so a test can reproduce the counts the old per-test
+    `try/except` produced without parsing the file again.
+    """
+
+    path: Path
+    document: EnigmaDocument | None
+    score: Score | None
+    corrupt: bool
+    malformed: bool
+
+
+@pytest.fixture(scope="module")
+def cohort() -> tuple[DclRead, ...]:
+    """The whole DCL cohort, read and built **once**.
+
+    Nine tests here each ran `build_score(read_mus_document(path))` over the
+    cohort, so the cohort was parsed nine times to answer nine questions about
+    one parse. At 274 ms a document that is most of this file's runtime.
+
+    Module-scoped rather than session-scoped: only this file wants the DCL
+    cohort specifically, and `--dist loadfile` keeps a file on one worker, so
+    the wider scope would buy nothing and cost every other worker the memory.
+    """
+    reads: list[DclRead] = []
+    for path in _dcl_files():
+        document: EnigmaDocument | None = None
+        score: Score | None = None
+        corrupt = malformed = False
+        try:
+            document = read_mus_document(path)
+            score = build_score(document)
+        except MalformedScoreError:
+            malformed = True
+        except CorruptScoreError:
+            corrupt = True
+        reads.append(DclRead(path, document, score, corrupt, malformed))
+    return tuple(reads)
+
+
+def test_the_cohort_builds_scores_with_music_in_them(cohort: tuple[DclRead, ...]) -> None:
     built = malformed = corrupt = 0
     parts = measures = events = pitches = 0
-    for path in _dcl_files():
-        try:
-            score = build_score(read_mus_document(path))
-        except MalformedScoreError:
+    for read in cohort:
+        if read.malformed:
             malformed += 1
             continue
-        except CorruptScoreError:
+        if read.corrupt:
             corrupt += 1
             continue
+        assert read.score is not None
+        score = read.score
         built += 1
         parts += len(score.parts)
         for part in score.parts:
@@ -154,17 +215,18 @@ def test_the_cohort_builds_scores_with_music_in_them() -> None:
     assert pitches == EXPECTED_PITCHES
 
 
-def test_every_built_measure_carries_a_time_signature_and_most_carry_music() -> None:
+def test_every_built_measure_carries_a_time_signature_and_most_carry_music(
+    cohort: tuple[DclRead, ...],
+) -> None:
     """A score of empty measures would satisfy the counts above document by
     document but not this: the time signature comes from `MS` and the events
     from the frame chain, so this fails if either link is broken.
     """
     with_time = with_events = total = 0
-    for path in _dcl_files():
-        try:
-            score = build_score(read_mus_document(path))
-        except Exception:  # noqa: BLE001 - counted by the sweep above
+    for read in cohort:
+        if read.score is None:  # counted by the sweep above
             continue
+        score = read.score
         for part in score.parts:
             for measure in part.measures:
                 total += 1
@@ -177,7 +239,7 @@ def test_every_built_measure_carries_a_time_signature_and_most_carry_music() -> 
     assert with_events / total >= 0.75
 
 
-def test_no_built_score_is_empty() -> None:
+def test_no_built_score_is_empty(cohort: tuple[DclRead, ...]) -> None:
     """A score with no parts is not a successful read.
 
     Three documents used to produce one, and it took the export audit to notice:
@@ -185,18 +247,17 @@ def test_no_built_score_is_empty() -> None:
     contributed nothing at all. Asserted per document rather than in aggregate,
     which is the whole point.
     """
-    for path in _dcl_files():
-        try:
-            score = build_score(read_mus_document(path))
-        except (CorruptScoreError, MalformedScoreError):
+    for read in cohort:
+        if read.score is None:
             continue
+        score = read.score
         assert score.parts, "built a score with no parts"
         assert any(measure.voices for part in score.parts for measure in part.measures), (
             "built a score with no music"
         )
 
 
-def test_the_reader_discards_only_dead_pool_space() -> None:
+def test_the_reader_discards_only_dead_pool_space(cohort: tuple[DclRead, ...]) -> None:
     """The counterweight to the pruning in `_live_entries`.
 
     Discarding unreached entries is what lets these documents build, and it is
@@ -206,30 +267,28 @@ def test_the_reader_discards_only_dead_pool_space() -> None:
     quieter.
     """
     dead = 0
-    for path in _dcl_files():
-        try:
-            document = read_mus_document(path)
-        except CorruptScoreError:
+    for read in cohort:
+        if read.document is None:
             continue
-        dead += len(read_mus_entry_records(path)) - len(document.entries.records)
+        dead += len(read_mus_entry_records(read.path)) - len(read.document.entries.records)
     assert dead == EXPECTED_DEAD_ENTRIES
 
 
-def test_the_cohort_reads_its_clefs() -> None:
+def test_the_cohort_reads_its_clefs(cohort: tuple[DclRead, ...]) -> None:
     """See `EXPECTED_CLEFS`. Counted on each part's first measure."""
     signs: collections.Counter[str] = collections.Counter()
-    for path in _dcl_files():
-        try:
-            score = build_score(read_mus_document(path))
-        except (CorruptScoreError, MalformedScoreError):
+    for read in cohort:
+        if read.score is None:
             continue
-        for part in score.parts:
+        for part in read.score.parts:
             if part.measures and part.measures[0].clef_sign:
                 signs[part.measures[0].clef_sign] += 1
     assert dict(signs) == EXPECTED_CLEFS
 
 
-def test_a_bass_clef_part_really_does_sound_lower_than_a_treble_one() -> None:
+def test_a_bass_clef_part_really_does_sound_lower_than_a_treble_one(
+    cohort: tuple[DclRead, ...],
+) -> None:
     """The clef takes no part in decoding a pitch, so the two are independent:
     if the table or the indices were being read wrongly, the clef a part is
     given would not predict the notes it contains. It does.
@@ -239,12 +298,10 @@ def test_a_bass_clef_part_really_does_sound_lower_than_a_treble_one() -> None:
     """
     step = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
     heard: dict[str, list[float]] = {"G": [], "F": []}
-    for path in _dcl_files():
-        try:
-            score = build_score(read_mus_document(path))
-        except (CorruptScoreError, MalformedScoreError):
+    for read in cohort:
+        if read.score is None:
             continue
-        for part in score.parts:
+        for part in read.score.parts:
             sign = part.measures[0].clef_sign if part.measures else None
             if sign not in heard:
                 continue
@@ -266,15 +323,13 @@ def test_a_bass_clef_part_really_does_sound_lower_than_a_treble_one() -> None:
     )
 
 
-def test_the_cohort_draws_its_double_barlines() -> None:
+def test_the_cohort_draws_its_double_barlines(cohort: tuple[DclRead, ...]) -> None:
     """See `EXPECTED_DOUBLE_BARLINES`. Counted per measure across the cohort."""
     styles: collections.Counter[str] = collections.Counter()
-    for path in _dcl_files():
-        try:
-            score = build_score(read_mus_document(path))
-        except (CorruptScoreError, MalformedScoreError):
+    for read in cohort:
+        if read.score is None:
             continue
-        for part in score.parts:
+        for part in read.score.parts:
             for measure in part.measures:
                 if measure.barline_style:
                     styles[measure.barline_style] += 1
@@ -318,16 +373,14 @@ in a 2011 file would be read by the code these two sweeps already pin.
 """
 
 
-def test_mirrored_frames_are_a_known_and_counted_shape() -> None:
+def test_mirrored_frames_are_a_known_and_counted_shape(cohort: tuple[DclRead, ...]) -> None:
     """See `DOCUMENTS_WITH_MIRRORED_FRAMES`."""
     documents = 0
-    for path in _dcl_files():
-        try:
-            document = read_mus_document(path)
-        except CorruptScoreError:
+    for read in cohort:
+        if read.document is None:
             continue
         spans: dict[tuple[str, str], int] = collections.Counter()
-        for frame in document.others.of_tag("frameSpec"):
+        for frame in read.document.others.of_tag("frameSpec"):
             if "part" in frame.attrs:
                 continue
             start, end = frame.fields.get("startEntry"), frame.fields.get("endEntry")
@@ -337,14 +390,17 @@ def test_mirrored_frames_are_a_known_and_counted_shape() -> None:
     assert documents == DOCUMENTS_WITH_MIRRORED_FRAMES
 
 
-def test_a_mirror_places_its_entries_on_every_staff_that_shows_them() -> None:
+def test_a_mirror_places_its_entries_on_every_staff_that_shows_them(
+    cohort: tuple[DclRead, ...],
+) -> None:
     """See `MIRRORED_ENTRIES`."""
     documents = 0
     mirrored = 0
-    for path in _dcl_files():
+    for read in cohort:
+        if read.document is None:
+            continue
         try:
-            document = read_mus_document(path)
-            locations = locate_entries(document)
+            locations = locate_entries(read.document)
         except (CorruptScoreError, MalformedScoreError):
             continue
         here = [places for places in locations.values() if len(places) > 1]
@@ -353,10 +409,18 @@ def test_a_mirror_places_its_entries_on_every_staff_that_shows_them() -> None:
         documents += 1
         mirrored += len(here)
         for places in here:
-            # a mirror puts one entry in several places, never one place twice
-            assert len({(p.staff, p.measure, p.layer) for p in places}) == len(places), path
+            # a mirror puts one entry in several places, never one place twice.
+            # The message says which staves and bar, never which document: this
+            # file's docstring forbids a corpus filename in a failure, and these
+            # two asserts used to pass `path` as exactly that.
+            spots = {(p.staff, p.measure, p.layer) for p in places}
+            assert len(spots) == len(places), (
+                f"a mirrored entry landed twice in one place: {sorted(spots)}"
+            )
             # and always within one measure -- the staves differ, the bar does not
-            assert len({p.measure for p in places}) == 1, path
+            assert len({p.measure for p in places}) == 1, (
+                f"a mirrored entry spans more than one measure: {sorted(spots)}"
+            )
 
     assert documents == DOCUMENTS_WHERE_A_MIRROR_REACHES_THE_SCORE
     assert mirrored == MIRRORED_ENTRIES
