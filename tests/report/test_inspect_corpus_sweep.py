@@ -87,7 +87,7 @@ from corpus_files import CORPUS, corpus_paths
 
 from finale_file_parser.report import Inspection, inspect_document
 from finale_file_parser.report.html import render_html
-from finale_file_parser.report.ladder import CRASHED, OK, REFUSED
+from finale_file_parser.report.ladder import CRASHED, OK, REFUSED, SKIPPED
 
 pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not present")
 
@@ -123,6 +123,35 @@ CRASHES = 0
 
 A crash is a reader bug rather than a bad file. Zero today, pinned so the next
 one is a regression rather than a statistic.
+"""
+
+ENGRAVE_EVERY = 10
+"""Engrave one document in ten, rather than all 639.
+
+**This is a deliberate reduction in coverage, and here is its price.**
+Engraving is a third-party layout pass (Verovio) and the most expensive rung in
+the pipeline: 210 ms of a document's 747 ms, measured over a 25-document
+sample. Run on every document it made this the longest test in the suite by a
+factor of three, and because `--dist loadfile` keeps a file on one worker, that
+one test was the floor under the whole suite's wall-clock.
+
+What is given up: an engraving failure on a document outside the sample is no
+longer caught here. `CRASHES` still covers every other rung on every document,
+and it covers engraving only on the sample.
+
+Every tenth document of a sorted walk, not a random or a first-N sample: a
+first-N sample would only ever see `.mus` (the walk is `.mus` then `.musx`) and
+so would never engrave the container most of the corpus is in, and a random one
+would make this sweep's counts differ run to run.
+"""
+
+ENGRAVED = 64
+"""How many documents the sample actually engraves.
+
+Pinned because a sample that quietly became empty -- a slicing mistake, a walk
+that returned fewer documents -- would turn this sweep green while testing
+engraving on nothing at all. That is exactly the failure a reduced sample
+invites, so it is the one thing here that is asserted rather than assumed.
 """
 
 
@@ -186,9 +215,10 @@ def digest() -> CorpusDigest:
     paths = corpus_paths(".mus") + corpus_paths(".musx")
     ladders: list[tuple[tuple[str, str], ...]] = []
     first_failing: Inspection | None = None
-    for path in paths:
+    for index, path in enumerate(paths):
+        engrave_this = index % ENGRAVE_EVERY == 0
         try:
-            inspection = inspect_document(path)
+            inspection = inspect_document(path, engrave_notation=engrave_this)
             ladders.append(_rungs(inspection))
             if first_failing is None and _is_failing(inspection):
                 first_failing = inspection
@@ -204,6 +234,20 @@ def digest() -> CorpusDigest:
 def _count_documents(digest: CorpusDigest) -> int:
     """How many documents were inspected."""
     return len(digest.ladders)
+
+
+def _count_engraved(digest: CorpusDigest) -> int:
+    """Documents whose engraving rung actually ran. See `ENGRAVED`.
+
+    Counted from the ladder rather than from how many were asked for: a
+    document the pipeline stopped early records the rung as `SKIPPED` too, so
+    requesting engraving is not the same as reaching it, and the number worth
+    pinning is the one that says what really happened.
+    """
+    engraved = 0
+    for rungs in digest.ladders:
+        engraved += any(name == "engrave notation" and status != SKIPPED for name, status in rungs)
+    return engraved
 
 
 def _count_built(digest: CorpusDigest) -> int:
@@ -299,6 +343,18 @@ def test_no_corpus_document_crashes_a_reader(request: pytest.FixtureRequest) -> 
     """See `CRASHES`."""
     crashed = _guarded(request, _count_crashed)
     assert crashed == CRASHES
+
+
+def test_the_engraving_sample_is_not_empty(request: pytest.FixtureRequest) -> None:
+    """See `ENGRAVED` and `ENGRAVE_EVERY`.
+
+    The sweep engraves one document in ten rather than all of them, so this is
+    the test that stops the reduction going further than intended. Without it a
+    slicing mistake that engraved nothing would leave every other assertion here
+    green -- `CRASHES` counts crashes among the stages that ran, and a stage
+    that never runs never crashes.
+    """
+    assert _guarded(request, _count_engraved) == ENGRAVED
 
 
 def test_a_report_renders_for_a_document_that_does_not_build(

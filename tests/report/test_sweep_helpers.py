@@ -21,13 +21,14 @@ from __future__ import annotations
 import pytest
 
 from finale_file_parser.report import Inspection
-from finale_file_parser.report.ladder import CRASHED, OK, REFUSED, Stage
+from finale_file_parser.report.ladder import CRASHED, OK, REFUSED, SKIPPED, Stage
 from report.test_inspect_corpus_sweep import (
     CorpusDigest,
     _all_have_ladders,
     _count_built,
     _count_crashed,
     _count_documents,
+    _count_engraved,
     _guarded,
     _is_failing,
     _render_check,
@@ -132,6 +133,31 @@ def test_a_ladder_reduces_to_names_and_statuses_and_nothing_else() -> None:
     assert LEAK_CANARY not in flattened
     assert _CANARY_RECORD_VALUE not in flattened
     assert _CANARY_SHA not in flattened
+
+
+def _engraved(status: str) -> Inspection:
+    """A document whose engraving rung reached `status`."""
+    return Inspection(
+        file={"name": LEAK_CANARY, "size": "1", "sha256": _CANARY_SHA},
+        stages=[Stage("build score", OK), Stage("engrave notation", status)],
+    )
+
+
+def test_count_engraved_counts_rungs_that_ran_not_rungs_that_were_asked_for() -> None:
+    """The pin that stops the engraving sample silently emptying.
+
+    `SKIPPED` is the status both for "the caller declined this rung" and for
+    "the ladder had already stopped", and neither engraved anything -- so both
+    must be excluded. A counter that trusted the request instead would report
+    full coverage for a sample that never ran.
+    """
+    assert _count_engraved(_digest(_engraved(OK), _engraved(SKIPPED))) == 1
+    assert _count_engraved(_digest(_engraved(SKIPPED), _engraved(SKIPPED))) == 0
+    # A rung that ran and failed still ran: that is a finding, not an absence.
+    assert _count_engraved(_digest(_engraved(CRASHED), _engraved(REFUSED))) == 2
+    # A ladder that never got as far as naming the rung engraved nothing.
+    assert _count_engraved(_digest(_built())) == 0
+    assert _count_engraved(_digest()) == 0
 
 
 def test_only_a_failing_document_is_kept_whole() -> None:
