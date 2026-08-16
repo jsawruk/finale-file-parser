@@ -18,6 +18,12 @@ Report counts only -- never a corpus filename, title, or record value.
 
 from __future__ import annotations
 
+import faulthandler
+import os
+import resource
+import sys
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -30,6 +36,98 @@ from finale_file_parser.enigma.mus_document import read_mus_document
 from finale_file_parser.enigma.score import score_xml
 from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.ir import Score
+
+MEMORY_CAP_MB = int(os.environ.get("FFP_TEST_MEMORY_CAP_MB", "8192"))
+"""How much a single test process may hold before it is killed.
+
+**Why this exists.** A layout field once reported `sys.maxsize` as its end offset
+and a test looped `for index in range(f.offset, f.end)`, filling a dict. Nothing
+stopped it: it reached 28.8 GB, took the machine into swap and crashed it. The
+bug was a one-line mistake and the blast radius was the whole computer.
+
+`setrlimit` is not the guard -- macOS refuses `RLIMIT_AS` and `RLIMIT_DATA` here
+with EINVAL -- so a thread polls this process's own high-water mark instead and
+hard-exits over the cap, naming the test that did it.
+
+**8 GB is measured, not guessed, and the first guess was wrong.** The cap started
+at 3 GB, reasoned from the note above that holding every built `Score` costs
+about 173 MB. That is the `musx_scores` fixture, and it is not the heaviest thing
+here: `test_inspect_corpus_sweep.py` holds an `Inspection` for all 639 documents
+and peaks at **3.37 GB**, measured on a clean single-process run of that file.
+The 3 GB cap killed it -- a real sweep, not a runaway -- and took the xdist
+worker down with it. So the cap is roughly 2.4x the true high-water mark: loose
+enough that legitimate work never trips it, tight enough that a runaway dies in
+seconds instead of taking the machine.
+
+Raise it with `FFP_TEST_MEMORY_CAP_MB` if a sweep ever genuinely needs more --
+and record the measured peak that justified it, as above.
+"""
+
+_POLL_SECONDS = 0.25
+
+_current_test = "before any test"
+_config: pytest.Config | None = None
+
+
+def _held_bytes() -> int:
+    """This process's peak resident size.
+
+    `ru_maxrss` is bytes on macOS and kilobytes on Linux -- the same number
+    would be off by 1024 on CI, which is the difference between a cap that
+    fires and one that never does.
+    """
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return peak if sys.platform == "darwin" else peak * 1024
+
+
+def _uncaptured_stderr() -> None:
+    """Put the real stderr back on fd 2.
+
+    pytest captures at the file-descriptor level, so a report written on the way
+    out lands in a temp file it will never get to read -- the first version of
+    this guard killed the process silently, which tells the next person nothing
+    about what they did.
+    """
+    if _config is None:
+        return
+    capman = _config.pluginmanager.getplugin("capturemanager")
+    if capman is not None:
+        capman.suspend_global_capture(in_=False)
+
+
+def _watch_memory() -> None:
+    cap = MEMORY_CAP_MB * 1024 * 1024
+    while True:
+        held = _held_bytes()
+        if held > cap:
+            _uncaptured_stderr()
+            # Written to the fd rather than through `print`: the interpreter is
+            # about to stop without flushing anything.
+            os.write(
+                2,
+                f"\nMEMORY CAP: {_current_test} reached {held / 1e9:.1f} GB, over the "
+                f"{MEMORY_CAP_MB} MB cap (FFP_TEST_MEMORY_CAP_MB). "
+                f"Killing this process; the stack below is where it was.\n".encode(),
+            )
+            faulthandler.dump_traceback()
+            # _exit, not sys.exit: an exception here would be raised in this
+            # thread and the test would carry on allocating.
+            os._exit(9)
+        time.sleep(_POLL_SECONDS)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Arm the memory guard. Runs in each xdist worker as well as the parent."""
+    global _config
+    _config = config
+    threading.Thread(target=_watch_memory, daemon=True, name="memory-cap").start()
+
+
+def pytest_runtest_protocol(item: pytest.Item, nextitem: pytest.Item | None) -> None:
+    """Record which test is running, so the guard can name it."""
+    global _current_test
+    _current_test = item.nodeid
+    return None
 
 
 def musx_paths() -> list[Path]:

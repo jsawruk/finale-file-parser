@@ -62,8 +62,14 @@ class Struct:
         )
 
     def field_at(self, index: int) -> tuple[int, Field] | None:
+        """Which field claims byte `index`; see `Layout.field_at`, which this
+        matches so the document and the inspector tint the same bytes.
+
+        A tail claims the rest of the example bytes, which is what it does in a
+        real payload too.
+        """
         for i, f in enumerate(self.fields):
-            if f.offset <= index < f.end:
+            if f.offset <= index and (f.is_tail or index < f.end):
                 return i, f
         return None
 
@@ -107,10 +113,20 @@ def render_struct_table(struct: Struct) -> str:
     rows: list[str] = []
     for i, f in enumerate(struct.fields):
         swatch = f'<span class=swatch style="background:{PALETTE[i % len(PALETTE)]}"></span>'
-        span = f"0x{f.offset:02x}" if f.size == 1 else f"0x{f.offset:02x}&#8211;0x{f.end - 1:02x}"
+        if f.is_tail:
+            # No end to name: the field runs to the end of whatever payload this
+            # is. Writing `f.end - 1` here would print a span that ends before it
+            # begins.
+            span = f"0x{f.offset:02x}&#8211;end"
+            size = "var"
+        else:
+            span = (
+                f"0x{f.offset:02x}" if f.size == 1 else f"0x{f.offset:02x}&#8211;0x{f.end - 1:02x}"
+            )
+            size = str(f.size)
         rows.append(
             f"<tr><td class=sw>{swatch}</td><td class=off>{span}</td>"
-            f"<td class=sz>{f.size}</td><td class=ty><code>{html.escape(f.type_)}</code></td>"
+            f"<td class=sz>{size}</td><td class=ty><code>{html.escape(f.type_)}</code></td>"
             f"<td class=nm><code>{html.escape(f.name)}</code></td>"
             f"<td class=nt>{html.escape(html.unescape(f.note))}</td></tr>"
         )

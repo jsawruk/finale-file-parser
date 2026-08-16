@@ -7,10 +7,12 @@ a tinted hex dump, and the inspector, which tints the bytes of a record actually
 read from a file. Describing a field twice is how a document and a decoder come
 to disagree about where a field sits.
 
-Only nine record types appear here. One corpus document alone carries 146
-`others` tags and 41 `details` tags, so most records have no layout -- those are
-the ones whose meaning this project does not claim to know, and a consumer must
-treat a missing layout as "not decoded" rather than as an error.
+Twelve layouts appear here, for eleven record types -- `textExprDef` gets two,
+one per era, because what the 2011 record confirms does not all carry back to the
+older DCL spelling. One corpus document alone carries 146 `others` tags and 41
+`details` tags, so most records have no layout -- those are the ones whose
+meaning this project does not claim to know, and a consumer must treat a missing
+layout as "not decoded" rather than as an error.
 """
 
 from __future__ import annotations
@@ -48,13 +50,40 @@ class Field:
     """
 
     offset: int
+
     size: int
+    """Bytes the field occupies, or **0 for a variable-length tail**.
+
+    A NUL-terminated string running to the end of the payload has no fixed width
+    -- a `textExprDef` description sits at `+36` in records of 48, 60 and 72
+    bytes. Only the last field of a layout may use 0, and its note must say what
+    ends it.
+    """
+
     name: str
     type_: str
     note: str = ""
 
     @property
+    def is_tail(self) -> bool:
+        """True for a variable-length field: it claims every byte from `offset`
+        to the end of whatever payload the caller is holding."""
+        return self.size == 0
+
+    @property
     def end(self) -> int:
+        """One past the last byte of a fixed-size field.
+
+        A tail has no end to give -- where it stops depends on the payload in
+        front of the caller and not on the layout -- so this returns `offset`,
+        an empty span, and `is_tail` is what a caller branches on.
+
+        It deliberately does **not** return a large sentinel. `end` is what a
+        renderer subtracts one from and what a loop counts up to, and
+        `range(f.offset, f.end)` reads as safe at a glance; with `sys.maxsize`
+        here that line became an allocation that ran until the machine gave out
+        -- 28.8 GB in one pytest process before it was killed.
+        """
         return self.offset + self.size
 
 
@@ -65,6 +94,12 @@ class Layout:
     `tag` is the 2011-era numeric tag; `dcl` is the two-character tag the older
     DCL container uses for the same record, empty where that era has none. Both
     identify the same record type, so a consumer holding either can find this.
+
+    The reverse also happens: `tag` is **0** for a layout that describes only the
+    DCL spelling, where what is confirmed of the 2011 record does not carry
+    across. `DT` is the case -- its `+4` and its description are established and
+    its enums measurably are not, so the two eras get two layouts rather than one
+    that overstates the older.
     """
 
     name: str
@@ -105,9 +140,13 @@ class Layout:
 
         The position is what a renderer keys a colour to, so it must come from
         the same place as the field itself.
+
+        A tail covers every byte from its offset on, however long the payload
+        turns out to be -- a `textExprDef` description sits at `+36` in records
+        of 48, 60 and 72 bytes, and the caller is the one holding the length.
         """
         for i, f in enumerate(self.fields):
-            if f.offset <= index < f.end:
+            if f.offset <= index and (f.is_tail or index < f.end):
                 return i, f
         return None
 
@@ -252,13 +291,15 @@ TEXT_EXPR_DEF = Layout(
     name="TextExprDef",
     record="textExprDef",
     tag=OTH.TAG_TEXT_EXPR_DEF,
-    dcl="DT",
+    dcl="",
     pool="others",
     fields=(
-        Field(0, 2, "textIDKey", "uint16", "names the expression text; not its number"),
-        Field(4, 2, "value", "uint16", "playback level; velocity for a dynamic"),
-        Field(6, 2, "auxdata1", "uint16", ""),
-        Field(8, 2, "playPass", "uint16", ""),
+        Field(0, 2, "textIDKey", "uint16", "points at the expression text; not its number"),
+        Field(4, 2, "value", "uint16", "playback level; the velocity for a dynamic"),
+        Field(
+            6, 2, "auxdata1", "uint16", "purpose unknown; agrees with the .musx field of that name"
+        ),
+        Field(8, 2, "playPass", "uint16", "which repeat pass it plays on"),
         Field(
             12,
             2,
@@ -273,15 +314,48 @@ TEXT_EXPR_DEF = Layout(
             "uint16",
             "2 manual, 4 topNote, 8 aboveStaffOrEntry, 9 belowStaffOrEntry",
         ),
-        Field(30, 2, "yAdjustBaseline", "int16", ""),
-        Field(32, 2, "yAdjustEntry", "int16", ""),
-        Field(36, 0, "descStr", "string", "the marking in words, NUL-terminated"),
+        Field(30, 2, "yAdjustBaseline", "int16", "vertical offset from the baseline, in EVPU"),
+        Field(32, 2, "yAdjustEntry", "int16", "vertical offset from the entry, in EVPU"),
+        Field(36, 0, "descStr", "string", "the marking in words, NUL-terminated, runs to the end"),
     ),
 )
-"""Every field confirmed by exact equality against the 97 paired documents; see
-`mus_others.TAG_TEXT_EXPR_DEF` for the counts. `categoryID` and `playType` are
-absent because neither is identified. The DCL era shares `+4` and the description
-at `+36` and nothing else that has been shown."""
+"""The 2011 numeric spelling. Every field confirmed by exact equality against the
+97 paired documents -- see `mus_others.TAG_TEXT_EXPR_DEF` for the counts.
+
+`categoryID` and `playType` are absent because neither is identified.
+
+**`dcl` is empty on purpose.** The DCL container spells this record `DT`, but only
+its `+4` and its description survive the crossing: no offset in a `DT` payload
+separates the "Below Staff" descriptions from the rest, so the enums above are not
+evidenced there. `TEXT_EXPR_DEF_DCL` describes what is.
+"""
+
+TEXT_EXPR_DEF_DCL = Layout(
+    name="TextExprDef",
+    record="textExprDef",
+    tag=0,
+    dcl="DT",
+    pool="others",
+    fields=(
+        Field(0, 2, "counter", "uint16", "runs with cmper; the 2011 record has textIDKey here"),
+        Field(4, 2, "value", "uint16", "playback level; read in the document's byte order"),
+        Field(36, 0, "descStr", "string", "the marking in words, NUL-terminated, runs to the end"),
+    ),
+)
+"""What a DCL `DT` payload is known to hold -- three fields, not the twelve of the
+2011 record.
+
+`+4` is confirmed **without any paired document**: the description states the
+velocity in words, and it equals the `uint16` at `+4` in **434 records out of 434,
+with zero disagreements**. The record vouches for its own field.
+
+Deliberately smaller than `TEXT_EXPR_DEF`. Laying that layout over these bytes
+would name `+12` and `+24` as alignment enums, and the corpus says otherwise: no
+offset separates the `Below Staff` descriptions. Two eras, two layouts.
+
+**Read `+4` in the document's byte order.** 37 corpus documents are big-endian,
+where a little-endian reading turns 127 into 32,512.
+"""
 
 MEAS_EXPR_ASSIGN_SLOT = 24
 
@@ -289,22 +363,27 @@ MEAS_EXPR_ASSIGN = Layout(
     name="MeasExprAssign",
     record="measExprAssign",
     tag=OTH.TAG_MEAS_EXPR_ASSIGN,
-    dcl="DY",
+    dcl="",
     pool="others",
     stride=MEAS_EXPR_ASSIGN_SLOT,
     fields=(
         Field(0, 2, "textExprID", "uint16", "names a textExprDef; a shapeExprID when +11 has 0x20"),
-        Field(2, 2, "horzEduOff", "int16", ""),
-        Field(4, 2, "horzEvpuOff", "int16", ""),
-        Field(6, 2, "vertOff", "int16", ""),
-        Field(8, 2, "staffAssign", "int16", "-1 means a staff list rather than a staff"),
-        Field(11, 1, "flags", "uint8", "0x20 marks a shape assignment"),
-        Field(12, 2, "staffGroup", "uint16", ""),
-        Field(14, 2, "staffList", "uint16", ""),
+        Field(2, 2, "horzEduOff", "int16", "horizontal offset in EDU, along the measure"),
+        Field(4, 2, "horzEvpuOff", "int16", "horizontal offset in EVPU"),
+        Field(6, 2, "vertOff", "int16", "vertical offset in EVPU"),
+        Field(8, 2, "staffAssign", "int16", "the staff, or -1 for a staff list"),
+        Field(11, 1, "flags", "uint8", "0x20 marks a shape assignment rather than a text one"),
+        Field(12, 2, "staffGroup", "uint16", "the group, on a staff-list assignment"),
+        Field(14, 2, "staffList", "uint16", "which staff list, on a staff-list assignment"),
     ),
 )
-"""One marking per 24-byte slot. `layer` is absent: its best offset is `+8`, which
-`staffAssign` already holds at 100%."""
+"""One marking per 24-byte slot, so a measure carrying two dynamics is one 48-byte
+record. `layer` is absent: its best offset is `+8`, which `staffAssign` already
+holds at 100%.
+
+**`dcl` is empty because nothing about `^DY` is decoded.** Claiming this layout for
+it would assert a 24-byte slot in a record no one has looked at.
+"""
 
 INST_USED = Layout(
     name="InstUsedSlot",
@@ -326,6 +405,9 @@ LAYOUTS: tuple[Layout, ...] = (
     LYRIC_VERSE,
     ARTIC_ASSIGN,
     INST_USED,
+    TEXT_EXPR_DEF,
+    TEXT_EXPR_DEF_DCL,
+    MEAS_EXPR_ASSIGN,
 )
 
 
@@ -338,7 +420,10 @@ def _by_tag() -> dict[tuple[str, str], Layout]:
     """
     index: dict[tuple[str, str], Layout] = {}
     for layout in LAYOUTS:
-        for spelling in (str(layout.tag), layout.dcl):
+        # Tag 0 is the "DCL only" marker, not a record number: indexing it would
+        # claim every tag-less caller.
+        numeric = str(layout.tag) if layout.tag else ""
+        for spelling in (numeric, layout.dcl):
             if spelling:
                 index[(layout.pool, spelling)] = layout
     return index
