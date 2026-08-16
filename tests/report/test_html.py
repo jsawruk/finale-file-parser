@@ -518,6 +518,32 @@ def test_the_xml_pane_is_absent_entirely_for_a_document_that_has_no_source() -> 
     assert 'data-pane="records"' in html
 
 
+def test_the_xml_tree_is_built_lazily_from_the_source() -> None:
+    """A 2.5 MB source is tens of thousands of elements. Building them all on
+    load would stall the Music pane, which is the one that opens by default, for
+    a pane the reader may never look at -- so the tree is drawn when the tab is
+    first opened, and each element's children when that element is opened.
+    """
+    html = render_html(_inspection(xml="<finale><a><b>1</b></a></finale>"))
+    assert "function renderXml()" in html
+    assert "if (b.dataset.pane === 'xml') { renderXml(); }" in html
+    # The fold itself, and the guard that fills it only once.
+    assert "node.addEventListener('toggle'" in html
+    assert "if (node.open && !node.dataset.filled)" in html
+    # Not drawn at load, unlike the three panes that are.
+    assert "renderXml();\nshow('music')" not in html
+
+
+def test_the_raw_source_is_hidden_but_kept_as_the_parse_input_and_fallback() -> None:
+    """Hidden so the browser lays out no megabytes of text, present because the
+    tree is parsed from it -- and unhidden if it will not parse, since a
+    document that cannot be folded still has to be readable."""
+    html = render_html(_inspection(xml="<finale/>"))
+    assert 'id="xml-source" hidden="hidden"' in html
+    assert "src.textContent" in html
+    assert "src.hidden = false;" in html
+
+
 def test_the_xml_pane_carries_the_source_entire_and_escaped() -> None:
     """The whole document, never a prefix: a truncated XML reads as a complete
     one right up to where it stops."""
