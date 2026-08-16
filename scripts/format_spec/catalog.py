@@ -226,6 +226,68 @@ def artic_assign() -> Struct:
     )
 
 
+def text_expr_def() -> Struct:
+    """The 2011 spelling. Every field confirmed against the 97 paired documents."""
+    desc = b"mezzo forte (Vel. 80)\x00"
+    buf = bytearray(LAY.TEXT_EXPR_DEF.fields[-1].offset)
+    buf[0:2] = le16(19)  # textIDKey
+    buf[4:6] = le16(80)  # value -- the velocity the marking plays at
+    buf[8:10] = le16(0)  # playPass
+    buf[12:14] = le16(13)  # horzMeasExprAlign: leftOfPrimaryNotehead
+    buf[24:26] = le16(9)  # vertMeasExprAlign: belowStaffOrEntry
+    buf[30:32] = le16(16)  # yAdjustBaseline
+    return Struct.of(
+        LAY.TEXT_EXPR_DEF,
+        data=bytes(buf) + desc,
+        caption="textExprDef &mdash; 2011 tag 241. One expression definition: what it "
+        "plays back as, where it sits, and the marking in words. The description is a "
+        "<strong>variable-length tail</strong> &mdash; it runs from <code>0x24</code> to "
+        "the end of the payload, which is 48, 60 or 72 bytes depending on the record, so "
+        "the field table gives its size as <code>var</code> rather than a number.",
+    )
+
+
+def text_expr_def_dcl() -> Struct:
+    """The DCL era's `DT`, which is deliberately a *smaller* layout, not the same one."""
+    desc = b"Below Staff (Vel. 62)\x00"
+    buf = bytearray(LAY.TEXT_EXPR_DEF_DCL.fields[-1].offset)
+    buf[0:2] = le16(11)  # counter
+    buf[4:6] = le16(62)  # value -- stated in words by the description beside it
+    return Struct.of(
+        LAY.TEXT_EXPR_DEF_DCL,
+        data=bytes(buf) + desc,
+        caption="textExprDef, DCL era &mdash; ETF <code>^DT</code>. Three fields, not the "
+        "nine above, and that is the point: only <code>+4</code> and the description "
+        "carry across the eras. No offset in a <code>DT</code> payload separates the "
+        "&ldquo;Below Staff&rdquo; descriptions from the rest, so the alignment enums are "
+        "not evidenced here and are not claimed. <code>+4</code> is confirmed without any "
+        "paired document at all: the description states the velocity in words, and it "
+        "equals the <code>uint16</code> at <code>+4</code> in 434 records of 434. Read it "
+        "in the document's own byte order &mdash; 37 corpus documents are big-endian, "
+        "where a little-endian reading turns 127 into 32,512.",
+    )
+
+
+def meas_expr_assign() -> Struct:
+    slot = LAY.MEAS_EXPR_ASSIGN.stride
+    buf = bytearray(slot)
+    buf[0:2] = le16(6)  # textExprID
+    buf[4:6] = le16(24)  # horzEvpuOff
+    buf[6:8] = le16(0xFFB8 & 0xFFFF)  # vertOff, -72
+    buf[8:10] = le16(3)  # staffAssign
+    return Struct.of(
+        LAY.MEAS_EXPR_ASSIGN,
+        data=bytes(buf),
+        caption=f"measExprAssign &mdash; 2011 tag 177. Where a definition is actually "
+        f"placed. One marking per {slot}-byte slot, so a measure carrying two dynamics is "
+        f"one {slot * 2}-byte record &mdash; read every slot, not just the first. "
+        "<code>staffAssign</code> of &minus;1 means a staff list rather than one staff. "
+        "No DCL tag is claimed for this record: the era's <code>^DY</code> is undecoded, "
+        f"and claiming this layout for it would assert a {slot}-byte slot nobody has "
+        "looked at.",
+    )
+
+
 def inst_used() -> Struct:
     slot = LAY.INST_USED.stride
     buf = bytearray(slot * 2)
@@ -256,7 +318,21 @@ CATALOG = [
     (LAY.LYRIC_VERSE, lyric_verse),
     (LAY.ARTIC_ASSIGN, artic_assign),
     (LAY.INST_USED, inst_used),
+    (LAY.TEXT_EXPR_DEF, text_expr_def),
+    (LAY.TEXT_EXPR_DEF_DCL, text_expr_def_dcl),
+    (LAY.MEAS_EXPR_ASSIGN, meas_expr_assign),
 ]
+
+NEW_SINCE_LAST_REVIEW = {
+    "textExprDef": ("TEXT_EXPR_DEF", "TEXT_EXPR_DEF_DCL"),
+    "measExprAssign": ("MEAS_EXPR_ASSIGN",),
+}
+"""Which catalog records are new, so the generator can badge them for review.
+
+Marking is per *record name*, and `textExprDef` appears twice -- once per era --
+so both spellings are badged. Delete this and the `REVIEW_BADGE` uses once the
+additions have been read; a badge that outlives its review is noise.
+"""
 
 PARTIAL = [
     ("articDef", 121, "the glyph an articAssign refers to; character offsets 0 and 2"),
@@ -267,12 +343,28 @@ PARTIAL = [
 ]
 
 
+REVIEW_BADGE = "<span class=newbadge>NEW</span>"
+"""Marks a section added since the last review. See `NEW_SINCE_LAST_REVIEW`."""
+
+
+def _tag_line(layout: LAY.Layout) -> str:
+    """How a record's identity reads under its heading.
+
+    A layout with `tag == 0` describes only the DCL spelling -- 0 is the
+    "no 2011 number" marker, not a record number -- so writing "tag 0" would
+    invent a record that does not exist.
+    """
+    etf_txt = f"DCL <code>^{layout.dcl}</code>" if layout.dcl else ""
+    numeric = f"tag {layout.tag}" if layout.tag else ""
+    return ", ".join(part for part in (numeric, etf_txt) if part)
+
+
 def render_catalog() -> str:
     out: list[str] = []
     for layout, fn in CATALOG:
-        etf_txt = f", DCL <code>^{layout.dcl}</code>" if layout.dcl else ""
+        badge = REVIEW_BADGE if layout.record in NEW_SINCE_LAST_REVIEW else ""
         out.append(
-            f"<h3>{layout.record} <span class=meta>&mdash; tag {layout.tag}{etf_txt}</span></h3>"
+            f"<h3>{layout.record} <span class=meta>&mdash; {_tag_line(layout)}</span>{badge}</h3>"
         )
         out.append(render_struct(fn()))
     rows = "".join(

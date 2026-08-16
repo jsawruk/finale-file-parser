@@ -108,6 +108,30 @@ Coda's own documentation, that is stated explicitly rather than quietly
 resolved &mdash; there is one such case, the note alteration encoding in
 &sect;7.2.</div>
 
+<div class="note review"><strong>Changes in this revision</strong>
+<span class=newbadge>NEW</span>
+<p>Everything added since the last read carries this badge, so it can be found
+without diffing the document. Three record types are new to the catalog, all in
+&sect;6:</p>
+<ul>
+<li><strong><code>textExprDef</code></strong> (2011 tag 241) &mdash; an
+expression definition: playback level, alignment, and the marking in words.
+Introduces the <strong>variable-length tail</strong>, the first field in this
+document whose size is <code>var</code> rather than a number.</li>
+<li><strong><code>textExprDef</code>, DCL era</strong> (ETF <code>^DT</code>)
+&mdash; deliberately a <em>smaller</em> layout than the 2011 one, and drawn
+separately rather than as one shared struct, because only two of its fields are
+evidenced in that era.</li>
+<li><strong><code>measExprAssign</code></strong> (2011 tag 177) &mdash; where a
+definition is placed. An array of slots; reading only the first loses the second
+dynamic in any measure carrying two.</li>
+</ul>
+<p>Also updated: &sect;3 now states what a reader should do with a byte order it
+does not expect, and the catalog no longer prints a &ldquo;tag 0&rdquo; for a
+record that exists only under a DCL tag.</p>
+<p class=meta>These marks are temporary. Remove them once reviewed &mdash; see
+<code>NEW_SINCE_LAST_REVIEW</code> in <code>catalog.py</code>.</p></div>
+
 <h4>No corpus bytes appear in this document</h4>
 <p>Every hex dump is <strong>synthetic</strong>, constructed by the generator
 that produced this PDF. The test corpus is licensed third-party music and its
@@ -204,6 +228,29 @@ every length was read correctly. All 139 DCL documents in the corpus do this:
 
 <div class=note>All files in the 2011 era are <strong>little-endian</strong>,
 since this is after Apple switched to Intel-based Macs.</div>
+
+<h3>What to do with a byte order you did not expect<span class=newbadge>NEW</span></h3>
+<p>The sentence above is a fact about the corpus, not a guarantee from the
+format, and the difference matters when writing a reader. This project's
+2011-era pool reader parses its record headers little-endian unconditionally.
+That is safe for every file measured &mdash; the 99 documents whose pools it
+accepts are all little-endian, and the 37 big-endian documents are all DCL-era,
+which that reader rejects anyway as a different encoding entirely &mdash; but
+nothing stops a big-endian 2011 file existing somewhere outside it.</p>
+
+<p>So the question worth answering in advance is not
+<em>&ldquo;can it happen?&rdquo;</em> but <em>&ldquo;what happens if it
+does?&rdquo;</em>, and the answer should be <strong>refusal, never a
+misreading</strong>. A length field read the wrong way round is enormous
+&mdash; the same swap that turns 15 into 3,840 turns a 48-byte payload into
+12,288 &mdash; so the walk described above overshoots the end of the stream on
+its first record and the tiling check fails. A reader that validates the chain
+end-to-end gets this for free; one that trusts each length in isolation returns
+records assembled from transposed bytes and reports success.</p>
+
+<div class=prov>Verified by taking a 2011 pool the reader accepts, byte-swapping
+all 1,464 of its record headers, and re-reading it: 2,578 records became a
+refusal.</div>
 
 <h3>Compression</h3>
 <dl>
