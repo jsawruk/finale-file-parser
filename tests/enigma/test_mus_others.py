@@ -166,3 +166,46 @@ def test_rejects_a_stream_of_padding_alone(streams: Callable[..., None]) -> None
     streams(bytes(4096))
     with pytest.raises(CorruptScoreError):
         read_mus_others(PATH)
+
+
+def _big_endian_record(tag: int, cmper: int, part: int, payload: bytes) -> bytes:
+    """`record()`, written the other way round."""
+    header = (
+        tag.to_bytes(2, "big")
+        + cmper.to_bytes(2, "big")
+        + part.to_bytes(2, "big")
+        + len(payload).to_bytes(4, "big")
+    )
+    return header + payload + bytes(4)
+
+
+def test_rejects_a_big_endian_pool_rather_than_misreading_it(
+    streams: Callable[..., None],
+) -> None:
+    """This reader parses its headers little-endian, always -- see `u16_le`.
+
+    That is safe today because of what the corpus holds, not because the format
+    promises it: all 99 documents whose pools this walk accepts are 2011-era and
+    little-endian, while all 37 big-endian documents are 2001-2005 and are
+    rejected here anyway (they are `mus_rows`' business). The assumption is
+    therefore load-bearing on a fact about the corpus.
+
+    So what matters is the failure mode if that fact ever stops holding. A
+    big-endian length read little-endian is astronomically large, so the walk
+    fails its own tiling check and refuses the stream -- the reader raises
+    rather than handing back records built from transposed bytes. Verified
+    against a real corpus pool as well: byte-swapping the 1,464 record headers
+    of an accepted 2011 stream turns 2,578 records into a rejection.
+    """
+    payloads = [(n, b"\x09\x00\x0a\x00") for n in range(1, 12)]
+
+    # The control, and the thing that keeps this test honest: the very same
+    # records written little-endian must be accepted. Without it a rejection
+    # would prove nothing -- the pool could be refused for being too short, or
+    # for any other rule, and the test would still pass.
+    streams(pool(*(record(146, n, 0, data) for n, data in payloads)))
+    assert len(read_mus_others(PATH)) >= len(payloads)
+
+    streams(pool(*(_big_endian_record(146, n, 0, data) for n, data in payloads)))
+    with pytest.raises(CorruptScoreError):
+        read_mus_others(PATH)
