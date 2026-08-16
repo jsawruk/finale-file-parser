@@ -311,6 +311,48 @@ def test_a_decoded_value_is_read_with_the_document_s_own_byte_order() -> None:
     assert "(order === 'big')" in html
 
 
+def test_a_decoded_number_keeps_its_hex_visibly_apart_from_its_decimal() -> None:
+    """`6  0x06` was written with two spaces and reached the page as `6 0x6`.
+
+    HTML collapses runs of whitespace, so a separator made of spaces is not a
+    separator at all -- the two numbers ran together into something that reads
+    as one. The gap now comes from a span with a margin and a pair of
+    parentheses, neither of which collapses, and the parentheses are what
+    survives printing and greyscale where the colour does not.
+    """
+    html = render_html(_inspection())
+    # The whole old expression, not the fragment `'  0x'`: these comments
+    # explain what was wrong by quoting it, and an absence check on a fragment
+    # a comment legitimately contains fails the moment the fix is documented.
+    assert "(field.size > 1) ? value + '  0x'" not in html
+    assert "hex.className = 'hexval';" in html
+    assert "hex.textContent = '(' + text.hex + ')';" in html
+    assert ".hexval { color: #777; margin-left: 0.7rem; }" in html
+
+
+def test_hex_is_the_width_of_the_field_not_of_a_javascript_integer() -> None:
+    """`(value >>> 0)` renders an int16 -1 as `0xffffffff`.
+
+    That claims four bytes for a two-byte field and hides the sign bit the hex
+    column exists to show. Padding to `size * 2` digits also keeps `0x0006` and
+    `0x06` distinguishable, which matters because they are different fields.
+    """
+    html = render_html(_inspection())
+    # As above: the comment quotes the old cast, so the check is on the code
+    # that used it rather than on the cast appearing anywhere in the page.
+    assert "value + '  0x' + (value >>> 0).toString(16)" not in html
+    assert "const unsigned = (value < 0) ? value + Math.pow(2, field.size * 8) : value;" in html
+    assert "unsigned.toString(16).padStart(field.size * 2, '0')" in html
+
+
+def test_a_single_byte_gets_hex_too() -> None:
+    """Hex used to be suppressed for `size === 1`, which hid it from `flags` --
+    the field whose own note reads "0x20 marks a shape assignment", and the one
+    where the decimal 32 says least."""
+    html = render_html(_inspection())
+    assert "(field.size > 1) ?" not in html
+
+
 def test_the_tint_stops_where_the_payload_does() -> None:
     """A layout describes the payload; `extra` follows it in the same dump and
     the layout says nothing about it. `length` is their sum, so the boundary is
