@@ -43,9 +43,9 @@ a { color: #14507a; }
 .warn { border-color: #c07a3a; background: #fdf6ef; }
 .prov { border-color: #7a9a6a; background: #f4f8f2; font-style: italic; }
 
-/* --- review marks: temporary, and meant to be deleted ------------------
-   Every passage changed since the last PDF review is highlighted and badged.
-   The word and outline keep the marks legible in greyscale. */
+/* --- reusable review marks ---------------------------------------------
+   Add class=review and a reviewbadge span only while a revision awaits review.
+   The word and outline keep the approved style legible in greyscale. */
 .reviewbadge {
   display: inline-block; font-size: 7pt; font-weight: bold; letter-spacing: 0.5pt;
   border: 0.75pt solid #9d2727; color: #9d2727; padding: 0.5pt 3pt;

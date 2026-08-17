@@ -34,9 +34,9 @@ a { color: #14507a; }
 .warn { border-color: #c07a3a; background: #fdf6ef; }
 .prov { border-color: #7a9a6a; background: #f4f8f2; font-style: italic; }
 
-/* --- review marks: temporary, and meant to be deleted ------------------
-   Every passage changed since the last PDF review is highlighted and badged.
-   The word and outline keep the marks legible in greyscale. */
+/* --- reusable review marks ---------------------------------------------
+   Add class=review and a reviewbadge span only while a revision awaits review.
+   The word and outline keep the approved style legible in greyscale. */
 .reviewbadge {
   display: inline-block; font-size: 7pt; font-weight: bold; letter-spacing: 0.5pt;
   border: 0.75pt solid #9d2727; color: #9d2727; padding: 0.5pt 3pt;
@@ -140,25 +140,6 @@ with what it was verified against. Where this project's findings contradict
 Coda's own documentation, that is stated explicitly rather than quietly
 resolved &mdash; there is one such case, the note alteration encoding in
 &sect;7.2.</div>
-
-<div class="note review"><strong>Changes in this revision</strong>
-<span class=reviewbadge>CHANGED</span>
-<p>Every changed passage in the PDF is highlighted and badged. The changes are
-all in the record-tag tables and evidence notes in &sect;6:</p>
-<ul>
-<li><code>^DF</code> is corrected from a MIDI-keyed appearance row to an
-input-note crosswalk whose payload starts with playback MIDI and staff position.</li>
-<li>The self-naming-tag census now covers all 139 DCL documents instead of the
-38 lowercase paths, so every row in that table has an updated document count.</li>
-<li>The <code>^RT</code> evidence is corrected to 1,253 records in 137 documents,
-and the complete <code>^DL</code>/<code>^DF</code>/<code>^DN</code> percussion
-crosswalk is documented.</li>
-<li><code>^DN</code> and <code>^fg</code> are removed from the Tier-C
-unidentified table; a highlighted deletion notice appears beside that table.</li>
-</ul>
-<p class=meta>These review marks are temporary and can be removed after the PDF
-has been read.</p></div>
-
 
 <h4>No corpus bytes appear in this document</h4>
 <p>Every hex dump is <strong>synthetic</strong>, constructed by the generator
@@ -633,7 +614,7 @@ and <code>^ac</code> is performance data; <code>^CH</code> is a chord and
 
 <h4>details</h4>
 <table><thead><tr><th>Tag</th><th>Name</th><th>Keys</th>
-<th>Source</th></tr></thead><tbody><tr><td><code>^GF</code></td><td>Frame Hold</td><td>(staff, measure)</td><td class=sz>LilyPond</td></tr><tr><td><code>^NG</code></td><td>Group Spec</td><td>(iuList, groupID)</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^FL</code></td><td>Floats: independent key and time</td><td>(instrument, measure)</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^mt</code></td><td>Measure Text Block</td><td>(instrument, measure)</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^LP</code></td><td>Staff Enduction</td><td>(staff system, instrument)</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^MI</code></td><td>MeasNumberSeparate</td><td>(instrument, measure)</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^ME</code></td><td>Midi Expression</td><td>(instrument, measure)</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^hC</code></td><td>Learned Chord</td><td>(root, alternate bass)</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^Ex</code></td><td>Slur detail</td><td>two rows per slur, paired with Sx</td><td class=sz>Cahill</td></tr><tr><td><code>^GT</code></td><td>Fretboard index</td><td>root as MIDI 60–71; 16 incidences each</td><td class=sz>measured</td></tr><tr class=review><td><span class=reviewbadge>CHANGED</span><code>^DF</code></td><td>Percussion map</td><td>(map id 1–26, input note 0–127); payload starts with playback MIDI note</td><td class=sz>measured</td></tr></tbody></table>
+<th>Source</th></tr></thead><tbody><tr><td><code>^GF</code></td><td>Frame Hold</td><td>(staff, measure)</td><td class=sz>LilyPond</td></tr><tr><td><code>^NG</code></td><td>Group Spec</td><td>(iuList, groupID)</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^FL</code></td><td>Floats: independent key and time</td><td>(instrument, measure)</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^mt</code></td><td>Measure Text Block</td><td>(instrument, measure)</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^LP</code></td><td>Staff Enduction</td><td>(staff system, instrument)</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^MI</code></td><td>MeasNumberSeparate</td><td>(instrument, measure)</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^ME</code></td><td>Midi Expression</td><td>(instrument, measure)</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^hC</code></td><td>Learned Chord</td><td>(root, alternate bass)</td><td class=sz>ETF&nbsp;spec</td></tr><tr><td><code>^Ex</code></td><td>Slur detail</td><td>two rows per slur, paired with Sx</td><td class=sz>Cahill</td></tr><tr><td><code>^GT</code></td><td>Fretboard index</td><td>root as MIDI 60–71; 16 incidences each</td><td class=sz>measured</td></tr><tr><td><code>^DF</code></td><td>Percussion map</td><td>(map id 1–26, input note 0–127); payload starts with playback MIDI note</td><td class=sz>measured</td></tr></tbody></table>
 
 <h4>entry details</h4>
 <p>Keyed by an entry number rather than by position &mdash; the two cmpers hold
@@ -648,17 +629,16 @@ only judgement is reading them. This is stronger evidence than the key-sequence
 matching of Tier&nbsp;B, and it establishes what a record <em>holds</em> while
 saying nothing about where its fields sit.</p>
 
-<p class=review><span class=reviewbadge>CHANGED</span>
-It matters most for the 2001&ndash;2005 era, which has <strong>no paired
+<p>It matters most for the 2001&ndash;2005 era, which has <strong>no paired
 <code>.musx</code> anywhere in this corpus</strong>, so the method that earned
 Tier&nbsp;A elsewhere is unavailable. Counts are documents carrying the tag
 across all 139 DCL files. An earlier census reported only 38 because it matched
 lowercase <code>.mus</code> and silently omitted 101 uppercase
 <code>.MUS</code> paths.</p>
 <table><thead><tr><th>Tag</th><th>Holds</th><th>Text found in the payload</th>
-<th>Docs</th></tr></thead><tbody><tr class=review><td><span class=reviewbadge>CHANGED</span><code>^DL</code></td><td>drum library</td><td>names drum sets: 'General MIDI Entry & Playback', 'Cymbals', 'Agogo Bells'</td><td class=sz>133</td></tr><tr class=review><td><span class=reviewbadge>CHANGED</span><code>^FN</code></td><td>font names</td><td>'Maestro', 'Times', 'Chicago', 'Helvetica', 'Jazz'</td><td class=sz>139</td></tr><tr class=review><td><span class=reviewbadge>CHANGED</span><code>^RT</code></td><td>text repeat</td><td>the printed text of a jump: 'D.C. al Fine', 'D.C. al Coda', 'D.S. al Fine', 'D.S. al Coda'</td><td class=sz>137</td></tr><tr class=review><td><span class=reviewbadge>CHANGED</span><code>^fI</code></td><td>fretted instrument</td><td>'Standard Guitar', 'Guitar - 7 String', 'Guitar - DADGAD'</td><td class=sz>139</td></tr><tr class=review><td><span class=reviewbadge>CHANGED</span><code>^fg</code></td><td>chord shape</td><td>'Simple Major Triad', 'Minor Triad Seville', 'dim triad', '7 Seville'</td><td class=sz>39</td></tr><tr class=review><td><span class=reviewbadge>CHANGED</span><code>^ft</code></td><td>fretboard style</td><td>'Seville', 'Seville 5 Frets', 'Seville With Shapes', 'Jazz'</td><td class=sz>139</td></tr><tr class=review><td><span class=reviewbadge>CHANGED</span><code>^DN</code></td><td>percussion input-note name</td><td>'Acoustic Bass Drum', 'Side Stick', 'Snare (Acoustic)', 'Hand Clap'</td><td class=sz>133</td></tr></tbody></table>
+<th>Docs</th></tr></thead><tbody><tr><td><code>^DL</code></td><td>drum library</td><td>names drum sets: 'General MIDI Entry & Playback', 'Cymbals', 'Agogo Bells'</td><td class=sz>133</td></tr><tr><td><code>^FN</code></td><td>font names</td><td>'Maestro', 'Times', 'Chicago', 'Helvetica', 'Jazz'</td><td class=sz>139</td></tr><tr><td><code>^RT</code></td><td>text repeat</td><td>the printed text of a jump: 'D.C. al Fine', 'D.C. al Coda', 'D.S. al Fine', 'D.S. al Coda'</td><td class=sz>137</td></tr><tr><td><code>^fI</code></td><td>fretted instrument</td><td>'Standard Guitar', 'Guitar - 7 String', 'Guitar - DADGAD'</td><td class=sz>139</td></tr><tr><td><code>^fg</code></td><td>chord shape</td><td>'Simple Major Triad', 'Minor Triad Seville', 'dim triad', '7 Seville'</td><td class=sz>39</td></tr><tr><td><code>^ft</code></td><td>fretboard style</td><td>'Seville', 'Seville 5 Frets', 'Seville With Shapes', 'Jazz'</td><td class=sz>139</td></tr><tr><td><code>^DN</code></td><td>percussion input-note name</td><td>'Acoustic Bass Drum', 'Side Stick', 'Snare (Acoustic)', 'Hand Clap'</td><td class=sz>133</td></tr></tbody></table>
 
-<div class="note review"><span class=reviewbadge>CHANGED</span><strong><code>^RT</code> corrects a claim this project
+<div class=note><strong><code>^RT</code> corrects a claim this project
 published.</strong> The reader's own list of gaps stated that the corpus offered
 no evidence at all for identifying the text-repeat tag &mdash; &ldquo;not a
 little, none&rdquo;. It had reasoned entirely about paired documents, found the
@@ -687,7 +667,7 @@ DCL documents
 carry it, against 149 of 150 <code>.musx</code> documents, later versions
 shipping the defaults regardless.</p></div>
 
-<div class="note review"><span class=reviewbadge>CHANGED</span><strong><code>^DL</code>, <code>^DF</code> and
+<div class=note><strong><code>^DL</code>, <code>^DF</code> and
 <code>^DN</code> form the DCL percussion-map palette.</strong>
 <code>^DL(map)</code> names the map. <code>^DF(map,input)</code> is one
 10-byte appearance row, and <code>^DN(map,input)</code> names that same input.
@@ -784,11 +764,6 @@ against a paired document, is a different kind of claim.</p>
 of which the tiers above account for roughly thirty. The rest are read, keyed and
 carried, but their meaning is unknown. The most frequent, by record count across
 the corpus:</p>
-<div class="note review"><span class=reviewbadge>CHANGED</span><strong>Removed from this table:</strong>
-<code>^DN</code> is now decoded as the percussion input-note name, and
-<code>^fg</code> is identified by its chord-shape text. Their former Tier-C rows
-were stale, so the deletion is called out here where absent rows cannot carry a
-highlight of their own.</div>
 <table><thead><tr><th>Tag</th><th>Era</th><th>Pool</th><th>Records</th></tr></thead><tbody><tr><td><code>213</code></td><td>2011</td><td>others</td><td class=sz>25,576</td></tr><tr><td><code>215</code></td><td>2011</td><td>others</td><td class=sz>25,576</td></tr><tr><td><code>140</code></td><td>2011</td><td>others</td><td class=sz>18,624</td></tr><tr><td><code>214</code></td><td>2011</td><td>others</td><td class=sz>12,681</td></tr><tr><td><code>125</code></td><td>2011</td><td>others</td><td class=sz>12,612</td></tr><tr><td><code>148</code></td><td>2011</td><td>others</td><td class=sz>11,887</td></tr><tr><td><code>126</code></td><td>2011</td><td>others</td><td class=sz>11,208</td></tr><tr><td><code>183</code></td><td>2011</td><td>others</td><td class=sz>10,114</td></tr><tr><td><code>192</code></td><td>2011</td><td>others</td><td class=sz>7,353</td></tr><tr><td><code>241</code></td><td>2011</td><td>others</td><td class=sz>7,353</td></tr><tr><td><code>217</code></td><td>2011</td><td>others</td><td class=sz>6,638</td></tr><tr><td><code>1043</code></td><td>2011</td><td>details</td><td class=sz>166,524</td></tr><tr><td><code>1064</code></td><td>2011</td><td>details</td><td class=sz>8,162</td></tr><tr><td><code>1063</code></td><td>2011</td><td>details</td><td class=sz>2,162</td></tr><tr><td><code>1066</code></td><td>2011</td><td>details</td><td class=sz>1,483</td></tr><tr><td><code>1034</code></td><td>2011</td><td>details</td><td class=sz>1,164</td></tr><tr><td><code>1060</code></td><td>2011</td><td>details</td><td class=sz>1,156</td></tr><tr><td><code>^fb</code></td><td>DCL</td><td>details</td><td class=sz>63,324</td></tr><tr><td><code>^BC</code></td><td>DCL</td><td>others</td><td class=sz>3,809</td></tr><tr><td><code>^DA</code></td><td>DCL</td><td>others</td><td class=sz>2,963</td></tr><tr><td><code>^OC</code></td><td>DCL</td><td>others</td><td class=sz>2,170</td></tr><tr><td><code>^ls</code></td><td>DCL</td><td>others</td><td class=sz>1,809</td></tr></tbody></table>
 <div class=note><strong>Two hints from the counts.</strong> Several pairs share an
 exact record count &mdash; 213/215, 192/241, and <code>sL</code>/<code>sb</code>
