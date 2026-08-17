@@ -186,9 +186,10 @@ record text, or individual note values.
 ## Documentation
 
 - Add the confirmed linkage and the palette trap to `docs/ARCHITECTURE.md`.
-- Correct `docs/ROADMAP.md`: 149,533 palette rows are present, but only 605
-  assignments select percussion maps in this corpus. Remove the earlier
-  43,470-incidence premise.
+- Update `docs/ROADMAP.md` with the measured resolver status: 149,533 palette
+  rows are present, but only 605 assignments select percussion maps in this
+  corpus. The earlier 43,470-incidence premise lived in the session queue, not
+  in the tracked roadmap, so there is no stale roadmap text to remove.
 - Do not change README feature claims because user-visible score output is
   unchanged.
 
