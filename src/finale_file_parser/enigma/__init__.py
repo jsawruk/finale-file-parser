@@ -86,6 +86,12 @@ from finale_file_parser.enigma.music import (
     duration_from_edu,
     read_entry,
 )
+from finale_file_parser.enigma.percussion import (
+    MalformedPercussionError,
+    PercussionAppearance,
+    PercussionNote,
+    percussion_notes,
+)
 from finale_file_parser.enigma.pitch import (
     SpelledNote,
     SpelledPitch,
@@ -147,6 +153,7 @@ __all__ = [
     "LyricKind",
     "MalformedEnigmaError",
     "MalformedEntryError",
+    "MalformedPercussionError",
     "MalformedScoreError",
     "MusDetailRecord",
     "MusOther",
@@ -156,6 +163,8 @@ __all__ = [
     "OptionsPool",
     "OthersPool",
     "Pool",
+    "PercussionAppearance",
+    "PercussionNote",
     "Record",
     "SpelledNote",
     "Syllabic",
@@ -188,6 +197,7 @@ __all__ = [
     "StaffNames",
     "file_info",
     "plain_text",
+    "percussion_notes",
     "staff_names",
     "text_block",
     "decode_key",

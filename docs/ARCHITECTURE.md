@@ -47,11 +47,12 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
   typed layer over the generic `entry`/`note` records), `location.py` (`locate_entries`,
   `EntryLocation`, `MalformedScoreError` — the first cross-pool link resolution, placing each entry
   in every staff/measure that displays it and computing the raw key signature in force),
-  `key.py` (`decode_key`,
+  `percussion.py` (`percussion_notes` — resolves a selected staff percussion map to its assigned
+  notes while preserving unresolved appearances), `key.py` (`decode_key`,
   `KeySignature`, `Mode`, `UnsupportedKeyError` — decodes the raw `keySig.key` integer into fifths,
   mode, and tonic). See "Known format facts — score.dat", "Known format facts — EnigmaXML
-  structure", "Known format facts — entries and pitch", "Known format facts — score linkage", and
-  "Known format facts — key signatures" below.
+  structure", "Known format facts — entries and pitch", "Known format facts — score linkage",
+  "Known format facts — percussion mapping", and "Known format facts — key signatures" below.
 - The same package holds the legacy `.mus` readers, which produce the same types from the other
   container: `mus_payload.py` (`read_mus_payload`, `read_mus_streams` — the two eras' codecs),
   `mus_entries.py` (`read_mus_entries` — the entry pool), `mus_others.py` (`read_mus_others`,
@@ -1030,6 +1031,19 @@ once — no corpus `.musx` carries a mirror, which the legacy `.mus` cohort does
   checked against the ones already made for its entry, so a budget one entry could absorb whole
   would make resolution quadratic in the file's size (measured: 1.70 MB of crafted input took 65.7 s
   to refuse under a whole-document total, 0.004 s per entry). The corpus maximum is 2.
+
+### Known format facts — percussion mapping
+
+`percussionNoteInfo` is a **149,533-row palette** present in all **401** archives; it is not score
+usage. Actual use follows the resolver's five-hop linkage: `playbackRoute.cmper` identifies the
+staff, `percMapRefID` selects that staff's map, and the map's assignments resolve through to the
+percussion note information used by notes in that staff. `percussionNoteCode.noteID` is one-based;
+its `inci` is exactly zero-based.
+
+The aggregate sweep pins **605 used placements**: **597** resolve and **eight** remain explicit
+unresolved code-13 assignments. All resolved `harmLev` values differ from the currently interpreted
+pitch. Notehead meaning, MIDI/drum naming, IR consumption, output, and `.mus` translation remain
+deliberately deferred.
 
 ### Known format facts — key signatures
 
