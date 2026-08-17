@@ -163,6 +163,9 @@ limit is verified by mutation, because no real corpus archive trips one.
 - [x] **Fingerings** — `enigma/fingerings.py`, both containers. 834 across 18 documents; the
       numeral character identifies one, which is what unblocked the `.mus`. See
       `docs/ARCHITECTURE.md`.
+- [x] **Typed `.musx` percussion resolver** — `enigma/percussion.py` follows the selected staff
+      map and returns the **605 used placements**, not the universal palette: 597 resolve and eight
+      remain explicit unresolved code-13 assignments. It does not yet affect the IR or output.
 
 ## Later
 
@@ -252,6 +255,8 @@ than searching the same files again, write down what a contributed file would ha
       staff). The DCL era carries an ETF `^Iu` row that is very likely the same record, but with no
       paired `.musx` anywhere in the cohort there is nothing to check a slot layout against, so it
       keeps the numeric fallback.
+- [ ] **Unpitched IR and MusicXML consumption.** Consume the typed `.musx` percussion resolver in
+      the IR and MusicXML only after notehead meaning and MIDI/drum naming have independent evidence.
 - [x] **Durations above a whole note.** A breve (8192 EDU) is a note value now, and the range check
       bounds the *base* rather than the total — which is what had been rejecting a **dotted whole**
       (6144), ordinary notation. `NoteValue`, the range check and the MusicXML `<type>` map moved
