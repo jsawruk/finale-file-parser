@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from finale_file_parser.enigma import (
     PercussionAppearance,
     PercussionNote,
@@ -15,6 +17,7 @@ from finale_file_parser.enigma.document import (
     Record,
     TextsPool,
 )
+from finale_file_parser.enigma.percussion import MalformedPercussionError
 
 EMPTY: tuple[Record, ...] = ()
 
@@ -178,3 +181,76 @@ def test_a_code_absent_from_the_selected_map_remains_explicitly_unresolved() -> 
     assert percussion_notes(document) == {
         (1, 1): (PercussionNote(map_id=7, note_code=13, appearance=None), None)
     }
+
+
+def test_rejects_a_non_integer_note_code() -> None:
+    document = _document(
+        routes={1: "7"},
+        definitions={},
+        assignments=(("0", "1", "not-an-integer"),),
+    )
+    with pytest.raises(MalformedPercussionError, match="noteCode is not an integer"):
+        percussion_notes(document)
+
+
+def test_rejects_inci_that_is_not_zero_based_note_id() -> None:
+    document = _document(
+        routes={1: "7"},
+        definitions={},
+        assignments=(("1", "1", "42"),),
+    )
+    with pytest.raises(MalformedPercussionError, match="inci=1 disagrees with noteID=1"):
+        percussion_notes(document)
+
+
+def test_rejects_a_note_id_outside_the_entry() -> None:
+    document = _document(
+        routes={1: "7"},
+        definitions={},
+        assignments=(("2", "3", "42"),),
+    )
+    with pytest.raises(MalformedPercussionError, match="noteID=3 outside entry 1"):
+        percussion_notes(document)
+
+
+def test_rejects_two_assignments_for_one_entry_note() -> None:
+    document = _document(
+        routes={1: "7"},
+        definitions={},
+        assignments=(("0", "1", "42"), ("1", "1", "43")),
+    )
+    with pytest.raises(MalformedPercussionError, match="duplicate percussion assignment"):
+        percussion_notes(document)
+
+
+def test_rejects_an_incomplete_selected_definition() -> None:
+    fields = _appearance_fields()
+    del fields["harmLev"]
+    document = _document(
+        routes={1: "7"},
+        definitions={("7", "42"): fields},
+        assignments=(("0", "1", "42"),),
+    )
+    with pytest.raises(MalformedPercussionError, match="harmLev is not an integer"):
+        percussion_notes(document)
+
+
+def test_rejects_a_duplicate_route_after_an_ordinary_route() -> None:
+    document = _document(
+        routes={1: None},
+        definitions={},
+        assignments=(("0", "1", "42"),),
+    )
+    document.others = OthersPool(
+        records=(
+            *document.others.records,
+            Record(
+                tag="playbackRoute",
+                attrs={"cmper": "01"},
+                text="",
+                fields={"percMapRefID": "7"},
+            ),
+        )
+    )
+    with pytest.raises(MalformedPercussionError, match="duplicate percussion route"):
+        percussion_notes(document)

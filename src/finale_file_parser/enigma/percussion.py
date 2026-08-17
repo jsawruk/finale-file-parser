@@ -42,6 +42,13 @@ class PercussionNote:
     appearance: PercussionAppearance | None
 
 
+def _required_int(value: object, name: str) -> int:
+    parsed = field_int(value)
+    if parsed is None:
+        raise MalformedPercussionError(f"{name} is not an integer: {value!r}")
+    return parsed
+
+
 def percussion_notes(
     document: EnigmaDocument,
 ) -> dict[tuple[int, int], tuple[PercussionNote | None, ...]]:
@@ -77,31 +84,50 @@ def percussion_notes(
 def _assignments(document: EnigmaDocument) -> tuple[dict[int, dict[int, int]], dict[int, int]]:
     out: dict[int, dict[int, int]] = {}
     note_counts: dict[int, int] = {}
+    seen: set[tuple[int, int]] = set()
     for record in document.details.of_tag(_ASSIGNMENT):
         if "part" in record.attrs:
             continue
-        entnum = field_int(record.attrs.get("entnum"))
-        note_id = field_int(record.fields.get("noteID"))
-        note_code = field_int(record.fields.get("noteCode"))
-        if entnum is None or note_id is None or note_code is None:
-            continue
+        entnum = _required_int(record.attrs.get("entnum"), "entnum")
+        inci = _required_int(record.attrs.get("inci", "0"), "inci")
+        note_id = _required_int(record.fields.get("noteID"), "noteID")
+        note_code = _required_int(record.fields.get("noteCode"), "noteCode")
+        identity = (entnum, note_id)
+        if identity in seen:
+            raise MalformedPercussionError(
+                f"duplicate percussion assignment for entry {entnum} noteID {note_id}"
+            )
+        seen.add(identity)
+        if inci != note_id - 1:
+            raise MalformedPercussionError(
+                f"percussion assignment inci={inci} disagrees with noteID={note_id}"
+            )
         entry_record = document.entries.get(entnum)
         if entry_record is None:
-            continue
-        note_counts.setdefault(entnum, len(read_entry(entry_record).notes))
+            raise MalformedPercussionError(f"percussion assignment names missing entry {entnum}")
+        note_count = len(read_entry(entry_record).notes)
+        if not 1 <= note_id <= note_count:
+            raise MalformedPercussionError(
+                f"noteID={note_id} outside entry {entnum} with {note_count} note(s)"
+            )
+        note_counts[entnum] = note_count
         out.setdefault(entnum, {})[note_id - 1] = note_code
     return out, note_counts
 
 
 def _routes(document: EnigmaDocument) -> dict[int, int]:
     out: dict[int, int] = {}
+    seen: set[int] = set()
     for record in document.others.of_tag(_ROUTE):
         if "part" in record.attrs:
             continue
-        staff = field_int(record.attrs.get("cmper"))
-        map_id = field_int(record.fields.get("percMapRefID"))
-        if staff is not None and map_id is not None:
-            out[staff] = map_id
+        staff = _required_int(record.attrs.get("cmper"), "cmper")
+        if staff in seen:
+            raise MalformedPercussionError(f"duplicate percussion route for staff {staff}")
+        seen.add(staff)
+        map_ref = record.fields.get("percMapRefID")
+        if map_ref is not None:
+            out[staff] = _required_int(map_ref, "percMapRefID")
     return out
 
 
@@ -110,32 +136,24 @@ def _definitions(document: EnigmaDocument) -> dict[tuple[int, int], Record]:
     for record in document.others.of_tag(_DEFINITION):
         if "part" in record.attrs:
             continue
-        map_id = field_int(record.attrs.get("cmper"))
-        note_code = field_int(record.attrs.get("inci", "0"))
-        if map_id is not None and note_code is not None:
-            out[(map_id, note_code)] = record
+        map_id = _required_int(record.attrs.get("cmper"), "cmper")
+        note_code = _required_int(record.attrs.get("inci", "0"), "inci")
+        identity = (map_id, note_code)
+        if identity in out:
+            raise MalformedPercussionError(
+                f"duplicate percussion definition for map {map_id} noteCode {note_code}"
+            )
+        out[identity] = record
     return out
 
 
 def _appearance(record: Record) -> PercussionAppearance:
-    harm_lev = field_int(record.fields.get("harmLev"))
-    percussion_type = field_int(record.fields.get("percNoteType"))
-    double_whole = field_int(record.fields.get("dwholeNotehead"))
-    whole = field_int(record.fields.get("wholeNotehead"))
-    half = field_int(record.fields.get("halfNotehead"))
-    closed = field_int(record.fields.get("closedNotehead"))
-    if harm_lev is None:
-        raise MalformedPercussionError("harmLev is not an integer")
-    if percussion_type is None:
-        raise MalformedPercussionError("percNoteType is not an integer")
-    if double_whole is None:
-        raise MalformedPercussionError("dwholeNotehead is not an integer")
-    if whole is None:
-        raise MalformedPercussionError("wholeNotehead is not an integer")
-    if half is None:
-        raise MalformedPercussionError("halfNotehead is not an integer")
-    if closed is None:
-        raise MalformedPercussionError("closedNotehead is not an integer")
+    harm_lev = _required_int(record.fields.get("harmLev"), "harmLev")
+    percussion_type = _required_int(record.fields.get("percNoteType"), "percNoteType")
+    double_whole = _required_int(record.fields.get("dwholeNotehead"), "dwholeNotehead")
+    whole = _required_int(record.fields.get("wholeNotehead"), "wholeNotehead")
+    half = _required_int(record.fields.get("halfNotehead"), "halfNotehead")
+    closed = _required_int(record.fields.get("closedNotehead"), "closedNotehead")
     return PercussionAppearance(
         harm_lev=harm_lev,
         percussion_type=percussion_type,
