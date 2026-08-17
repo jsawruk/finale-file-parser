@@ -33,6 +33,7 @@ from finale_file_parser.enigma.mus_others import (
     MusOther,
 )
 from finale_file_parser.enigma.pitch import read_transposition
+from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.enigma.tuplet import tuplets_by_entry
 
 PATH = "unused.mus"
@@ -164,6 +165,33 @@ def test_passes_entry_records_through(pools: Callable[..., None]) -> None:
     entry = Record(tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024"})
     pools(entries=(entry,))
     assert read_mus_document(PATH).entries.get(9) is entry
+
+
+def test_tagged_file_info_reaches_the_score(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The numeric kinds in a `.mus` text stream name bibliographic fields.
+
+    This catches dropping the sections or mapping any of 1, 2 and 3 to the
+    wrong Enigma `fileInfo.type`. The unknown kind proves the adapter does not
+    invent a meaning for a number the paired corpus has not established.
+    """
+    stream = (
+        b"^fileInfo(1)Legacy title^end"
+        b"^fileInfo(2)Jos\xe9 Composer^end"
+        b"^fileInfo(3)Copyright notice^end"
+        b"^fileInfo(9)Unknown metadata^end"
+    )
+    monkeypatch.setattr(adapter, "read_mus_others", lambda _p: ())
+    monkeypatch.setattr(adapter, "read_mus_details", lambda _p: ())
+    monkeypatch.setattr(adapter, "read_mus_entry_records", lambda _p: ())
+    monkeypatch.setattr(adapter, "read_mus_streams", lambda _p: [b"", b"", b"", stream])
+    monkeypatch.setattr(adapter, "_banner_year", lambda _p: 2011)
+    monkeypatch.setattr(adapter, "_banner_platform", lambda _p: "WIN")
+
+    score = build_score(read_mus_document(PATH))
+
+    assert score.title == "Legacy title"
+    assert score.composer == "Jos\N{LATIN SMALL LETTER E WITH ACUTE} Composer"
+    assert score.metadata == {"copyright": "Copyright notice"}
 
 
 def test_skips_record_types_it_cannot_translate(pools: Callable[..., None]) -> None:

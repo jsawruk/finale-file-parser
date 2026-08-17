@@ -607,6 +607,14 @@ Its tag counts match the `.musx` texts pool exactly:
 (`^block(` is 28 against 14 `blockText` records — exactly 2×, unexplained and worth a look, but the
 other three families are exact.)
 
+The shipped adapter now reads the `fileInfo` family. A corpus-wide scan finds 145 sections in the
+99 later-era `.mus` files and none in the 139 DCL-era files. Exact body matches against same-content
+`.musx` records establish the numeric kinds used here: 1 is `title` (15 matches), 2 is `composer`
+(12), and 3 is `copyright` (4). Those three become the same semantic `fileInfo` records the `.musx`
+parser builds. Kinds 4, 6 and 7 stay absent rather than receiving names from one or no exact match.
+The fixed preamble block is not used: its boundaries are only approximate, while these sections
+identify both their extent and their kind.
+
 ### The entry pool parses directly from `eeppd.txt`
 
 Reading stream 3 little-endian at a 38-byte stride reproduces the documented doubly-linked list:

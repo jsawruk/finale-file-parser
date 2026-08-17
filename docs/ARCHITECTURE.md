@@ -465,8 +465,18 @@ container.
 
 **It is an MVP and translates only the record types whose payloads are decoded**: `frameSpec`
 (startEntry, endEntry), `measSpec` (keySig.key, beats, divbeat), `gfhold` (clefID, frame1, frame2),
-`clefOptions` (the clef table), `tupletDef`, and entries. A record type it does not understand is **absent** from the document rather than
+`clefOptions` (the clef table), `tupletDef`, entries, and the tagged text records listed by
+`mus_document`. A record type it does not understand is **absent** from the document rather than
 present and wrong. `enigma.UNTRANSLATED` names each remaining gap and its consequence.
+
+**2011-era bibliographic metadata is tagged text, not a field inferred from the preamble.** The
+text stream writes `^fileInfo(kind)…^end`; exact body matches to paired `.musx` records establish
+kind 1 as title (15 matches), 2 as composer (12), and 3 as copyright (4). The adapter emits those as
+ordinary `fileInfo type="…"` records, so the existing `file_info` → `Score` path reads both
+containers unchanged. Across the 238-file `.mus` corpus, all 145 `fileInfo` sections occur in the
+99 later-era files; the 139 DCL-era files carry none in their text streams and still yield no
+bibliographic metadata. Kinds 4, 6 and 7 remain untranslated: the paired evidence is insufficient
+to ship semantic names for them.
 
 **The clef table** comes from `others` tag 109 under cmper `0xFFFE`, Enigma's sentinel for a
 document-wide option. Its entry stride is set by the banner year — 2011 uses 18 bytes, 2012 uses 20

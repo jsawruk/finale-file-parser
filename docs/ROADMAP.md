@@ -122,6 +122,9 @@ limit is verified by mutation, because no real corpus archive trips one.
       rhythm all match exactly. Sounded durations and tuplet ratios match too. The
       remaining gaps are all instrument-derived — transposing staves, 22 clefs — plus part names.
       See `enigma.UNTRANSLATED`.
+- [x] **2011-era `.mus` title, composer and copyright** — tagged text kinds 1, 2 and 3 become the
+      same `fileInfo` records used by `.musx`, then reach `Score` through the existing path. The DCL
+      cohort carries no `fileInfo` sections and remains metadata-empty.
 - [x] **Lyrics** — `enigma/lyrics.py`, both containers, schema-validated. 12,912 syllables
       across 85 corpus documents.
 - [x] **Articulations** — `enigma/articulations.py`, both containers. 22,821 marks across 273

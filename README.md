@@ -66,8 +66,9 @@ is absent. The report is most informative when a document does *not* convert —
 that stopped and why, which is what to send when reporting a file that will not parse.
 
 A `.mus` is read by reverse engineering, so a converted score can be missing things the original
-had — part names come out positional, for instance. What is and is not carried is recorded in
-`UNTRANSLATED` in `src/finale_file_parser/enigma/mus_document.py`.
+had — part names come out positional, for instance. Later-era `.mus` title, composer and copyright
+metadata is preserved; the older DCL cohort carries no tagged bibliographic records. What is and is
+not carried is recorded in `UNTRANSLATED` in `src/finale_file_parser/enigma/mus_document.py`.
 
 ## How well does it read a file?
 
