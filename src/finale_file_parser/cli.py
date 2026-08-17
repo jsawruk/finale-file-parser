@@ -29,13 +29,10 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from finale_file_parser.enigma.document import EnigmaDocument, parse_enigma
-from finale_file_parser.enigma.mus_document import read_mus_document
-from finale_file_parser.enigma.score import score_xml
-from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.errors import FinaleFileError
 from finale_file_parser.export.musicxml import to_musicxml
 from finale_file_parser.ir import Score
+from finale_file_parser.reader import read_score
 from finale_file_parser.report import inspect_document
 from finale_file_parser.report.html import render_html
 from finale_file_parser.version.detect import detect_version
@@ -69,13 +66,6 @@ def source_paths(root: Path) -> list[Path]:
     return sorted(
         path for path in root.rglob("*") if path.is_file() and path.suffix.lower() in {_MUS, _MUSX}
     )
-
-
-def load_document(path: Path) -> EnigmaDocument:
-    """Read either container into the shared document model."""
-    if path.suffix.lower() == _MUSX:
-        return parse_enigma(score_xml(path))
-    return read_mus_document(path)
 
 
 def output_path(source: Path, root: Path, destination: Path | None) -> Path:
@@ -133,7 +123,7 @@ def _convert(args: argparse.Namespace, out: object) -> int:
             failures.append((source, reason))
             continue
         try:
-            score = build_score(load_document(source))
+            score = read_score(source)
             data = to_musicxml(score)
         except FinaleFileError as error:
             failures.append((source, _reason(error)))
@@ -220,7 +210,7 @@ def _inspect(args: argparse.Namespace, out: object) -> int:
             failures += 1
             continue
         try:
-            score = build_score(load_document(source))
+            score = read_score(source)
         except FinaleFileError as error:
             print(f"  score     will not build: {_reason(error)}", file=sys.stderr)
             failures += 1
