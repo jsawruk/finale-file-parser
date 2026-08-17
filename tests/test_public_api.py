@@ -18,9 +18,9 @@ omission fails instead of passing silently.
 The hardcoded set is a change-detector: it catches those four names regressing,
 but not the general shape of the bug. A subpackage that adds a name to its own
 `__all__` and forgets to re-export it at the root would still pass. The third
-test derives that relationship instead of restating it, so any subpackage
-export that never reaches the root fails without anyone remembering to update
-a list here.
+test derives that relationship instead of restating it, with the four approved
+Enigma-only exports excluded because they intentionally do not belong at the
+package root.
 """
 
 from __future__ import annotations
@@ -151,6 +151,13 @@ EXPECTED_PUBLIC_NAMES = {
     "written_octave_correction",
 }
 
+ENIGMA_ONLY_EXPORTS = {
+    "MalformedPercussionError",
+    "PercussionAppearance",
+    "PercussionNote",
+    "percussion_notes",
+}
+
 
 def test_all_exports_are_reachable_at_package_root() -> None:
     for name in finale_file_parser.__all__:
@@ -161,16 +168,15 @@ def test_all_declares_the_expected_public_names() -> None:
     assert set(finale_file_parser.__all__) == EXPECTED_PUBLIC_NAMES
 
 
-def test_every_subpackage_export_reaches_the_package_root() -> None:
-    """Derived, not restated: a subpackage that exports a name the root never
-    re-exports fails here without anyone remembering to update a hardcoded
-    list. This is the general shape of the bug that shipped once already."""
+def test_every_non_exempt_subpackage_export_reaches_the_package_root() -> None:
+    """Derived, not restated, except for the approved Enigma-only boundary."""
     root = set(finale_file_parser.__all__)
     missing = set(container.__all__) - root
     assert not missing, f"exported by finale_file_parser.container but not at the root: {missing}"
     missing_enigma = set(enigma.__all__) - root
-    assert not missing_enigma, (
-        f"exported by finale_file_parser.enigma but not at the root: {missing_enigma}"
+    assert missing_enigma == ENIGMA_ONLY_EXPORTS, (
+        "unexpected Enigma exports missing from the package root: "
+        f"{missing_enigma - ENIGMA_ONLY_EXPORTS}"
     )
     version_public = (
         {name for name in version_models.__all__ if not name.startswith("_")}
