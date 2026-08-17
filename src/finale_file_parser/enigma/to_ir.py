@@ -213,8 +213,10 @@ part of the score:
   documents hold just two distinct bodies, all with the same fixed `instUuid`,
   a one-line `customStaff`, and clefs, key signatures, measure numbers, repeats
   and repeat barlines all hidden;
-* 376 of 398 give it a single repeated pitch, always in layer 1, and none
-  carries a lyric.
+* in the 398 buildable documents measured when this rule was established, 376
+  gave it a single repeated pitch, always in layer 1, and none carried a lyric;
+  the final three documents became buildable later and were not part of that
+  content count.
 
 It is also the **only** staff in the corpus absent from the instrument list, so
 excluding it excludes nothing else. What Finale actually uses it for is not
@@ -230,7 +232,7 @@ def _measure_numbers(keys: dict[int, int], cells: dict[tuple[int, int], _Cell]) 
 
     The list comes from `measSpec` -- which `effective_keys` already walks, one
     entry per measure -- and **not** from where the music happens to be. It runs
-    1..N with no gaps in all 398 buildable corpus documents and nothing sounds
+    1..N with no gaps in all 401 buildable corpus documents and nothing sounds
     outside it, whereas the measures that hold entries omit every bar in which
     the whole ensemble rests: 1,375 of them across 162 documents.
 

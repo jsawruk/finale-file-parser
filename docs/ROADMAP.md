@@ -153,8 +153,9 @@ limit is verified by mutation, because no real corpus archive trips one.
 - [x] **End-to-end audit** — `tests/export/test_export_audit_corpus_sweep.py`. Invariants asserted
       on the exported document rather than on any one feature, over the whole corpus and through
       both readers: the part list agrees with the parts, groups nest, measures line up, beams close,
-      barlines are well formed, and nothing the IR holds is dropped on the way out. Schema
-      validation went from 25 documents to all 398. **No defects found.**
+      barlines are well formed, and nothing the IR holds is dropped on the way out. The original
+      schema run grew from 25 documents to all 398 then-buildable `.musx`; the optional gate now
+      receives all 401. **No defects found.**
 - [x] **Fingerings** — `enigma/fingerings.py`, both containers. 834 across 18 documents; the
       numeral character identifies one, which is what unblocked the `.mus`. See
       `docs/ARCHITECTURE.md`.
@@ -193,13 +194,14 @@ The cheap-looking work has been the productive work. What remains:
    `gfhold` references reaching measure 111 — an incomplete file, and its sibling is named
    `..._Temp`.
 
-3. **Notation rendering.** The hex-viewer half of the desktop frontend shipped as `finale-parser
-   inspect --report`; rendering notation itself is much larger than anything above, and the CLI now
-   serves the practical need for the rest.
+3. **DCL-only semantics whose records are identified but whose links are not.** `^Iu` is probably
+   staff order, `^RT` carries text-repeat definitions, and `^DT`/`^DY` carry expressions. What is
+   missing is the independent evidence that maps their slots or assignments into the score; do not
+   guess it from names alone.
 
-**Blocked on the corpus, not on effort.** Text repeats: no `.mus`/`.musx` pair of the same music
-carries one. DCL staff layout order: that cohort has no paired `.musx` at all. Rather than searching
-again, write down what a contributed file would have to contain.
+**Blocked on the corpus, not on effort.** The DCL cohort has no paired `.musx`; text-repeat
+definitions identify themselves, but no same-content pair exposes their measure assignment. Rather
+than searching the same files again, write down what a contributed file would have to contain.
 
 <!-- Things deliberately deferred. Keep them out of Phase 1 so the MVP stays small. -->
 - [x] Notes, pitches, and rhythms as a Python data model — `enigma/music.py` and `ir.py`.
@@ -207,7 +209,7 @@ again, write down what a contributed file would have to contain.
 - [x] `.mus` header provenance stamps (created/modified with date, application, platform).
 - [x] Unify `.musx` provenance onto `ProvenanceStamp` (see `docs/DECISIONS.md`). `MusxDetail.platform`
       was dropped in favour of a platform on each stamp, matching `.mus`.
-- [ ] **2011-era `.mus` internal record pools** — mostly done. The payload decodes, the entry pool
+- [x] **2011-era `.mus` internal record pools** — shipped. The payload decodes, the entry pool
       reads, and both the `others` and `details` pools walk generically from byte zero: their
       records are self-identifying (`tag`, `cmper`, `part`, `length`), so no oracle is needed. See
       `enigma/mus_others.py` and `enigma/mus_details.py`.
@@ -250,19 +252,26 @@ again, write down what a contributed file would have to contain.
       bounds the *base* rather than the total — which is what had been rejecting a **dotted whole**
       (6144), ordinary notation. `NoteValue`, the range check and the MusicXML `<type>` map moved
       together. A longa is deliberately still refused: no corpus document carries one.
-- [x] MusicXML exporter over the IR — shipped and W3C schema-validated across all 398 `.musx`
-      documents and 224 `.mus`. See `enigma/to_ir.py` and `export/musicxml.py`.
+- [x] MusicXML exporter over the IR — all 401 `.musx` and 231 `.mus` documents that build export and
+      pass the end-to-end output audit. The optional `MUSICXML_XSD` gate validates every `.musx`
+      export against the official W3C MusicXML 4.0 schema. See `enigma/to_ir.py` and
+      `export/musicxml.py`.
 - [x] Desktop frontend: hex viewer with decoded structure values — shipped as `finale-parser
       inspect --report`, a self-contained HTML report rather than a GUI: the stage ladder, the
       score/document summaries, every record, and the raw bytes, base64-encoded and budget-capped.
       Every pool is embedded whole and browsed a 4 KB page at a time, with the byte range and the
       pool's total size on screen. See `src/finale_file_parser/report/`.
-- [ ] Desktop frontend: notation rendering.
+- [x] Desktop frontend: notation rendering — Verovio engraves the report's Music tab as bounded,
+      self-contained inline SVG; a failed engraving is reported without stopping the rest of the
+      diagnostic page.
+- [x] Desktop frontend: source XML — a `.musx` report carries its complete EnigmaXML in a foldable
+      XML tab. The tab is absent for binary `.mus` files, which have no source XML.
 - [x] **CLI** — `finale-parser`, with `convert` and `inspect`. Takes a file or a
       directory; a batch reports and skips what will not build rather than aborting, and
       never overwrites without `--force`. See `src/finale_file_parser/cli.py`.
-- [ ] **`.musx` `tupletDef` without `symbolicNum`.** Three corpus `.musx` documents fail to build on
-      it — the only remaining `.musx` failures, and the largest single unread thing on that side.
+- [x] **`.musx` linked-part `tupletDef` overrides without `symbolicNum`.** The three documents were
+      not missing score ratios: part overrides carried geometry only and were being read as second,
+      nested tuplets. Filtering part variants makes all 401 `.musx` documents build and export.
 - [ ] **Staff and group names from a `.mus`.** The names are in the file and the id that selects one
-      is known; what is missing is the per-document base that turns that id into a text block. One
-      anchor per document would resolve every name in it. See `docs/formats/mus-staff-names.md`.
+      is known; what is missing is the fixed id-to-block table. Nine ids are known, too few to fit or
+      ship the table safely. See `docs/formats/mus-staff-names.md`.

@@ -8,14 +8,17 @@ working on structure.
 The system consists of a parser library that reads Finale `.mus` and `.musx` files and exports
 MusicXML, plus a diagnostic frontend built from two functions:
 
-- **A hex viewer that decodes binary entries and shows the structure values** — delivered as
-  `finale-parser inspect --report`, a self-contained HTML report (`src/finale_file_parser/report/`)
-  rather than a desktop application: the stage ladder, the score and document summaries, every
-  decoded record, and the raw bytes — each pool embedded whole and paged through 4 KB at a time —
-  in one file with no server and no GUI toolkit. See
+- **A diagnostic view of the source and decoded structure** — delivered as `finale-parser inspect
+  --report`, a self-contained HTML report (`src/finale_file_parser/report/`) rather than a desktop
+  application: the stage ladder, score and document summaries, every decoded record, and the raw
+  bytes — each pool embedded whole and paged through 4 KB at a time. A `.musx` report also carries
+  its complete EnigmaXML in a foldable XML tab; a binary `.mus` has no source XML, so that tab is
+  absent. See
   `docs/DECISIONS.md`'s 2026-08-04 entry for why this shape was chosen over a GUI, and
   `docs/superpowers/specs/2026-08-04-diagnostic-frontend-design.md` for the full design.
-- **A rendering of the corresponding music notation** — not built, and not scheduled.
+- **A rendering of the corresponding music notation** — the report's Music tab sends the shared
+  `Score` through the existing MusicXML exporter and engraves it with Verovio as bounded inline SVG.
+  Engraving is a non-halting report stage: if it fails, records, XML and diagnostics still render.
 
 Because parsing supports multiple inputs, all data flows into a single intermediate representation
 (IR). The library stays independently usable and takes no GUI dependency.
@@ -367,11 +370,14 @@ addressing one needs nothing outside it. Little-endian:
 2-3    cmper     the (n) in an ETF ^XX(n)
 4-5    part      0 for the score, then 1, 2, ... per linked part
 6-9    length    payload size in bytes
-10-    payload   `length` bytes, then a four-byte trailer
+10-    payload   `length` bytes
+10+length  extra length   LE32
+14+length  extra          that many bytes; usually empty, preserved verbatim
 ```
 
-so one record occupies **`14 + length`** bytes. Records of one tag sit together in a section, and
-sections may be separated by two-byte zero padding.
+so one record occupies **`14 + length + extra_length`** bytes. Records of one tag sit together in a
+section, and sections may be separated by `0x0000` or `0xFFFF` padding words. The second block is
+empty on 99.4% of records; where present it is 24, 48 or 96 bytes and remains uninterpreted.
 
 **This answers the long-open `cmper` question.** There is no directory, no key array and no
 positional convention, and the search for them failed for a mundane reason: every earlier attempt
@@ -380,24 +386,23 @@ located a section by searching for payload values known from the paired `.musx` 
 the neighbouring record's header as part of the anchored one. See `docs/formats/mus-binary-notes.md`
 for the full account, the retractions it forces, and the candidate tag-id table.
 
-Verified against paired `.musx` files. The walk tiles stream 1 exactly in **84 of 91** pairs
-(211,554 records), and on same-content pairs:
+Verified against paired `.musx` files. The walk tiles stream 1 exactly in **97 of 97** current oracle
+pairs, and on same-content pairs:
 
 | check | result |
 | --- | --- |
-| `frameSpec` (tag 146) `(cmper, part)` sequence | 76 of 77 documents exact |
-| `frameSpec` `startEntry`/`endEntry` payload | 7,919 of 7,922 records |
-| `measSpec` (tag 176) `beats`, `divbeat` payload | 3,799 of 3,799 records |
-| `measSpec` `width` payload | 3,750 of 3,799, every miss in one document |
+| `frameSpec` (tag 146) `(cmper, part)` sequence | every `.mus` key appears in `.musx` order; 5 documents have additional `.musx` part overrides |
+| `frameSpec` `startEntry`/`endEntry` payload | over 8,000 compared, 15 differences |
+| `measSpec` (tag 176) `beats`, `divbeat` payload | over 5,000 compared, zero differences |
+| `measSpec` `width` payload | 59 differences, all in one document |
 
 `width` is layout, not music: re-spacing a score between the two saves changes every measure width
 and no `beats`/`divbeat`. Only these two tags are confirmed by payload content; the rest of the tag
 table is key-sequence matching and is recorded as leads.
 
-**Scope and refusals.** The 2011/2012 era only, as with the entry pool. Seven corpus documents halt
-part-way through one record type whose length field the walk mis-reads; `read_mus_others` raises
-`CorruptScoreError` for those rather than returning a truncated pool, because a partial pool is
-indistinguishable from a complete one at the call site.
+**Scope.** The 2011/2012 era only, as with the entry pool. The seven former refusals were reader
+defects, not corrupt files: `0xFFFF` is padding, the previous 64 KiB record cap was measured only on
+documents that already passed it, and the supposed fixed trailer is the extra block described above.
 
 ### Known format facts — the `.mus` details pool
 
@@ -412,23 +417,26 @@ cmpers, so its header carries one more field:
 4-5    cmper2    second key component (measure, for gfhold)
 6-7    inci      incidence — identified by position only, see below
 8-11   length    payload size in bytes
-12-    payload   `length` bytes, then a four-byte trailer
+12-    payload   `length` bytes
+12+length  extra length   LE32
+16+length  extra          that many bytes; usually empty, preserved verbatim
 ```
 
-so one record occupies **`16 + length`** bytes, against the `others` pool's `14 + length`.
+so one record occupies **`16 + length + extra_length`** bytes, against the `others` pool's
+`14 + length + extra_length`.
 
 `gfhold` (**tag 1044**) is why this pool matters: it ties a measure on a staff to the entry frames
 that fill it. Its 20-byte payload holds `clefID` at +0, `clefPercent` at +4 and `frame1` at +6.
 
-Verified against paired `.musx` files. The walk tiles stream 2 exactly in **84 of 91** pairs
-(167,463 records), and on the 80 same-content pairs carrying `gfhold`:
+Verified against paired `.musx` files. The walk tiles stream 2 exactly in **97 of 97** current oracle
+pairs, all of which are same-content pairs carrying `gfhold`:
 
 | check | result |
 | --- | --- |
-| `gfhold` key sequence | 80 of 80 documents — the `.musx` sequence restricted to the keys `.mus` holds |
-| `clefPercent` at payload +4 | every record |
-| `frame1` at payload +6 | every record |
-| `clefID` at payload +0 | 8,110 exact, 272 defaulted (below), **0 unexplained** |
+| `gfhold` key sequence | every document — the `.musx` sequence restricted to the keys `.mus` holds |
+| `clefPercent` at payload +4 | over 8,000 compared, every record exact |
+| `frame1` at payload +6 | over 8,000 compared, one dangling-reference difference |
+| `clefID` at payload +0 | 9,736 exact, 272 defaulted (below), **0 unexplained** |
 
 **`.mus` writes `clefID` 0 for "use the staff's `defaultClef`"**, and a `.musx` export materialises
 the resolved clef into the record. This refines the earlier note that every `gfhold` carries a
@@ -558,7 +566,7 @@ measure, its own entries — but it is not part of the score:
 | named by a staff group | never |
 | distinct `staffSpec` bodies | **two**, all with one fixed `instUuid` |
 | display features | one-line `customStaff`; clefs, key signatures, measure numbers, repeats and repeat barlines all hidden |
-| its music | a single repeated pitch in 376 of 398, always layer 1, never a lyric |
+| its music | in the 398 documents measured when the rule was established, a single repeated pitch in 376, always layer 1, never a lyric; the final 3 became buildable later and were not part of this content count |
 | entries shared with a real staff | none — disjoint in all 401 |
 
 It is also the only staff in the corpus absent from the instrument list. `build_score` therefore

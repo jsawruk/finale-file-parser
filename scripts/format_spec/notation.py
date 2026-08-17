@@ -4,10 +4,11 @@ The staff diagrams these produce are the one place in this document where a
 picture beats a table: a harmonic value means a different pitch in every key,
 and that is easier shown than described.
 
-Verovio is a build-time tool, like the browser that prints the PDF. It is not a
-dependency of the parser, and nothing it produces is linked into the library --
-its output here is an SVG of our own notes, engraved. If it is absent the
-document still builds; the examples are simply omitted.
+Verovio is the package's inspection-report engraver and a build-time tool here,
+like the browser that prints the PDF. It does not participate in parsing, and
+nothing it produces for this document is linked into the library -- its output
+here is an SVG of our own notes, engraved. If it is absent the document still
+builds; the examples are simply omitted.
 """
 
 from __future__ import annotations

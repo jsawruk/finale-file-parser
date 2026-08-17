@@ -13,7 +13,8 @@ uv tool install finale-file-parser     # just the `finale-parser` command
 pip install finale-file-parser         # or as a library, into your own environment
 ```
 
-Python 3.12 or newer. The only runtime dependency is `defusedxml`.
+Python 3.12 or newer. Runtime dependencies are `defusedxml`, which makes parsing untrusted XML safe,
+and Verovio, which engraves the inspection report's notation view.
 
 To run a change that has landed on `main` but is not yet released:
 
@@ -45,9 +46,10 @@ finale-parser inspect score.mus --report score-report.html
 ```
 
 Writes one self-contained HTML file showing what the parser saw: how far the pipeline got, the
-score it built, the records it read, and the raw bytes. It is most informative when the document
-does *not* convert — the report names the stage that stopped and why, which is what to send when
-reporting a file that will not parse.
+engraved score and music tree it built, the records it read, and the raw bytes. A `.musx` report also
+shows the file's complete EnigmaXML as a foldable tree; a binary `.mus` has no source XML, so that tab
+is absent. The report is most informative when a document does *not* convert — it names the stage
+that stopped and why, which is what to send when reporting a file that will not parse.
 
 A `.mus` is read by reverse engineering, so a converted score can be missing things the original
 had — part names come out positional, for instance. What is and is not carried is recorded in

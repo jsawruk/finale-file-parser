@@ -112,8 +112,11 @@ open question on GUI framework and repo layout.
 
 **Update, 2026-08-04:** (a), the hex viewer, shipped — not as part of a desktop application, as an
 HTML report instead. See the 2026-08-04 entry below for why, and `docs/ARCHITECTURE.md`'s overview
-for the current shape. (b), notation rendering, remains as scoped here: unbuilt, and the open
-question below still applies to it.
+for the current shape.
+
+**Update, 2026-08-15:** (b), notation rendering, also shipped in that report. Verovio engraves the
+shared `Score` in the Music tab; see the 2026-08-15 entry below. No GUI framework, separate package,
+or repository split was needed.
 
 ## 2026-07-20 — DECIDED: third-party reference documents are vendored into `docs/` under fair use
 
@@ -146,10 +149,6 @@ permissive license suits a format-interoperability library that other tools need
 
 <!-- Add architectural forks here as they arise, each with a recommended default and "owner to
      confirm". Move to a DECIDED entry above once resolved. -->
-- **RESOLVED 2026-08-15 — notation rendering.** Answered by the entry below: notation is engraved by
-  Verovio into the report's Music tab. No GUI framework, no separate package, no repo split. What
-  remains genuinely open is only whether this project ever grows an interactive editing application,
-  which nothing currently calls for.
 - **OPEN — does each detected version need distinct record-parsing logic?** Version detection
   itself is DECIDED (see above) and covers both `.mus` and `.musx`. What remains unknown is whether
   the record layouts inside a given version differ enough to require separate parsing paths per
@@ -491,8 +490,10 @@ stage ladder, the score and document summaries, every decoded record, and the ra
 
 **Why an HTML report over a GUI, now that the choice is real rather than deferred:**
 
-- **No new dependency.** The library depends on `defusedxml` and nothing else; a GUI toolkit or web
-  framework would be a dependency taken on for one read-only viewer.
+- **No GUI or web dependency.** At the time, the library depended on `defusedxml` alone; a GUI
+  toolkit or web framework would have been a dependency taken on for one read-only viewer. Verovio
+  later became the second runtime dependency for notation engraving, without changing this choice of
+  HTML over a GUI.
 - **Works offline.** No server, no port, nothing to run beside opening a file.
 - **Archivable beside the converted output.** One file, the same way `score.musicxml` is one file —
   it can sit next to a conversion in the same archive rather than needing an application installed to
@@ -503,9 +504,9 @@ stage ladder, the score and document summaries, every decoded record, and the ra
   diagnosing a parser failure without transmitting the protected work.
 
 Consequence: the 2026-07-20 entry's "must not take a GUI dependency" constraint is satisfied by
-construction, not by discipline — there is no GUI toolkit anywhere in the dependency graph. The
-open question on GUI framework and repo layout (see "Open questions" above) is **not** resolved by
-this; it narrows to apply only to notation rendering, the half that remains unbuilt.
+construction, not by discipline — there is no GUI toolkit anywhere in the dependency graph. This
+initially left notation rendering open; the 2026-08-15 Verovio decision below resolved it inside the
+same report.
 
 ## Mirror direction is not inferred
 

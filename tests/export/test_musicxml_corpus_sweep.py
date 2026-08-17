@@ -44,8 +44,12 @@ pytestmark = pytest.mark.skipif(not CORPUS.is_dir(), reason="local corpus not pr
 SAMPLE = 25
 SCHEMA_ENV = "MUSICXML_XSD"
 
-EXPORTABLE = 398
-"""Corpus documents that export at all; the other three fail to decode."""
+EXPORTABLE = 401
+"""Every corpus `.musx` exports.
+
+Was 398 until linked-part `tupletDef` geometry stopped being read as a second,
+nested tuplet definition; see `enigma.tuplet.tuplets_by_entry`.
+"""
 
 _BATCH = 40
 """Files per `xmllint` invocation. It re-reads the schema each time, so batching
@@ -77,6 +81,7 @@ def exports(musx_scores: list[tuple[Path, Score]]) -> list[bytes]:
 
 
 def test_every_score_exports_and_is_well_formed(exports: list[bytes]) -> None:
+    assert len(exports) == EXPORTABLE
     exported = 0
     for raw in exports[:SAMPLE]:
         document = DET.fromstring(raw.decode())

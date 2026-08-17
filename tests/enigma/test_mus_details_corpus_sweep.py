@@ -34,16 +34,17 @@ READABLE = 97
 
 It was 84 until `0xFFFF` was recognised as filler alongside `0x0000`. The seven
 that failed hit a run of `0xFFFF` words, which parse as records of declared
-length 0 and leave the walk four bytes short each time. The `others` pool still
-refuses those seven for an unrelated reason -- a `tupletDef`-sized record under
-tag 158 whose length field is not understood.
+length 0 and leave the walk four bytes short each time. The `others` pool once
+refused six of the same documents because its payload cap was measured
+circularly; raising that independently fixed them too.
 """
 
 SAME_CONTENT = 97
 """Readable pairs holding the same music and carrying `gfhold` records.
 
-Was 80 until `0xFFFF` was recognised as filler; the three added are documents
-whose details pool the walk could not previously finish.
+Earlier sweeps compared 80 or 81 pairs. Filler handling made the previously
+unreadable details pools available; deterministic pairing later established
+the current 97 same-content oracle pairs.
 """
 
 FRAME1_DANGLING = 1
@@ -61,7 +62,7 @@ under test still has to be right on all 9,932 records that name a real frame.
 
 CLEF_ID = 9736
 CLEF_ID_DEFAULTED = 272
-"""`clefID` matches outright in 8,356 records. The other 272 are `.mus` storing
+"""`clefID` matches outright in 9,736 records. The other 272 are `.mus` storing
 0 where the `.musx` materialises that staff's `defaultClef` -- so every record
 is accounted for, and a regression would show up as an *unexplained* miss."""
 

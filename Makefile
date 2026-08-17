@@ -72,7 +72,7 @@ fmt:
 typecheck:
 	$(PY) mypy $(CODE)
 
-# Two gates, because one that takes nine minutes is a gate people skip.
+# Two gates, because one that takes about ten minutes is a gate people skip.
 #
 # `check` is the one to run between edits: lint, format, types and every test
 # that does not read the corpus. About a minute.

@@ -65,7 +65,7 @@ are the same shape as the original two -- more documents in the sweep, not a new
 kind of difference."""
 
 FRAME_SPEC_PAYLOAD_MISSES = 15
-"""Three `startEntry`/`endEntry` pairs differ, out of 7,922."""
+"""Fifteen `startEntry`/`endEntry` pairs differ across more than 8,000 comparisons."""
 
 MEAS_SPEC_WIDTH_MISSES = 59
 """Measure widths that differ, all of them in a single document.
