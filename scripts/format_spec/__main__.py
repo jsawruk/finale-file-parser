@@ -108,7 +108,6 @@ Coda's own documentation, that is stated explicitly rather than quietly
 resolved &mdash; there is one such case, the note alteration encoding in
 &sect;7.2.</div>
 
-
 <h4>No corpus bytes appear in this document</h4>
 <p>Every hex dump is <strong>synthetic</strong>, constructed by the generator
 that produced this PDF. The test corpus is licensed third-party music and its

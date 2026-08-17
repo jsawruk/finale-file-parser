@@ -255,8 +255,14 @@ than searching the same files again, write down what a contributed file would ha
       staff). The DCL era carries an ETF `^Iu` row that is very likely the same record, but with no
       paired `.musx` anywhere in the cohort there is nothing to check a slot layout against, so it
       keeps the numeric fallback.
+- [x] **DCL percussion palette crosswalk.** `^DL` names each map; all 18,647 `^DN` note names join
+      exactly to a `^DF(map, input-note)` appearance row. `^DF` now exposes playback MIDI, staff
+      position, and its remaining raw appearance words through `dcl_percussion_maps`. The palette
+      is not yet score content: the DCL staff-to-map selector is still unidentified.
 - [ ] **Unpitched IR and MusicXML consumption.** Consume the typed `.musx` percussion resolver in
       the IR and MusicXML only after notehead meaning and MIDI/drum naming have independent evidence.
+      The DCL crosswalk does not supply a shortcut: the two used `.musx` `percNoteType` values are
+      outside MIDI's range, and no name-bearing record shares that key.
 - [x] **Durations above a whole note.** A breve (8192 EDU) is a note value now, and the range check
       bounds the *base* rather than the total — which is what had been rejecting a **dotted whole**
       (6144), ordinary notation. `NoteValue`, the range check and the MusicXML `<type>` map moved

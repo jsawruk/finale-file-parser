@@ -1042,8 +1042,26 @@ its `inci` is exactly zero-based.
 
 The aggregate sweep pins **605 used placements**: **597** resolve and **eight** remain explicit
 unresolved code-13 assignments. All resolved `harmLev` values differ from the currently interpreted
-pitch. Notehead meaning, MIDI/drum naming, IR consumption, output, and `.mus` translation remain
-deliberately deferred.
+pitch.
+
+The older DCL palette is now typed independently. `^DL(map)` names a map,
+`^DF(map,input)` carries one 10-byte mapping, and `^DN(map,input)` names that same input note. Every
+one of the **18,647** `^DN` records has an exact `^DF` partner. The `^DF` key is an input note rather
+than playback MIDI: among named entries they differ **3,717** times. Its first payload word is the
+playback MIDI note and its second is staff position. Two further notehead values and the trailing
+word remain raw because neither vendored specification names their order. The full DCL cohort holds
+**1,282 maps** and **74,730 mapping rows**; `dcl_percussion_maps` reads the palette without claiming
+that a score selects any of it. Text decoding follows the container cohort too: all **37**
+big-endian DCL files are Mac-origin and all **102** little-endian files are Windows-origin, so map
+and note names use Mac Roman and CP1252 respectively.
+
+The cross-era boundary is equally important. Every `.musx` `percussionNoteInfo` map id has a
+same-document `drumLibName` record — **8,403 map names in 401 documents** — but there is no
+same-key note-name table. The 597 used appearances carry two distinct `percNoteType` values, both
+outside MIDI's 0–127 range and neither equal to their note code. DCL map IDs also change meaning
+between library versions, so joining unrelated files by a plausible numeric id would manufacture a
+name. Notehead meaning, `.musx` drum naming, staff-to-map selection in DCL, IR consumption, output,
+and `.mus` translation therefore remain deliberately deferred.
 
 ### Known format facts — key signatures
 

@@ -156,6 +156,13 @@ UNTRANSLATED = (
     "paired .musx anywhere -- so there is nothing to check a slot layout "
     "against, and this reader does not guess at one. A 2001-2005 document whose "
     "staves are laid out out of order therefore still comes out numerically.",
+    "Percussion in a 2001-2005 .mus. The DCL palette IS read: ^DL names each "
+    "map, ^DF(map,input-note) gives playback MIDI, staff position and raw "
+    "appearance words, and all 18,647 ^DN note names join to an exact ^DF key. "
+    "What is not identified is the record that selects one of those 1,282 maps "
+    "for a staff or assigns a map input to an entry note. A DCL-derived Score "
+    "therefore still treats percussion as pitched music. See "
+    "enigma.mus_percussion and docs/ARCHITECTURE.md.",
     "Mirror transposition: Finale's Mirror Tool appears to let a mirrored "
     "staff carry its own transposition or octave displacement. Mirrors "
     "themselves ARE read -- an entry holds a location per placement and the "
@@ -169,7 +176,7 @@ UNTRANSLATED = (
     "Text repeats (Fine, D.C. al Coda): the .musx reading is implemented and the "
     ".mus one is not, so a .mus still exports no markings. What is missing is "
     "narrower than this entry twice claimed. **The DCL tag is ^RT**, and its "
-    "payload spells itself out: 411 records across all 38 DCL documents carry "
+    "payload spells itself out: 1,253 records across 137 DCL documents carry "
     "'D.C. al Fine', 'D.C. al Coda', 'D.S. al Fine' and 'D.S. al Coda' as text. "
     "This entry previously said the corpus offers NO evidence to identify the "
     "tag from, 'not a little, none'. That was wrong, and wrong in a specific "

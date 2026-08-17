@@ -43,6 +43,18 @@ a { color: #14507a; }
 .warn { border-color: #c07a3a; background: #fdf6ef; }
 .prov { border-color: #7a9a6a; background: #f4f8f2; font-style: italic; }
 
+/* --- reusable review marks ---------------------------------------------
+   Add class=review and a reviewbadge span only while a revision awaits review.
+   The word and outline keep the approved style legible in greyscale. */
+.reviewbadge {
+  display: inline-block; font-size: 7pt; font-weight: bold; letter-spacing: 0.5pt;
+  border: 0.75pt solid #9d2727; color: #9d2727; padding: 0.5pt 3pt;
+  margin: 0 5pt 1pt 0; border-radius: 2pt; vertical-align: 0.1em;
+}
+.review { border-color: #9d2727 !important; background: #fff1a8 !important; }
+p.review { padding: 5pt 7pt; border-left: 2.5pt solid #9d2727; }
+tr.review td { background: #fff1a8; }
+
 
 /* --- tables ----------------------------------------------------------- */
 table { border-collapse: collapse; width: 100%; margin: 8pt 0; font-size: 9pt; }

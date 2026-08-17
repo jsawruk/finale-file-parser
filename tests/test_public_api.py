@@ -152,9 +152,12 @@ EXPECTED_PUBLIC_NAMES = {
 }
 
 ENIGMA_ONLY_EXPORTS = {
+    "DclPercussionEntry",
+    "DclPercussionMap",
     "MalformedPercussionError",
     "PercussionAppearance",
     "PercussionNote",
+    "dcl_percussion_maps",
     "percussion_notes",
 }
 
