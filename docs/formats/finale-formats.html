@@ -274,8 +274,9 @@ a network address, and a parser that resolves it reads that file or makes that
 request on the attacker's behalf. Neither was intended by the standard; both
 follow from a feature it does include. All XML in this project is parsed with
 <strong><code>defusedxml</code></strong>, which disables entity expansion and
-external references. This is the project's only runtime dependency, and it
-exists for this reason alone.</dd>
+external references. It is the parser's XML-safety dependency. The package's
+other runtime dependency, Verovio, engraves notation in inspection reports and
+does not participate in parsing.</dd>
 
 <dt>Malformed offsets and lengths</dt>
 <dd>Every offset and length in this document is read <em>from the file</em>,

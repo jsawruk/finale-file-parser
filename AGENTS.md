@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-Instructions Claude Code should hold in **every** session for this repo. Keep this file short and
+Instructions Codex should hold in **every** session for this repo. Keep this file short and
 high-signal — it loads into every session, so every line competes for attention. Deep or procedural
 material lives in `docs/`; read the relevant doc before working in that area.
 

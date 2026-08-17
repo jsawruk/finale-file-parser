@@ -239,8 +239,8 @@ def render_staff(notes: list[tuple[str, str]], sharps: int, caption: str) -> str
     """A short treble staff with `notes` as (pitch, label-under-the-note).
 
     `sharps` is how many sharps the key signature carries. Drawn as plain SVG:
-    this project takes no notation dependency, and five lines with ellipses on
-    them is enough to show which pitch a number means.
+    five lines with ellipses on them are enough to show which pitch a number
+    means, without invoking the report's notation engraver for this small diagram.
     """
     left, gap, width = 62.0, 34.0, 0.0
     width = left + gap * (len(notes) + 1)

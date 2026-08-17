@@ -12,8 +12,9 @@ version lives in `CLAUDE.md`; this is the detail.
 
 ## Dependencies
 
-- Prefer well-maintained, widely-used libraries. `make check` (and CI) runs an advisory dependency
-  audit; escalate flagged issues to the owner.
+- Prefer well-maintained, widely-used libraries and keep them pinned in `uv.lock`. No advisory
+  dependency audit is currently wired into `make check` or CI, so a green gate does **not** cover
+  dependency advisories. Escalate any advisory found during release review to the owner.
 
 ## The `.musx` container reader's threat model
 

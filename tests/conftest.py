@@ -145,10 +145,11 @@ def stem_pairs() -> list[tuple[Path, Path]]:
 
 @pytest.fixture(scope="session")
 def musx_scores() -> list[tuple[Path, Score]]:
-    """Every `.musx` that builds, with its `Score`. Undecodable ones are absent.
+    """Every `.musx` that builds, with its `Score`.
 
-    The three corpus documents that fail to decode are pinned by the container
-    sweeps; a sweep that needs an exact count asserts its own.
+    All 401 current corpus documents build. Exceptions remain skipped here so a
+    feature sweep can report on the rest if a future corpus addition is corrupt;
+    sweeps that require exact coverage pin their own count.
     """
     out: list[tuple[Path, Score]] = []
     for path in musx_paths():

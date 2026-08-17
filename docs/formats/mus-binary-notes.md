@@ -1,6 +1,9 @@
 # `.mus` (Enigma Binary File) — reverse-engineering notes
 
-**Status:** active research (branch `research/mus-binary-format`). Not yet a shipped reader.
+**Status:** shipped reader, with active research on the untranslated fields listed in
+`enigma/mus_document.py::UNTRANSLATED`. This is a chronological research log: intermediate
+"still open" sections record the state when they were written and are superseded by later
+`SOLVED` sections; `docs/ARCHITECTURE.md` is the current source of truth.
 **Goal:** decode the `.mus` payload to plaintext so its records can populate the same
 `EnigmaDocument` the `.musx` pipeline builds, giving `.mus`/`.musx` parity for free.
 
