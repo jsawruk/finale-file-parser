@@ -175,6 +175,8 @@ def test_every_non_exempt_subpackage_export_reaches_the_package_root() -> None:
     assert not missing, f"exported by finale_file_parser.container but not at the root: {missing}"
     missing_enigma = set(enigma.__all__) - root
     assert missing_enigma == ENIGMA_ONLY_EXPORTS, (
+        "Enigma-only exports absent from the expected boundary: "
+        f"{ENIGMA_ONLY_EXPORTS - missing_enigma}; "
         "unexpected Enigma exports missing from the package root: "
         f"{missing_enigma - ENIGMA_ONLY_EXPORTS}"
     )

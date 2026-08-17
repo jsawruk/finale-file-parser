@@ -102,15 +102,19 @@ def _assignments(document: EnigmaDocument) -> tuple[dict[int, dict[int, int]], d
             raise MalformedPercussionError(
                 f"percussion assignment inci={inci} disagrees with noteID={note_id}"
             )
-        entry_record = document.entries.get(entnum)
-        if entry_record is None:
-            raise MalformedPercussionError(f"percussion assignment names missing entry {entnum}")
-        note_count = len(read_entry(entry_record).notes)
+        note_count = note_counts.get(entnum)
+        if note_count is None:
+            entry_record = document.entries.get(entnum)
+            if entry_record is None:
+                raise MalformedPercussionError(
+                    f"percussion assignment names missing entry {entnum}"
+                )
+            note_count = len(read_entry(entry_record).notes)
+            note_counts[entnum] = note_count
         if not 1 <= note_id <= note_count:
             raise MalformedPercussionError(
                 f"noteID={note_id} outside entry {entnum} with {note_count} note(s)"
             )
-        note_counts[entnum] = note_count
         out.setdefault(entnum, {})[note_id - 1] = note_code
     return out, note_counts
 

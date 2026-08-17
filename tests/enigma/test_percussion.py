@@ -17,6 +17,7 @@ from finale_file_parser.enigma.document import (
     Record,
     TextsPool,
 )
+from finale_file_parser.enigma.music import Entry, read_entry
 from finale_file_parser.enigma.percussion import MalformedPercussionError
 
 EMPTY: tuple[Record, ...] = ()
@@ -143,6 +144,35 @@ def test_resolves_the_selected_map_row_in_entry_note_order() -> None:
     assert percussion_notes(document) == {
         (1, 1): (None, PercussionNote(map_id=7, note_code=42, appearance=appearance))
     }
+
+
+def test_multiple_assignments_decode_their_entry_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    document = _document(
+        routes={1: "7"},
+        definitions={},
+        assignments=(("0", "1", "42"), ("1", "2", "43")),
+    )
+    calls = 0
+
+    def counted_read_entry(record: Record) -> Entry:
+        nonlocal calls
+        calls += 1
+        return read_entry(record)
+
+    monkeypatch.setattr(
+        "finale_file_parser.enigma.percussion.read_entry",
+        counted_read_entry,
+    )
+
+    assert percussion_notes(document) == {
+        (1, 1): (
+            PercussionNote(map_id=7, note_code=42, appearance=None),
+            PercussionNote(map_id=7, note_code=43, appearance=None),
+        )
+    }
+    assert calls == 1
 
 
 def test_a_mirror_resolves_against_each_staffs_own_map() -> None:
