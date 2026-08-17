@@ -21,6 +21,20 @@ To run a change that has landed on `main` but is not yet released:
 uv tool install git+https://github.com/jsawruk/finale-file-parser
 ```
 
+## Using the library
+
+```python
+from finale_file_parser import read_document, read_score
+
+score = read_score("archive/score.musx")
+document = read_document("archive/legacy-score.mus")
+```
+
+`read_score` is the ordinary high-level entry point and returns the format-neutral `Score` model.
+`read_document` stops one layer earlier at `EnigmaDocument` for callers that need Finale records.
+Both detect `.mus` versus `.musx` from the file contents rather than the filename extension, and
+preserve the existing parser exceptions.
+
 ## Converting scores
 
 ```bash

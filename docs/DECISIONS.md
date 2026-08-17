@@ -599,3 +599,20 @@ tree, its records and its ladder, and the stage says what happened.
 
 **Reopen if** the dependency becomes a problem for a consumer who wants the parser without it, at
 which point the answer is an optional extra and a fallback message rather than a different engraver.
+
+## 2026-08-17 — DECIDED: two functions form the stable reader facade
+
+**Context.** Both containers already converge on `EnigmaDocument`, but an application caller had
+to know the format-specific composition: `score_xml` then `parse_enigma` for `.musx`, or
+`read_mus_document` for `.mus`, followed by `build_score`. The CLI duplicated that dispatch and
+chose from the filename suffix even though version detection already identifies the family from
+the file contents.
+
+**Decision.** `read_document(path)` detects the family from content and returns the shared
+`EnigmaDocument`; `read_score(path)` adds `build_score` and returns the IR. These two package-root
+functions are the small application-facing facade. They preserve existing exceptions rather than
+wrapping them, and the lower-level readers remain public for format research and record-level use.
+
+**Consequence.** Ordinary callers and the CLI no longer know which parser branch a file needs, and
+a valid file with a misleading suffix still reaches the correct reader. The facade deliberately
+does not include export or file-writing policy: `to_musicxml` remains a separate edge operation.

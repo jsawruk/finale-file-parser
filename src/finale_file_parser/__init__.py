@@ -109,6 +109,7 @@ from finale_file_parser.enigma import (
 )
 from finale_file_parser.enigma.to_ir import build_score
 from finale_file_parser.export import MUSICXML_VERSION, ExportError, to_musicxml
+from finale_file_parser.reader import read_document, read_score
 from finale_file_parser.version.detect import detect_version
 from finale_file_parser.version.models import (
     AppVersion,
@@ -123,6 +124,8 @@ from finale_file_parser.version.models import (
 )
 
 __all__ = [
+    "read_document",
+    "read_score",
     "to_musicxml",
     "build_score",
     "ExportError",

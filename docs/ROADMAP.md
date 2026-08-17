@@ -115,8 +115,9 @@ limit is verified by mutation, because no real corpus archive trips one.
       opt-in via `MUSICXML_XSD`, see `tests/export/test_musicxml_corpus_sweep.py`.
 - [x] **Part names, title and composer** — `enigma/text.py`. `staffSpec.fullName` resolves through
       `textBlock` → `textID` → `blockText`; `fileInfo` supplies title/composer/copyright.
-- [x] **`.mus` input** — `read_mus_document(path)` yields an `EnigmaDocument`, so
-      `to_musicxml(build_score(read_mus_document(path)))` exports a legacy `.mus`. Validated IR
+- [x] **`.mus` input** — `read_mus_document(path)` yields an `EnigmaDocument`; the stable facade's
+      `read_score(path)` selects that reader by content, so `to_musicxml(read_score(path))` exports
+      a legacy `.mus`. Validated IR
       against IR on 73 paired documents: parts, measures, events, keys, time signatures and written
       rhythm all match exactly. Sounded durations and tuplet ratios match too. The
       remaining gaps are all instrument-derived — transposing staves, 22 clefs — plus part names.

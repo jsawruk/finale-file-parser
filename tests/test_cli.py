@@ -1,6 +1,6 @@
 """Tests for the `finale-parser` command.
 
-The readers are stubbed, so these cover the CLI's own decisions: which files it
+The stable score reader is stubbed, so these cover the CLI's own decisions: which files it
 finds, where output goes, what it refuses to overwrite, and what a batch does
 when one document will not build. Those are the parts a user meets first and the
 parts no corpus sweep exercises.
@@ -33,8 +33,7 @@ class _Version:
 def stub(monkeypatch: pytest.MonkeyPatch) -> None:
     """Make every document detect, build, and export to the same trivial XML."""
     monkeypatch.setattr(cli, "detect_version", lambda path: _Version())
-    monkeypatch.setattr(cli, "load_document", lambda path: object())
-    monkeypatch.setattr(cli, "build_score", lambda document: _SCORE)
+    monkeypatch.setattr(cli, "read_score", lambda path: _SCORE)
     monkeypatch.setattr(cli, "to_musicxml", lambda score: b"<score/>")
 
 
@@ -87,6 +86,16 @@ def test_converts_a_single_file(tmp_path: Path, stub: None) -> None:
     assert (tmp_path / "a.musicxml").read_bytes() == b"<score/>"
 
 
+def test_convert_uses_the_stable_score_reader(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = touch(tmp_path / "a.mus")
+    monkeypatch.setattr(cli, "read_score", lambda path: _SCORE)
+    monkeypatch.setattr(cli, "to_musicxml", lambda score: b"<score/>")
+
+    assert cli.main(["convert", str(source)]) == cli.EXIT_OK
+
+
 def test_refuses_to_overwrite_without_force(tmp_path: Path, stub: None) -> None:
     """Conversion is cheap to repeat; a clobbered file is not."""
     source = touch(tmp_path / "a.mus")
@@ -115,13 +124,12 @@ def test_a_batch_continues_past_a_document_that_will_not_build(
     touch(root / "bad.mus")
     touch(root / "good.mus")
 
-    def load(path: Path) -> object:
+    def load(path: Path) -> Score:
         if path.name == "bad.mus":
             raise FinaleFileError("no music the frames reach")
-        return object()
+        return _SCORE
 
-    monkeypatch.setattr(cli, "load_document", load)
-    monkeypatch.setattr(cli, "build_score", lambda document: _SCORE)
+    monkeypatch.setattr(cli, "read_score", load)
     monkeypatch.setattr(cli, "to_musicxml", lambda score: b"<score/>")
 
     out = tmp_path / "out"
@@ -148,15 +156,25 @@ def test_inspect_reports_a_score_that_builds(
     assert "score" in capsys.readouterr().out
 
 
+def test_terminal_inspect_uses_the_stable_score_reader(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = touch(tmp_path / "a.musx")
+    monkeypatch.setattr(cli, "detect_version", lambda path: _Version())
+    monkeypatch.setattr(cli, "read_score", lambda path: _SCORE)
+
+    assert cli.main(["inspect", str(source)]) == cli.EXIT_OK
+
+
 def test_inspect_reports_a_score_that_does_not_build(
     tmp_path: Path, stub: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from finale_file_parser.errors import FinaleFileError
 
-    def load(path: Path) -> object:
+    def load(path: Path) -> Score:
         raise FinaleFileError("entry 402 placed twice at staff 3 measure 12 layer 1")
 
-    monkeypatch.setattr(cli, "load_document", load)
+    monkeypatch.setattr(cli, "read_score", load)
     source = touch(tmp_path / "a.musx")
     assert cli.main(["inspect", str(source)]) == cli.EXIT_FAILURES
 

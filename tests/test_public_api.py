@@ -134,6 +134,8 @@ EXPECTED_PUBLIC_NAMES = {
     "open_musx",
     "parse_enigma",
     "read_entry",
+    "read_document",
+    "read_score",
     "repeats_for",
     "staff_groups",
     "staff_order",

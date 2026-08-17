@@ -32,6 +32,10 @@ Because parsing supports multiple inputs, all data flows into a single intermedi
   (`ContainerEntry`, `CorruptContainerError`), `names.py` (member-name safety), `musx.py`
   (`open_musx`, `MusxContainer`). `version/musx.py` is a client of this module; nothing else
   opens archives directly.
+- `src/finale_file_parser/reader.py` — the small application-facing facade. `read_document(path)`
+  detects the container family from file contents and returns the shared `EnigmaDocument`;
+  `read_score(path)` adds the single `build_score` step and returns the format-neutral IR. It does
+  not translate exceptions or dispatch by filename suffix.
 - `src/finale_file_parser/enigma/` — decodes a `.musx`'s `score.dat` into EnigmaXML and parses that
   EnigmaXML into a navigable document. `crypt.py` (the cipher, pure — no I/O), `models.py`
   (`CorruptScoreError`), `score.py` (`score_xml`, composing `container.open_musx` with the cipher
@@ -1138,5 +1142,8 @@ opportunity for the two to drift.
 - `.mus`: `read_mus_document(path)` → `EnigmaDocument`, translating the `.mus` pools into the same
   `Record`s (see "Known format facts — reading a `.mus` as an EnigmaDocument")
 
-Then `build_score(document)` → `Score` → `to_musicxml(score)`. Key types are named here as they are
-defined.
+`read_document(path)` is the public facade over those two branches, using `detect_version(path)` to
+choose by content. `read_score(path)` is `build_score(read_document(path))`. The lower-level
+functions remain public for research and record-level work; application callers do not need to
+compose them or know which container they received. Then `Score` → `to_musicxml(score)`. Key types
+are named here as they are defined.
