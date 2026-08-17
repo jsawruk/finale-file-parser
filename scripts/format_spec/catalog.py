@@ -473,6 +473,11 @@ against a paired document, is a different kind of claim.</p>
 of which the tiers above account for roughly thirty. The rest are read, keyed and
 carried, but their meaning is unknown. The most frequent, by record count across
 the corpus:</p>
+<div class="note review">{REVIEW_BADGE}<strong>Removed from this table:</strong>
+<code>^DN</code> is now decoded as the percussion input-note name, and
+<code>^fg</code> is identified by its chord-shape text. Their former Tier-C rows
+were stale, so the deletion is called out here where absent rows cannot carry a
+highlight of their own.</div>
 {render_unknown()}
 <div class=note><strong>Two hints from the counts.</strong> Several pairs share an
 exact record count &mdash; 213/215, 192/241, and <code>sL</code>/<code>sb</code>
@@ -506,11 +511,14 @@ _SOURCE = {
     "measured": "measured",
 }
 
+REVIEW_BADGE = "<span class=reviewbadge>CHANGED</span>"
+"""Temporary marker for text changed since the previous PDF review."""
+
 
 def _labelled_rows() -> str:
     """Tags named by the text in their own payloads."""
     return "".join(
-        f"<tr><td><code>^{e.tag}</code></td><td>{e.name}</td>"
+        f"<tr class=review><td>{REVIEW_BADGE}<code>^{e.tag}</code></td><td>{e.name}</td>"
         f"<td>{e.description}</td><td class=sz>{e.documents}</td></tr>"
         for e in TAGS.TAG_NAMES
         if e.tier == TAGS.LABELLED
@@ -519,12 +527,18 @@ def _labelled_rows() -> str:
 
 def _etf_rows(pool: str) -> str:
     """The documented ETF tags of one pool, in catalogue order."""
-    return "".join(
-        f"<tr><td><code>^{e.tag}</code></td><td>{e.name}</td><td>{e.description}</td>"
-        f"<td class=sz>{_SOURCE[e.source]}</td></tr>"
-        for e in TAGS.TAG_NAMES
-        if e.tier == TAGS.DOCUMENTED and e.pool == pool and e.source
-    )
+    rows: list[str] = []
+    for entry in TAGS.TAG_NAMES:
+        if entry.tier != TAGS.DOCUMENTED or entry.pool != pool or not entry.source:
+            continue
+        changed = entry.tag == "DF"
+        css = " class=review" if changed else ""
+        badge = REVIEW_BADGE if changed else ""
+        rows.append(
+            f"<tr{css}><td>{badge}<code>^{entry.tag}</code></td><td>{entry.name}</td>"
+            f"<td>{entry.description}</td><td class=sz>{_SOURCE[entry.source]}</td></tr>"
+        )
+    return "".join(rows)
 
 
 def render_etf_tags() -> str:
@@ -565,7 +579,8 @@ only judgement is reading them. This is stronger evidence than the key-sequence
 matching of Tier&nbsp;B, and it establishes what a record <em>holds</em> while
 saying nothing about where its fields sit.</p>
 
-<p>It matters most for the 2001&ndash;2005 era, which has <strong>no paired
+<p class=review>{REVIEW_BADGE}
+It matters most for the 2001&ndash;2005 era, which has <strong>no paired
 <code>.musx</code> anywhere in this corpus</strong>, so the method that earned
 Tier&nbsp;A elsewhere is unavailable. Counts are documents carrying the tag
 across all 139 DCL files. An earlier census reported only 38 because it matched
@@ -574,7 +589,7 @@ lowercase <code>.mus</code> and silently omitted 101 uppercase
 <table><thead><tr><th>Tag</th><th>Holds</th><th>Text found in the payload</th>
 <th>Docs</th></tr></thead><tbody>{_labelled_rows()}</tbody></table>
 
-<div class=note><strong><code>^RT</code> corrects a claim this project
+<div class="note review">{REVIEW_BADGE}<strong><code>^RT</code> corrects a claim this project
 published.</strong> The reader's own list of gaps stated that the corpus offered
 no evidence at all for identifying the text-repeat tag &mdash; &ldquo;not a
 little, none&rdquo;. It had reasoned entirely about paired documents, found the
@@ -603,7 +618,7 @@ DCL documents
 carry it, against 149 of 150 <code>.musx</code> documents, later versions
 shipping the defaults regardless.</p></div>
 
-<div class=note><strong><code>^DL</code>, <code>^DF</code> and
+<div class="note review">{REVIEW_BADGE}<strong><code>^DL</code>, <code>^DF</code> and
 <code>^DN</code> form the DCL percussion-map palette.</strong>
 <code>^DL(map)</code> names the map. <code>^DF(map,input)</code> is one
 10-byte appearance row, and <code>^DN(map,input)</code> names that same input.

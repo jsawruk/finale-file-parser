@@ -108,6 +108,24 @@ Coda's own documentation, that is stated explicitly rather than quietly
 resolved &mdash; there is one such case, the note alteration encoding in
 &sect;7.2.</div>
 
+<div class="note review"><strong>Changes in this revision</strong>
+<span class=reviewbadge>CHANGED</span>
+<p>Every changed passage in the PDF is highlighted and badged. The changes are
+all in the record-tag tables and evidence notes in &sect;6:</p>
+<ul>
+<li><code>^DF</code> is corrected from a MIDI-keyed appearance row to an
+input-note crosswalk whose payload starts with playback MIDI and staff position.</li>
+<li>The self-naming-tag census now covers all 139 DCL documents instead of the
+38 lowercase paths, so every row in that table has an updated document count.</li>
+<li>The <code>^RT</code> evidence is corrected to 1,253 records in 137 documents,
+and the complete <code>^DL</code>/<code>^DF</code>/<code>^DN</code> percussion
+crosswalk is documented.</li>
+<li><code>^DN</code> and <code>^fg</code> are removed from the Tier-C
+unidentified table; a highlighted deletion notice appears beside that table.</li>
+</ul>
+<p class=meta>These review marks are temporary and can be removed after the PDF
+has been read.</p></div>
+
 
 <h4>No corpus bytes appear in this document</h4>
 <p>Every hex dump is <strong>synthetic</strong>, constructed by the generator
