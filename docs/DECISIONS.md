@@ -555,8 +555,9 @@ elsewhere. Reading payload text is the strongest evidence that cohort can offer.
 
 Consequence: the `UNTRANSLATED` entry claiming the corpus held no evidence for
 the text-repeat tag was wrong, and is corrected. It had reasoned only about
-paired documents and never searched the DCL cohort, where 411 `^RT` records
-across all 38 documents carry the text verbatim.
+paired documents and never searched the DCL cohort, where 1,253 `^RT` records
+across 137 documents carry the text verbatim. The earlier 411/38 measurement
+was another incomplete cohort: a lowercase-only glob omitted 101 `.MUS` files.
 
 **Reopen if** a `labelled` name is ever contradicted by a decoded payload, which
 would mean the words in a record describe something other than the record.

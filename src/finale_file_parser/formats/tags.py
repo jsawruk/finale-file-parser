@@ -90,7 +90,7 @@ class TagName:
 
     Set for `fg` alone, and on two independent signals: its payload lengths are
     60, 120, 180 and 240 -- every one a multiple of 60 -- and the gap between
-    consecutive text runs is exactly 60 in 1,130 corpus records. Each slot holds
+    consecutive text runs is exactly 60 throughout the corpus. Each slot holds
     a 12-byte header, the name, then `0xCC` filler to the boundary.
 
     **Not inferred from payload length alone.** Every `others` payload is a
@@ -105,15 +105,13 @@ class TagName:
     """Where this record's name begins, for the records that carry one.
 
     A `LABELLED` tag was identified by the words in its payload, and those words
-    sit at a constant offset per tag -- `FN` at +12 in 458 of 458 corpus
-    records, `fI` at +12 in 1,008 of 1,008, `ft` at +84 in 179 of 179. The name
-    runs to the first NUL.
+    sit at a constant offset per tag -- `FN` and `fI` at +12, `ft` at +84. The
+    name runs to the first NUL.
 
     This is deliberately not a `Layout`. It says where the name starts and
     nothing else: `fI`, `fg` and `ft` carry further data after it whose meaning
     is unknown, and a layout claiming a field's extent would be claiming more
-    than was measured. `RT` has no entry because its offset is not constant --
-    +0 in 233 records, +4 or +5 in 115, absent in 44.
+    than was measured. `RT` has no entry because its offset is not constant.
     """
 
 
@@ -317,7 +315,7 @@ _DOCUMENTED: tuple[TagName, ...] = (
         "DF",
         "details",
         "Percussion map",
-        "(map id 1–26, MIDI note 0–127)",
+        "(map id 1–26, input note 0–127); payload starts with playback MIDI note",
         DOCUMENTED,
         source="measured",
     ),
@@ -375,8 +373,9 @@ _DOCUMENTED: tuple[TagName, ...] = (
 
 # Named from the text in their own payloads, read across the DCL cohort. The
 # sample strings in each description are verbatim from corpus records; the
-# counts are of documents carrying the tag, out of the 38 that read as
-# 2001-2005 rows. Several correspond to a 2011 tag that key-sequence matching
+# counts are of documents carrying the tag, across all 139 DCL-era files.
+# Earlier counts covered only the 38 lowercase `.mus` paths and silently missed
+# 101 uppercase `.MUS` paths. Several correspond to a 2011 tag that key-sequence matching
 # named -- ^FN to fontName, ^fI to fretInst, ^DL to drumLibName -- and reading
 # the payload is by some distance the better evidence of the two.
 _LABELLED: tuple[TagName, ...] = (
@@ -386,7 +385,7 @@ _LABELLED: tuple[TagName, ...] = (
         "drum library",
         "names drum sets: 'General MIDI Entry & Playback', 'Cymbals', 'Agogo Bells'",
         LABELLED,
-        documents=38,
+        documents=133,
         text_at=0,
     ),
     TagName(
@@ -395,7 +394,7 @@ _LABELLED: tuple[TagName, ...] = (
         "font names",
         "'Maestro', 'Times', 'Chicago', 'Helvetica', 'Jazz'",
         LABELLED,
-        documents=38,
+        documents=139,
         text_at=12,
     ),
     TagName(
@@ -405,7 +404,7 @@ _LABELLED: tuple[TagName, ...] = (
         "the printed text of a jump: 'D.C. al Fine', "
         "'D.C. al Coda', 'D.S. al Fine', 'D.S. al Coda'",
         LABELLED,
-        documents=38,
+        documents=137,
     ),
     TagName(
         "fI",
@@ -413,7 +412,7 @@ _LABELLED: tuple[TagName, ...] = (
         "fretted instrument",
         "'Standard Guitar', 'Guitar - 7 String', 'Guitar - DADGAD'",
         LABELLED,
-        documents=38,
+        documents=139,
         text_at=12,
     ),
     TagName(
@@ -422,7 +421,7 @@ _LABELLED: tuple[TagName, ...] = (
         "chord shape",
         "'Simple Major Triad', 'Minor Triad Seville', 'dim triad', '7 Seville'",
         LABELLED,
-        documents=34,
+        documents=39,
         text_at=12,
         text_stride=60,
     ),
@@ -432,16 +431,16 @@ _LABELLED: tuple[TagName, ...] = (
         "fretboard style",
         "'Seville', 'Seville 5 Frets', 'Seville With Shapes', 'Jazz'",
         LABELLED,
-        documents=38,
+        documents=139,
         text_at=84,
     ),
     TagName(
         "DN",
         "details",
-        "percussion note map",
+        "percussion input-note name",
         "'Acoustic Bass Drum', 'Side Stick', 'Snare (Acoustic)', 'Hand Clap'",
         LABELLED,
-        documents=38,
+        documents=133,
         text_at=0,
     ),
 )

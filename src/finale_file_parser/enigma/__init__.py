@@ -76,6 +76,11 @@ from finale_file_parser.enigma.mus_payload import (
     read_mus_pools,
     read_mus_streams,
 )
+from finale_file_parser.enigma.mus_percussion import (
+    DclPercussionEntry,
+    DclPercussionMap,
+    dcl_percussion_maps,
+)
 from finale_file_parser.enigma.mus_rows import MusRowRecord, MusRows, read_mus_rows
 from finale_file_parser.enigma.music import (
     Duration,
@@ -143,6 +148,8 @@ __all__ = [
     "CorruptDclStreamError",
     "CorruptScoreError",
     "DetailsPool",
+    "DclPercussionEntry",
+    "DclPercussionMap",
     "Duration",
     "EnigmaDocument",
     "EntriesPool",
@@ -201,6 +208,7 @@ __all__ = [
     "staff_names",
     "text_block",
     "decode_key",
+    "dcl_percussion_maps",
     "harm_lev_octave_shift",
     "duration_from_edu",
     "decrypt",

@@ -1,8 +1,8 @@
 """Tags named by the text in their own payloads.
 
 The claim each of these makes is narrow and checkable: a record of this tag
-contains these words. So the test reads the corpus and checks exactly that,
-rather than trusting the catalogue to describe itself.
+contains these words. These unit tests pin the catalogue contract; the complete
+case-insensitive measurement lives in `test_labelled_tags_corpus_sweep.py`.
 """
 
 from __future__ import annotations
@@ -28,10 +28,7 @@ EVIDENCE = {
 
 
 def test_a_name_offset_is_stated_only_where_it_is_constant() -> None:
-    """`RT` has none deliberately: its text sits at +0 in 233 corpus records,
-    at +4 or +5 in 115, and is absent in 44. An offset that holds 57% of the
-    time is not an offset, and pointing the decoder at one would show a name
-    cut in half or a fragment of the record before it."""
+    """`RT` has none deliberately because its text has no constant offset."""
     at = {e.tag: e.text_at for e in TAG_NAMES if e.tier == LABELLED}
     assert at == {"DL": 0, "DN": 0, "FN": 12, "fI": 12, "fg": 12, "ft": 84, "RT": None}
 

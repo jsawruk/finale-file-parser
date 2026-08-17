@@ -389,10 +389,8 @@ UNKNOWN: list[tuple[str, str, str, str]] = [
     ("1034", "2011", "details", "1,164"),
     ("1060", "2011", "details", "1,156"),
     ("^fb", "DCL", "details", "63,324"),
-    ("^DN", "DCL", "details", "18,647"),
     ("^BC", "DCL", "others", "3,809"),
     ("^DA", "DCL", "others", "2,963"),
-    ("^fg", "DCL", "others", "2,884"),
     ("^OC", "DCL", "others", "2,170"),
     ("^ls", "DCL", "others", "1,809"),
 ]
@@ -569,8 +567,10 @@ saying nothing about where its fields sit.</p>
 
 <p>It matters most for the 2001&ndash;2005 era, which has <strong>no paired
 <code>.musx</code> anywhere in this corpus</strong>, so the method that earned
-Tier&nbsp;A elsewhere is unavailable. Counts are documents carrying the tag, out
-of the 38 that read as DCL rows.</p>
+Tier&nbsp;A elsewhere is unavailable. Counts are documents carrying the tag
+across all 139 DCL files. An earlier census reported only 38 because it matched
+lowercase <code>.mus</code> and silently omitted 101 uppercase
+<code>.MUS</code> paths.</p>
 <table><thead><tr><th>Tag</th><th>Holds</th><th>Text found in the payload</th>
 <th>Docs</th></tr></thead><tbody>{_labelled_rows()}</tbody></table>
 
@@ -579,7 +579,7 @@ published.</strong> The reader's own list of gaps stated that the corpus offered
 no evidence at all for identifying the text-repeat tag &mdash; &ldquo;not a
 little, none&rdquo;. It had reasoned entirely about paired documents, found the
 candidates were mispairings, and concluded the corpus was silent. The DCL cohort
-was never searched, and 411 <code>^RT</code> records across all 38 of its
+was never searched, and 1,253 <code>^RT</code> records across 137 of its
 documents carry the text verbatim. What remains missing is narrower: the
 assignment attaching a repeat to a measure, and the action telling a player
 where to go.</div>
@@ -603,22 +603,34 @@ DCL documents
 carry it, against 149 of 150 <code>.musx</code> documents, later versions
 shipping the defaults regardless.</p></div>
 
-<div class=note><strong><code>^DF</code> is a percussion map.</strong> It is
-keyed by a map id (1&ndash;26) and a MIDI
-note (0&ndash;127), and gives that note's appearance on a percussion staff. It
-is the most common record in a DCL document, which a table of roughly
-twenty-five maps by 128 notes accounts for.
+<div class=note><strong><code>^DL</code>, <code>^DF</code> and
+<code>^DN</code> form the DCL percussion-map palette.</strong>
+<code>^DL(map)</code> names the map. <code>^DF(map,input)</code> is one
+10-byte appearance row, and <code>^DN(map,input)</code> names that same input.
+All 18,647 <code>^DN</code> records have an exact <code>^DF</code> partner;
+the typed reader is <code>enigma.dcl_percussion_maps</code>.
 
-<p>Three measurements support the reading. The id tops out at 21 or 25 whatever
-a document's staff count, so it selects from a fixed library rather than
-describing a staff. The payload's first field repeats its own key in 9,396 of
-10,434 non-empty records. And 79% of non-empty entries fall in notes
-35&ndash;81, the General Midi percussion range, which is only 37% of the key
-space. The first in any document sits at note 35, General Midi's first defined
-percussion note, with everything below it empty.</p>
+<p>The second key is an <em>input</em> note, not the playback MIDI note this
+document previously called it. The first payload word is playback MIDI and the
+second is staff position. The distinction is visible 3,717 times among the
+18,647 named entries. For example, &ldquo;Hi-Hat Foot&rdquo; in the bass-clef
+entry map is input 41 but playback 44; its treble-clef sibling is input 62 and
+playback 44, while both store staff position 1. A field that changes with the
+entry clef cannot be the playback note.</p>
 
-<p>The remaining payload fields, presumably notehead and staff position, are not
-decoded here.</p></div>
+<p>The final three words are preserved as two raw notehead values and one raw
+trailing value. Their order and meaning are not named: neither the ETF
+specification nor Cahill's thesis documents this record, and the unpaired
+corpora do not justify transferring the four-notehead EnigmaXML layout onto
+two DCL fields.</p>
+
+<p>Names follow the platform encoding. Every one of the 37 big-endian DCL files
+is Mac-origin and uses Mac Roman; every one of the 102 little-endian files is
+Windows-origin and uses CP1252.</p>
+
+<p>This is still a palette, not score usage: the DCL record selecting a map for
+a staff is not decoded. Across the full cohort there are 1,282 maps, 74,730
+<code>^DF</code> rows, and 18,647 named rows.</p></div>
 
 <div class=warn><strong>Not every DCL tag is two printable characters.</strong>
 Alongside the character tags, the details pool holds thirty
