@@ -112,6 +112,23 @@ class Inspection:
     already tripped once.
     """
 
+    xml: str = ""
+    """The document's own EnigmaXML, entire, or empty when there is none.
+
+    Empty is the ordinary case for a `.mus`: that container holds binary
+    records and its document model is *reconstructed*, so there is no source
+    text to show and the report hides the pane rather than offering an empty
+    one. Empty also covers a `.musx` whose ladder stopped before the source
+    could be extracted, which the ladder itself already explains.
+
+    Carried whole and never truncated. A cut-off XML document reads as a
+    complete one right up to the point it stops, so a prefix would be worse
+    than useless -- and unlike every other depth here this is the file's own
+    text rather than a view derived from it, which is the thing a reader most
+    needs to be able to trust. `apply_budget` therefore drops the derived
+    depths and leaves this alone.
+    """
+
     byte_order: str = ""
     """How to read a multi-byte field in this document's records.
 
@@ -239,6 +256,14 @@ def _musx_stages(
     xml = ladder.run(
         "extract score.dat", lambda: score_xml(target), lambda b: {"bytes": str(len(b))}
     )
+    if xml is not None:
+        # Decoded here rather than at render time so the page carries text and
+        # not bytes. `replace` rather than `strict`: EnigmaXML is UTF-8 and the
+        # corpus holds no counter-example, but this is untrusted input and a
+        # bad byte must not be what stops a report being written. The renderer
+        # sanitises separately, for characters XML forbids rather than ones
+        # UTF-8 does.
+        inspection.xml = xml.decode("utf-8", errors="replace")
     document = ladder.run("parse EnigmaXML", lambda: parse_enigma(xml or b""))
     if document is not None:
         records = ladder.run(

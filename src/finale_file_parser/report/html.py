@@ -89,6 +89,14 @@ details.node > summary::marker { color: #999; }
    colour does not -- these tables are read on paper as well as on screen. */
 .hexval { color: #777; margin-left: 0.7rem; }
 .no-bytes { color: #666; max-width: 34rem; }
+/* The source pane. `pre-wrap` rather than `pre`: EnigmaXML runs to long lines
+   and a horizontal scrollbar on a multi-megabyte document is unusable. */
+.xmlsrc { white-space: pre-wrap; word-break: break-word; font-size: 12px;
+          line-height: 1.35; background: #fafafa; border: 1px solid #eee;
+          padding: 0.6rem; }
+.xmltree { font-size: 12.5px; }
+.xmltree .leaf { margin-left: 1rem; color: #333; white-space: pre-wrap;
+                 word-break: break-word; }
 .score { overflow-x: auto; margin-bottom: 1rem; }
 .score .page { margin-bottom: 0.5rem; }
 .score svg { max-width: 100%; height: auto; }
@@ -112,7 +120,10 @@ function show(name) {
   }
 }
 for (const b of document.querySelectorAll('nav button')) {
-  b.addEventListener('click', () => show(b.dataset.pane));
+  b.addEventListener('click', () => {
+    show(b.dataset.pane);
+    if (b.dataset.pane === 'xml') { renderXml(); }
+  });
 }
 function esc(t) {
   return String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -697,6 +708,55 @@ function control(label, onClick) {
   button.addEventListener('click', onClick);
   return button;
 }
+// The source is parsed and drawn only when the XML pane is first opened, and
+// each element's children only when that element is opened. A .musx source runs
+// to 2.5 MB at the corpus median; building every node up front is tens of
+// thousands of elements for a pane the reader may never look at, and doing it
+// on load would stall the page that does open by default.
+function xmlLine(el) {
+  // `<tag attr="v">` as text, in one span, so nothing from the document is
+  // ever handed to a markup parser a second time.
+  let head = '<' + el.nodeName;
+  for (const a of el.attributes) { head += ' ' + a.name + '="' + a.value + '"'; }
+  return head + '>';
+}
+function xmlNode(el) {
+  const kids = [...el.children];
+  if (!kids.length) {
+    // A leaf: the element and its text on one line, which is how the format's
+    // scalar fields read -- <dura>1024</dura> says more than a fold would.
+    const leaf = document.createElement('div');
+    leaf.className = 'leaf';
+    const text = (el.textContent || '').trim();
+    leaf.textContent = xmlLine(el) + text + '</' + el.nodeName + '>';
+    return leaf;
+  }
+  const node = tree(xmlLine(el), kids.length + (kids.length === 1 ? ' child' : ' children'));
+  node.addEventListener('toggle', () => {
+    if (node.open && !node.dataset.filled) {
+      node.dataset.filled = '1';
+      for (const kid of kids) { node.appendChild(xmlNode(kid)); }
+    }
+  }, {once: false});
+  return node;
+}
+function renderXml() {
+  const src = document.getElementById('xml-source');
+  const out = document.getElementById('xml-tree');
+  if (!src || !out || out.dataset.done) { return; }
+  out.dataset.done = '1';
+  // textContent, not innerHTML: the page carries the source escaped, and this
+  // reads back the characters the file actually held.
+  const doc = new DOMParser().parseFromString(src.textContent, 'application/xml');
+  if (doc.querySelector('parsererror')) {
+    out.textContent = 'The source did not parse as XML. It is shown raw below.';
+    src.hidden = false;
+    return;
+  }
+  const root = xmlNode(doc.documentElement);
+  root.open = true;
+  out.appendChild(root);
+}
 renderStats();
 renderMusic();
 renderRecords();
@@ -777,6 +837,47 @@ def _notation(inspection: Inspection) -> str:
     return f'<div class="score">{pages}</div>{omitted}'
 
 
+def _xml_button(inspection: Inspection) -> str:
+    """The XML tab, or nothing at all.
+
+    Absent rather than empty. A `.mus` has no source text -- it holds binary
+    records and its document model is reconstructed from them -- so a pane
+    saying "no XML here" would invite the reader to wonder what went wrong,
+    when the answer is that nothing did and this container simply has none.
+    """
+    return '<button data-pane="xml">XML</button>' if inspection.xml else ""
+
+
+def _xml_pane(inspection: Inspection) -> str:
+    """The document's EnigmaXML, entire.
+
+    Written into the page rather than into the JSON island, which the other
+    panes are built from. The island is embedded *and* rendered, so anything
+    put there is carried twice; at a corpus median of 2.77 MB this is far the
+    largest thing in the report and paying for it once matters.
+
+    `_text` escapes it, which is what makes an XML document safe to nest inside
+    an XML-well-formed page at all: its own tags become entities and are shown
+    as the characters they are, rather than parsed as this document's markup.
+    """
+    if not inspection.xml:
+        return ""
+    size = f"{len(inspection.xml.encode('utf-8')):,} bytes"
+    return (
+        '<section id="xml">'
+        f'<p class="meta">score.dat, decrypted and decompressed — {size}, entire. '
+        "Every element folds; a leaf shows its text beside its tag.</p>"
+        '<div id="xml-tree" class="xmltree"></div>'
+        # Hidden, not absent: this is what the tree is parsed from, and hidden
+        # keeps the browser from laying out megabytes of text nobody asked to
+        # see. It is also the fallback -- if the source will not parse, it is
+        # unhidden, because a document this reader cannot fold is still a
+        # document they need to read.
+        f'<pre class="xmlsrc" id="xml-source" hidden="hidden">{_text(inspection.xml)}</pre>'
+        "</section>"
+    )
+
+
 def render_html(inspection: Inspection) -> str:
     """One self-contained page. No network, no build step, no external assets.
 
@@ -816,9 +917,11 @@ def render_html(inspection: Inspection) -> str:
         f"<h1>{name}</h1>"
         '<nav><button data-pane="music">Music</button>'
         '<button data-pane="records">Records</button>'
+        f"{_xml_button(inspection)}"
         '<button data-pane="debug">Debug</button></nav>'
         f'<section id="music">{_notation(inspection)}<div id="music-tree"></div></section>'
         '<section id="records"></section>'
+        f"{_xml_pane(inspection)}"
         '<section id="debug">'
         "<h2>File</h2>"
         f'<p class="meta">{meta}</p>{notes}'
