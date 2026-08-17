@@ -36,6 +36,7 @@ Translated:
 | details | `staffGroup` (1057) | `startInst`, `endInst`, `bracket.id`, `fullID`, the barline bit |
 | texts | `verse` | the `^verse(N)…^end` sections of the text stream |
 | texts | `expression` | the `^expression(N)…^end` sections of the same stream |
+| texts | `fileInfo` | title (1), composer (2), copyright (3) |
 | others | `textExprDef` (241) | `textIDKey`, `value`, `descStr` |
 | others | `measExprAssign` (177) | `textExprID`, `staffAssign`, offsets; per 24-byte slot |
 
@@ -108,6 +109,12 @@ UNTRANSLATED = (
     "from outside this corpus; it does not close by looking harder at these "
     "files. Parts still fall back to positional names. See "
     "docs/formats/mus-staff-names.md.",
+    "Bibliographic metadata in a 2001-2005 .mus. The 2011-era text stream "
+    "carries tagged fileInfo sections, and kinds 1, 2 and 3 are read as title, "
+    "composer and copyright. None of the 139 DCL-era text streams carries a "
+    "fileInfo section. Those files may carry text in the fixed preamble block, "
+    "but its field boundaries are only approximate and are not read, so a "
+    "DCL-derived Score still has empty bibliographic metadata.",
     "Instrument-derived clefs: where a gfhold stores clefID 0 it means 'use the "
     "staff's defaultClef', and for some staves the .mus stores 0 there too while "
     "the .musx materialises a real clef. Those measures come out treble. Same "
@@ -247,8 +254,19 @@ _LYRIC_WEXT = 8
 _TEXT_STREAM = 3
 """The payload stream holding ETF tagged text (`^verse(1)...^end`)."""
 
-_TEXT_SECTION = re.compile(rb"\^(verse|chorus|section|expression)\((\d+)\)(.*?)\^end", re.DOTALL)
+_TEXT_SECTION = re.compile(
+    rb"\^(verse|chorus|section|expression|fileInfo)\((\d+)\)(.*?)\^end", re.DOTALL
+)
 """One tagged text section. The body keeps its markup; `plain_text` strips it."""
+
+_FILE_INFO_TYPES = {b"1": "title", b"2": "composer", b"3": "copyright"}
+"""The bibliographic kinds confirmed by exact text matches to paired `.musx`.
+
+Kinds 6 and 7 each have one exact match to arranger and subtitle, respectively,
+which is not enough evidence to ship either mapping. Kind 4 appears widely but
+does not match the paired text exactly. Unknown kinds are omitted rather than
+given plausible-looking names.
+"""
 
 _FALLBACK_ENCODING = {"MAC": "mac_roman", "WIN": "cp1252"}
 """What a text section is if it is not UTF-8.
@@ -636,11 +654,14 @@ def _u32(payload: bytes, offset: int, order: ByteOrder = "little") -> int:
 
 
 def _texts_records(path: str | os.PathLike[str]) -> list[Record]:
-    """The text stream's tagged sections, as `verse`/`chorus`/`section` Records.
+    """The text stream's tagged sections as Enigma text records.
 
     A `.mus` keeps these as ETF tagged text rather than as binary records, so
     they are read straight out of the stream. The body keeps its markup, exactly
     as the `.musx` texts pool does, and `plain_text` handles both dialects.
+
+    Lyric and expression sections are keyed by `number`. A `fileInfo` section's
+    numeric kind is translated to the semantic `type` that `file_info` expects.
     """
     streams = read_mus_streams(path)
     if len(streams) <= _TEXT_STREAM:
@@ -651,16 +672,21 @@ def _texts_records(path: str | os.PathLike[str]) -> list[Record]:
     for match in _TEXT_SECTION.finditer(streams[_TEXT_STREAM]):
         tag = match.group(1).decode("ascii")
         number = match.group(2).decode("ascii")
-        if (tag, number) in seen:
+        if tag == "fileInfo":
+            kind = _FILE_INFO_TYPES.get(match.group(2))
+            if kind is None:
+                continue
+            identity = (tag, kind)
+            attrs = {"type": kind}
+        else:
+            identity = (tag, number)
+            attrs = {"number": number}
+        if identity in seen:
             # TextsPool rejects a duplicate identity, and a repeated section is
             # the writer's business rather than something to fail a read over.
             continue
-        seen.add((tag, number))
-        out.append(
-            Record(
-                tag=tag, attrs={"number": number}, text=_decode(match.group(3), fallback), fields={}
-            )
-        )
+        seen.add(identity)
+        out.append(Record(tag=tag, attrs=attrs, text=_decode(match.group(3), fallback), fields={}))
     return out
 
 
