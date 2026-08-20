@@ -195,6 +195,41 @@ def test_a_mirror_places_one_entry_twice() -> None:
     assert sorted(s for p in places[9] if (s := p.staff) is not None) == [4, 14]
 
 
+def test_a_frame_spec_with_one_entry_bound_says_which_is_missing() -> None:
+    """`locate_entries` raises on a `frameSpec` carrying only one of
+    `startEntry`/`endEntry`. Skipping it silently reported the wrong absence:
+    the entries came back "no frame reaches this entry" and nothing anywhere
+    said the frame naming them was half-written."""
+    gfhold = Record(
+        tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )
+    frame = Record(
+        tag="frameSpec", attrs={"cmper": "12"}, text="", fields={"startEntry": "9"}
+    )  # no endEntry
+    entry = Record(tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024"})
+
+    _, unresolved = placements_by_entry(_doc(details=(gfhold,), others=(frame,), entries=(entry,)))
+
+    assert any("endEntry" in message for message in unresolved[0]), unresolved
+    assert any("startEntry" in message for message in unresolved[0])
+
+
+def test_a_frame_spec_with_neither_entry_bound_is_an_empty_layer_not_a_failure() -> None:
+    """The case `locate_entries` also passes over: an incidence that exists
+    with other fields and never got an entry chain. A frame cmper can carry a
+    second incidence that does, so this is ordinary rather than broken, and
+    calling it a failure would fill the report with noise."""
+    gfhold = Record(
+        tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )
+    frame = Record(tag="frameSpec", attrs={"cmper": "12"}, text="", fields={"startTime": "0"})
+    entry = Record(tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024"})
+
+    _, unresolved = placements_by_entry(_doc(details=(gfhold,), others=(frame,), entries=(entry,)))
+
+    assert unresolved.get(0, []) == []
+
+
 def test_an_enormous_end_entry_does_not_hang() -> None:
     """`startEntry`/`endEntry` are file-supplied integers with no ceiling. The
     walk must follow `next`, not treat [start, end] as a dense arithmetic

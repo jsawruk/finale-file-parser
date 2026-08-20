@@ -321,9 +321,24 @@ def placements_by_entry(
                 )
                 continue
             for spec in specs:
-                start = _as_int(spec.fields.get("startEntry"))
-                end = _as_int(spec.fields.get("endEntry"))
+                raw_start = spec.fields.get("startEntry")
+                raw_end = spec.fields.get("endEntry")
+                if raw_start is None and raw_end is None:
+                    # Neither bound is a legitimate empty layer, exactly as
+                    # `locate_entries` reads it: the incidence exists, with
+                    # other fields, and simply never got an entry chain.
+                    continue
+                start = _as_int(raw_start)
+                end = _as_int(raw_end)
                 if start is None or end is None:
+                    # One bound, or a bound that is not a number: malformed,
+                    # and `locate_entries` raises. Say so -- skipped silently,
+                    # the entries reported "no frame reaches this entry" and
+                    # nothing anywhere said why, which is the wrong absence.
+                    failures.document(
+                        f"gfhold {key} {field_name} frameSpec {frame} has startEntry "
+                        f"{raw_start!r} and endEntry {raw_end!r}: an entry range needs both"
+                    )
                     continue
                 _walk_chain(
                     key=key,
