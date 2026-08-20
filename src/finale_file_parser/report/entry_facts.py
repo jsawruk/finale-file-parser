@@ -109,20 +109,33 @@ def references_to(doc: EnigmaDocument, entnum: int) -> tuple[Reference, ...]:
 def placements_by_entry(
     doc: EnigmaDocument,
 ) -> tuple[dict[int, list[Placement]], dict[int, list[str]]]:
-    """Walk gfhold -> frameSpec -> entry range, recording breaks instead of raising.
+    """Walk gfhold -> frameSpec -> entry chain, recording breaks instead of raising.
 
     Mirrors `locate_entries`, and deliberately: see the module docstring. The
     differences are all in what happens when something is wrong.
 
-    A failure that belongs to no single entry -- a frame that is absent, so no
-    entry number is ever learned -- is filed under entnum `0`, which is not a
-    valid entry number and so cannot collide with a real one.
+    The entry range is walked by following each entry's `next` attribute, the
+    same as `locate_entries._walk_entry_chain` -- not by treating
+    `[startEntry, endEntry]` as a dense arithmetic range. `startEntry` and
+    `endEntry` are file-supplied integers with no ceiling, so an arithmetic
+    range can be asked to iterate without bound; following `next` bounds the
+    walk to real entries and the same `_CHAIN_GUARD` step limit
+    `locate_entries` uses for exactly this reason.
+
+    A failure that belongs to no single entry -- a frame that is absent, a
+    chain that breaks before reaching its declared end, or a chain that loops
+    -- is filed under entnum `0`, which is not a valid entry number and so
+    cannot collide with a real one.
     """
-    from finale_file_parser.enigma.location import _FRAME_FIELDS
+    from finale_file_parser.enigma.location import _CHAIN_GUARD, _FRAME_FIELDS
 
     placements: dict[int, list[Placement]] = {}
     unresolved: dict[int, list[str]] = {}
-    known = {_as_int(record.attrs.get("entnum")) for record in doc.entries.of_tag("entry")} - {None}
+    entries_by_num: dict[int, Record] = {}
+    for record in doc.entries.of_tag("entry"):
+        n = _as_int(record.attrs.get("entnum"))
+        if n is not None:
+            entries_by_num[n] = record
 
     for gfhold in doc.details.of_tag("gfhold"):
         if "part" in gfhold.attrs:
@@ -153,17 +166,74 @@ def placements_by_entry(
                 end = _as_int(spec.fields.get("endEntry"))
                 if start is None or end is None:
                     continue
-                for entnum in range(start, end + 1):
-                    placements.setdefault(entnum, []).append(
-                        Placement(
-                            staff=staff, measure=measure, layer=layer, gfhold_key=key, frame=frame
-                        )
-                    )
+                _walk_chain(
+                    key=key,
+                    frame=frame,
+                    start=start,
+                    end=end,
+                    staff=staff,
+                    measure=measure,
+                    layer=layer,
+                    entries_by_num=entries_by_num,
+                    placements=placements,
+                    unresolved=unresolved,
+                    guard=_CHAIN_GUARD,
+                )
 
-    for entnum in sorted(n for n in known if n is not None):
+    for entnum in sorted(entries_by_num):
         if entnum not in placements:
             unresolved.setdefault(entnum, []).append("no frame reaches this entry")
     return placements, unresolved
+
+
+def _walk_chain(
+    *,
+    key: str,
+    frame: int,
+    start: int,
+    end: int,
+    staff: int | None,
+    measure: int | None,
+    layer: int,
+    entries_by_num: dict[int, Record],
+    placements: dict[int, list[Placement]],
+    unresolved: dict[int, list[str]],
+    guard: int,
+) -> None:
+    """Follow one entry chain from `start` to `end` via each entry's `next`.
+
+    Mirrors `locate_entries._walk_entry_chain`, but every place that function
+    raises, this records a message under entnum `0` and stops -- the entries
+    already placed on this walk stay placed.
+    """
+    entnum = start
+    steps = 0
+    while True:
+        steps += 1
+        if steps > guard:
+            unresolved.setdefault(0, []).append(
+                f"gfhold {key} frame {frame} entry chain exceeded {guard} steps (cycle?)"
+            )
+            return
+        entry = entries_by_num.get(entnum)
+        if entry is None:
+            unresolved.setdefault(0, []).append(
+                f"gfhold {key} frame {frame} chain references missing entry {entnum}"
+            )
+            return
+        placements.setdefault(entnum, []).append(
+            Placement(staff=staff, measure=measure, layer=layer, gfhold_key=key, frame=frame)
+        )
+        if entnum == end:
+            return
+        next_entnum = _as_int(entry.attrs.get("next"))
+        if next_entnum is None:
+            unresolved.setdefault(0, []).append(
+                f"gfhold {key} frame {frame} chain broke before reaching entry {end}: "
+                f"entry {entnum} has no valid next"
+            )
+            return
+        entnum = next_entnum
 
 
 def _as_int(value: object) -> int | None:

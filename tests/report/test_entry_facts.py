@@ -143,3 +143,51 @@ def test_a_mirror_places_one_entry_twice() -> None:
     places, _ = placements_by_entry(_doc(details=(a, b), others=(frame,), entries=(entry,)))
 
     assert sorted(s for p in places[9] if (s := p.staff) is not None) == [4, 14]
+
+
+def test_an_enormous_end_entry_does_not_hang() -> None:
+    """`startEntry`/`endEntry` are file-supplied integers with no ceiling. The
+    walk must follow `next`, not treat [start, end] as a dense arithmetic
+    range -- an arithmetic range would iterate without bound here."""
+    gfhold = Record(
+        tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )
+    frame = Record(
+        tag="frameSpec",
+        attrs={"cmper": "12"},
+        text="",
+        fields={"startEntry": "9", "endEntry": str(10**18)},
+    )
+    entry = Record(tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024"})
+    places, unresolved = placements_by_entry(
+        _doc(details=(gfhold,), others=(frame,), entries=(entry,))
+    )
+
+    assert places[9] == [
+        Placement(staff=1, measure=3, layer=1, gfhold_key="(cmper1 1, cmper2 3)", frame=12)
+    ]
+    assert any("chain broke" in message for message in unresolved[0])
+
+
+def test_a_looping_chain_terminates_via_the_guard() -> None:
+    """An entry whose `next` points back at itself is a cycle. `locate_entries`
+    bounds this with `_CHAIN_GUARD`; here the walk must stop the same way and
+    record it rather than hang or raise."""
+    gfhold = Record(
+        tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )
+    frame = Record(
+        tag="frameSpec",
+        attrs={"cmper": "12"},
+        text="",
+        fields={"startEntry": "9", "endEntry": "999"},
+    )
+    entry = Record(
+        tag="entry", attrs={"entnum": "9", "next": "9"}, text="", fields={"dura": "1024"}
+    )
+    places, unresolved = placements_by_entry(
+        _doc(details=(gfhold,), others=(frame,), entries=(entry,))
+    )
+
+    assert places[9]
+    assert any("exceeded" in message and "cycle" in message for message in unresolved[0])
