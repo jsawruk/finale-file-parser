@@ -595,7 +595,11 @@ def test_build_entry_index_is_linear_not_quadratic_in_entries_and_details() -> N
     index = build_entry_index(_doc(details=details, entries=entries))
     elapsed = time.perf_counter() - started
 
-    assert elapsed < 1.0, f"build_entry_index took {elapsed:.2f}s -- looks quadratic again"
+    # 2.0s separates ~0.05s (grouped) from ~3.4s (per-entry rescan): 40x
+    # headroom over the passing measurement and still under the failing one.
+    # A tighter bound would say nothing more and would flake on a loaded
+    # machine, which is a poor trade in a suite that runs on every commit.
+    assert elapsed < 2.0, f"build_entry_index took {elapsed:.2f}s -- looks quadratic again"
     assert len(index) == _STRESS_ENTRY_COUNT
     assert len(index["1"].named_by) >= 1
     assert index["1"].named_by[0].tag == "articAssign"
