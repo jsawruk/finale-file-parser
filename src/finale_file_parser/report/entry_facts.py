@@ -30,6 +30,7 @@ from finale_file_parser.enigma.pitch import StaffTransposition, read_transpositi
 from finale_file_parser.errors import FinaleFileError
 
 __all__ = [
+    "DOCUMENT_KEY",
     "EntryDecode",
     "EntryFacts",
     "NoteFacts",
@@ -121,6 +122,19 @@ class EntryFacts:
     """
 
 
+DOCUMENT_KEY = "document"
+"""Index key for the failures that belong to no single entry.
+
+Not an entry number. Every real key in the index is `str(entnum)`, so no
+document can produce this one however it numbers its entries -- which is the
+point: these messages used to be filed under entnum `0`, on the reasoning that
+0 is not a valid entry number. Nothing enforced that. `entnum` comes out of the
+file and `EntriesPool` accepts `entnum="0"`, so a hostile document could
+declare one and collect every document-level failure into that single entry's
+facts, from where `report.model` promotes them into the notes as though one
+entry had caused them all.
+"""
+
 _MAX_DOCUMENT_FAILURES = 200
 """How many document-level failures one document's walk records, at most.
 
@@ -153,13 +167,13 @@ class _Failures:
     list first.
     """
 
-    by_entry: dict[int, list[str]] = field(default_factory=dict)
+    by_entry: dict[str, list[str]] = field(default_factory=dict)
     dropped: int = 0
 
     def document(self, message: str) -> None:
         """Record a failure that belongs to no single entry, or count it as
         dropped once the cap is reached."""
-        here = self.by_entry.setdefault(0, [])
+        here = self.by_entry.setdefault(DOCUMENT_KEY, [])
         if len(here) >= _MAX_DOCUMENT_FAILURES:
             self.dropped += 1
             return
@@ -168,12 +182,12 @@ class _Failures:
     def entry(self, entnum: int, message: str) -> None:
         """Record a failure that belongs to one entry. Bounded by the entry
         pool: the walk writes at most two of these per entry."""
-        self.by_entry.setdefault(entnum, []).append(message)
+        self.by_entry.setdefault(str(entnum), []).append(message)
 
-    def result(self) -> dict[int, list[str]]:
+    def result(self) -> dict[str, list[str]]:
         """The messages, with a counted tail when the cap dropped any."""
         if self.dropped:
-            self.by_entry.setdefault(0, []).append(
+            self.by_entry.setdefault(DOCUMENT_KEY, []).append(
                 f"... and {self.dropped} further document-level failures, which are not "
                 f"recorded: this document broke more than {_MAX_DOCUMENT_FAILURES} links "
                 "and only the first are kept"
@@ -252,7 +266,7 @@ def _references_by_entnum(doc: EnigmaDocument) -> dict[str, tuple[Reference, ...
 
 def placements_by_entry(
     doc: EnigmaDocument,
-) -> tuple[dict[int, list[Placement]], dict[int, list[str]]]:
+) -> tuple[dict[int, list[Placement]], dict[str, list[str]]]:
     """Walk gfhold -> frameSpec -> entry chain, recording breaks instead of raising.
 
     Mirrors `locate_entries`, and deliberately: see the module docstring. The
@@ -268,10 +282,10 @@ def placements_by_entry(
 
     A failure that belongs to no single entry -- a frame that is absent, a
     chain that breaks before reaching its declared end, or a chain that loops
-    -- is filed under entnum `0`, which is not a valid entry number and so
-    cannot collide with a real one. How many of those a document has is a
-    number the file decides, so they are capped at `_MAX_DOCUMENT_FAILURES`
-    with a counted tail; see that constant.
+    -- is filed under `DOCUMENT_KEY`, which no entry number can equal, so a
+    document that declares an entry numbered 0 does not absorb them. How many
+    of those a document has is a number the file decides, so they are capped at
+    `_MAX_DOCUMENT_FAILURES` with a counted tail; see that constant.
 
     Placements per entry are capped at `_MAX_PLACEMENTS_PER_ENTRY`, the same
     bound `locate_entries` enforces and for the same reason: `_CHAIN_GUARD`
@@ -571,15 +585,15 @@ def build_entry_index(doc: EnigmaDocument) -> dict[str, EntryFacts]:
     passages across this project. So on failure this loses every spelling
     for the whole document, rather than guessing measure by measure: every
     note reports `spelled=None` with the existing "no key in force" reason,
-    and the one message below says why, filed under entnum 0 the same way
-    `placements_by_entry` files failures that belong to no single entry.
+    and the one message below says why, filed under `DOCUMENT_KEY` the same
+    way `placements_by_entry` files failures that belong to no single entry.
     """
     placements, unresolved = placements_by_entry(doc)
     try:
         keys = effective_keys(doc)
     except FinaleFileError as error:
         keys = {}
-        unresolved.setdefault(0, []).append(
+        unresolved.setdefault(DOCUMENT_KEY, []).append(
             f"no key could be resolved for this document, so no note can be spelled: "
             f"{type(error).__name__}: {error}"
         )
@@ -598,7 +612,7 @@ def build_entry_index(doc: EnigmaDocument) -> dict[str, EntryFacts]:
             transpositions.get(first.staff) if first and first.staff is not None else None
         )
         decode = decode_entry(record, key_raw, transposition)
-        messages = list(unresolved.get(entnum, ()))
+        messages = list(unresolved.get(str(entnum), ()))
         if decode is None:
             messages.append("this record does not read as an entry")
         index[str(entnum)] = EntryFacts(
@@ -608,8 +622,11 @@ def build_entry_index(doc: EnigmaDocument) -> dict[str, EntryFacts]:
             unresolved=tuple(messages),
         )
 
-    if unresolved.get(0) and "0" not in index:
-        index["0"] = EntryFacts(unresolved=tuple(unresolved[0]))
+    if unresolved.get(DOCUMENT_KEY):
+        # Its own key, which no entry number can equal, so a document that
+        # declares an entry numbered 0 keeps that entry's facts and this bucket
+        # separate rather than merging the two.
+        index[DOCUMENT_KEY] = EntryFacts(unresolved=tuple(unresolved[DOCUMENT_KEY]))
     return index
 
 

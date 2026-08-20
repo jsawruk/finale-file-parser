@@ -21,6 +21,7 @@ from finale_file_parser.enigma.pitch import StaffTransposition
 from finale_file_parser.report.entry_facts import (
     _DURATION_NAMES,
     _MAX_DOCUMENT_FAILURES,
+    DOCUMENT_KEY,
     Placement,
     Reference,
     _references_by_entnum,
@@ -109,7 +110,7 @@ def test_a_clean_chain_places_an_entry() -> None:
     assert places[9] == [
         Placement(staff=1, measure=3, layer=1, gfhold_key="(cmper1 1, cmper2 3)", frame=12)
     ]
-    assert unresolved.get(9, []) == []
+    assert unresolved.get("9", []) == []
 
 
 def test_a_missing_frame_spec_still_places_what_it_knows() -> None:
@@ -123,7 +124,7 @@ def test_a_missing_frame_spec_still_places_what_it_knows() -> None:
     places, unresolved = placements_by_entry(_doc(details=(gfhold,), entries=(entry,)))
 
     assert places.get(9, []) == []
-    assert unresolved[0] == [
+    assert unresolved[DOCUMENT_KEY] == [
         "gfhold (cmper1 1, cmper2 3) frame1 names frameSpec 12, which is absent"
     ]
 
@@ -135,7 +136,7 @@ def test_an_entry_no_frame_reaches_is_named_as_such() -> None:
     places, unresolved = placements_by_entry(_doc(entries=(entry,)))
 
     assert places.get(9, []) == []
-    assert unresolved[9] == ["no frame reaches this entry"]
+    assert unresolved["9"] == ["no frame reaches this entry"]
 
 
 def _part_variant_document() -> EnigmaDocument:
@@ -210,8 +211,8 @@ def test_a_frame_spec_with_one_entry_bound_says_which_is_missing() -> None:
 
     _, unresolved = placements_by_entry(_doc(details=(gfhold,), others=(frame,), entries=(entry,)))
 
-    assert any("endEntry" in message for message in unresolved[0]), unresolved
-    assert any("startEntry" in message for message in unresolved[0])
+    assert any("endEntry" in message for message in unresolved[DOCUMENT_KEY]), unresolved
+    assert any("startEntry" in message for message in unresolved[DOCUMENT_KEY])
 
 
 def test_a_frame_spec_with_neither_entry_bound_is_an_empty_layer_not_a_failure() -> None:
@@ -227,7 +228,7 @@ def test_a_frame_spec_with_neither_entry_bound_is_an_empty_layer_not_a_failure()
 
     _, unresolved = placements_by_entry(_doc(details=(gfhold,), others=(frame,), entries=(entry,)))
 
-    assert unresolved.get(0, []) == []
+    assert unresolved.get(DOCUMENT_KEY, []) == []
 
 
 def test_an_enormous_end_entry_does_not_hang() -> None:
@@ -251,7 +252,7 @@ def test_an_enormous_end_entry_does_not_hang() -> None:
     assert places[9] == [
         Placement(staff=1, measure=3, layer=1, gfhold_key="(cmper1 1, cmper2 3)", frame=12)
     ]
-    assert any("chain broke" in message for message in unresolved[0])
+    assert any("chain broke" in message for message in unresolved[DOCUMENT_KEY])
 
 
 def test_a_looping_chain_terminates_via_the_guard() -> None:
@@ -277,7 +278,7 @@ def test_a_looping_chain_terminates_via_the_guard() -> None:
     )
 
     assert len(places[9]) == _MAX_PLACEMENTS_PER_ENTRY
-    assert any("cap" in message for message in unresolved[9])
+    assert any("cap" in message for message in unresolved["9"])
 
 
 def test_many_claims_on_one_entry_are_capped_across_chains() -> None:
@@ -307,7 +308,7 @@ def test_many_claims_on_one_entry_are_capped_across_chains() -> None:
     )
 
     assert len(places[9]) == _MAX_PLACEMENTS_PER_ENTRY
-    assert any("cap" in message for message in unresolved[9])
+    assert any("cap" in message for message in unresolved["9"])
 
 
 _EXCESS_FAILURES = 50
@@ -344,7 +345,7 @@ def test_document_level_failures_are_capped_with_a_counted_tail() -> None:
 
     _, unresolved = placements_by_entry(_doc(details=gfholds, entries=(entry,)))
 
-    messages = unresolved[0]
+    messages = unresolved[DOCUMENT_KEY]
     assert len(messages) == _MAX_DOCUMENT_FAILURES + 1, "the list is capped, tail included"
     assert "(cmper1 1, cmper2 3)" in messages[0], "the first failure is kept, not the last"
     assert all("which is absent" in message for message in messages[:-1])
@@ -604,7 +605,7 @@ def test_the_index_never_raises_on_a_malformed_measspec() -> None:
 
     Placements and references come from `gfhold`/`articAssign`, not from
     `measSpec`, so they still resolve; only spelling is lost, and the reason
-    is filed under entnum 0, the same "belongs to no single entry" bucket
+    is filed under `DOCUMENT_KEY`, the "belongs to no single entry" bucket
     `placements_by_entry` already uses."""
     gfhold = Record(
         tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
@@ -639,9 +640,9 @@ def test_the_index_never_raises_on_a_malformed_measspec() -> None:
     assert facts.decode is not None
     assert facts.decode.notes[0].spelled is None
     assert facts.decode.notes[0].why_not == "no key in force (placement unresolved)"
-    assert "0" in index
-    assert len(index["0"].unresolved) == 1
-    assert "no key could be resolved for this document" in index["0"].unresolved[0]
+    assert DOCUMENT_KEY in index
+    assert len(index[DOCUMENT_KEY].unresolved) == 1
+    assert "no key could be resolved for this document" in index[DOCUMENT_KEY].unresolved[0]
 
 
 def test_a_reference_carries_the_tree_row_it_should_select() -> None:
@@ -862,3 +863,27 @@ def test_the_two_walks_agree_on_a_document_locate_entries_accepts() -> None:
             for entnum, places in placements.items()
         }
         assert ours == theirs, f"the two walks disagree on the {name} document"
+
+
+def test_an_entry_numbered_zero_does_not_absorb_the_document_failures() -> None:
+    """`entnum` comes out of the file and `EntriesPool` accepts `entnum="0"`.
+
+    Document-level failures used to be filed under entnum 0, described as a
+    number no real entry can have -- an assumption, not a check. A document
+    declaring entry 0 then collected every one of them into that one entry's
+    facts, and `report.model` promoted them into the report's notes as though
+    a single entry had caused them all. The two buckets are separate keys now,
+    and no entry number can equal `DOCUMENT_KEY`.
+    """
+    gfhold = Record(
+        tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )  # frameSpec 12 is absent: a failure belonging to no entry
+    entry = Record(
+        tag="entry", attrs={"entnum": "0"}, text="", fields={"dura": "1024", "numNotes": "0"}
+    )
+
+    index = build_entry_index(_doc(details=(gfhold,), entries=(entry,)))
+
+    assert index["0"].unresolved == ("no frame reaches this entry",), "the entry's own, only"
+    assert index["0"].decode is not None, "and it is still a real entry with real facts"
+    assert any("which is absent" in message for message in index[DOCUMENT_KEY].unresolved)

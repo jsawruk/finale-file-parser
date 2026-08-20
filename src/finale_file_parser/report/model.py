@@ -42,7 +42,7 @@ from finale_file_parser.errors import FinaleFileError
 from finale_file_parser.export.musicxml import to_musicxml
 from finale_file_parser.formats.layouts import Layout, layout_for
 from finale_file_parser.formats.tags import name_for
-from finale_file_parser.report.entry_facts import EntryFacts, build_entry_index
+from finale_file_parser.report.entry_facts import DOCUMENT_KEY, EntryFacts, build_entry_index
 from finale_file_parser.report.ladder import NOT_REQUESTED, Ladder, Stage
 from finale_file_parser.report.notation import Engraving, engrave
 from finale_file_parser.report.summary import (
@@ -1105,18 +1105,19 @@ _MAX_ENTRY_FACT_NOTES = 20
 `build_entry_index` files a message per broken frame chain, and how many of
 those a document has is a number read out of the file -- so copying the list
 whole would let a hostile document decide the size of the notes the page
-renders. The full list is never lost: it stays under entry 0 in the index,
-where the count below points.
+renders. The full list is never lost: it stays under `DOCUMENT_KEY` in the
+index, where the count below points.
 """
 
 
 def _note_document_failures(inspection: Inspection, facts: EntryFacts | None) -> None:
     """Surface the entry failures that belong to no single entry.
 
-    `build_entry_index` files them under entnum 0 -- including "no key could be
-    resolved for this document", the single most useful thing it says. No
-    record row has entnum 0, so the record pane can never show that bucket, and
-    a diagnostic nobody can reach is one this report may as well not produce.
+    `build_entry_index` files them under `DOCUMENT_KEY` -- including "no key
+    could be resolved for this document", the single most useful thing it says.
+    No record row carries that key, so the record pane can never show the
+    bucket, and a diagnostic nobody can reach is one this report may as well
+    not produce.
     """
     if facts is None:
         return
@@ -1125,7 +1126,7 @@ def _note_document_failures(inspection: Inspection, facts: EntryFacts | None) ->
     if len(messages) > _MAX_ENTRY_FACT_NOTES:
         inspection.notes.append(
             f"... and {len(messages) - _MAX_ENTRY_FACT_NOTES} further entry-facts failures, "
-            "listed in full under entry 0 of the entry index"
+            f"listed in full under {DOCUMENT_KEY!r} in the entry index"
         )
 
 
@@ -1163,7 +1164,7 @@ def _finish(
     index = ladder.run("build entry facts", lambda: build_entry_index(document), halt=False)
     if index is not None:
         inspection.entry_index = {entnum: asdict(facts) for entnum, facts in index.items()}
-        _note_document_failures(inspection, index.get("0"))
+        _note_document_failures(inspection, index.get(DOCUMENT_KEY))
     if after_index is not None:
         after_index()
     score = ladder.run("build score", lambda: build_score(document))
