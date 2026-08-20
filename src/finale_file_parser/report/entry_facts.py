@@ -15,7 +15,7 @@ which asserts the two agree on every corpus document `locate_entries` accepts.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from finale_file_parser.enigma.document import EnigmaDocument, Record
 from finale_file_parser.enigma.key import decode_key
@@ -116,6 +116,66 @@ class EntryFacts:
     """
 
 
+_MAX_DOCUMENT_FAILURES = 200
+"""How many document-level failures one document's walk records, at most.
+
+The allocation guard for the tolerant walk, and the counterpart of
+`_MAX_PLACEMENTS_PER_ENTRY`. A failure that belongs to no single entry -- an
+absent `frameSpec`, a chain that breaks, a frame slot that is not a number --
+is recorded and the walk continues, so the count is `gfholds x 4 slots x
+frameSpec incidences`, every factor of it read out of the file and none of
+them bounded relative to the others. A crafted document of a few hundred
+kilobytes can ask for millions of ~80-character messages, which are held in
+memory and then embedded in the report. `locate_entries` cannot reach this
+shape because it raises at the first failure; tolerance is what creates it.
+
+Sized well above any honest document: a document broken in more than 200
+distinct places is one nobody reads message 201 of, and the count of what was
+dropped is kept, so nothing is silently lost. Per-entry messages are not
+capped here -- there are at most two of those per entry ("no frame reaches
+this entry" and the placement cap), so they are already bounded by the entry
+pool itself.
+"""
+
+
+@dataclass
+class _Failures:
+    """The unresolved messages a walk has recorded, under the document cap.
+
+    Document-level failures are capped and counted here rather than at the
+    consumer, because it is the accumulation itself that costs memory: a cap
+    applied when the list is copied into the report would have held the whole
+    list first.
+    """
+
+    by_entry: dict[int, list[str]] = field(default_factory=dict)
+    dropped: int = 0
+
+    def document(self, message: str) -> None:
+        """Record a failure that belongs to no single entry, or count it as
+        dropped once the cap is reached."""
+        here = self.by_entry.setdefault(0, [])
+        if len(here) >= _MAX_DOCUMENT_FAILURES:
+            self.dropped += 1
+            return
+        here.append(message)
+
+    def entry(self, entnum: int, message: str) -> None:
+        """Record a failure that belongs to one entry. Bounded by the entry
+        pool: the walk writes at most two of these per entry."""
+        self.by_entry.setdefault(entnum, []).append(message)
+
+    def result(self) -> dict[int, list[str]]:
+        """The messages, with a counted tail when the cap dropped any."""
+        if self.dropped:
+            self.by_entry.setdefault(0, []).append(
+                f"... and {self.dropped} further document-level failures, which are not "
+                f"recorded: this document broke more than {_MAX_DOCUMENT_FAILURES} links "
+                "and only the first are kept"
+            )
+        return self.by_entry
+
+
 def _identity(record: Record) -> str:
     """The record's key as the Records tree writes it, so a reference can be
     matched to the row it names."""
@@ -204,7 +264,9 @@ def placements_by_entry(
     A failure that belongs to no single entry -- a frame that is absent, a
     chain that breaks before reaching its declared end, or a chain that loops
     -- is filed under entnum `0`, which is not a valid entry number and so
-    cannot collide with a real one.
+    cannot collide with a real one. How many of those a document has is a
+    number the file decides, so they are capped at `_MAX_DOCUMENT_FAILURES`
+    with a counted tail; see that constant.
 
     Placements per entry are capped at `_MAX_PLACEMENTS_PER_ENTRY`, the same
     bound `locate_entries` enforces and for the same reason: `_CHAIN_GUARD`
@@ -221,7 +283,7 @@ def placements_by_entry(
     )
 
     placements: dict[int, list[Placement]] = {}
-    unresolved: dict[int, list[str]] = {}
+    failures = _Failures()
     capped: set[int] = set()
     entries_by_num: dict[int, Record] = {}
     for record in doc.entries.of_tag("entry"):
@@ -241,7 +303,7 @@ def placements_by_entry(
                 continue
             frame = _as_int(value)
             if frame is None:
-                unresolved.setdefault(0, []).append(
+                failures.document(
                     f"gfhold {key} {field_name} is {value!r}, which is not a frame number"
                 )
                 continue
@@ -249,7 +311,7 @@ def placements_by_entry(
                 f for f in doc.others.all_with("frameSpec", frame) if "part" not in f.attrs
             )
             if not specs:
-                unresolved.setdefault(0, []).append(
+                failures.document(
                     f"gfhold {key} {field_name} names frameSpec {frame}, which is absent"
                 )
                 continue
@@ -268,7 +330,7 @@ def placements_by_entry(
                     layer=layer,
                     entries_by_num=entries_by_num,
                     placements=placements,
-                    unresolved=unresolved,
+                    failures=failures,
                     guard=_CHAIN_GUARD,
                     cap=_MAX_PLACEMENTS_PER_ENTRY,
                     capped=capped,
@@ -276,8 +338,8 @@ def placements_by_entry(
 
     for entnum in sorted(entries_by_num):
         if entnum not in placements:
-            unresolved.setdefault(entnum, []).append("no frame reaches this entry")
-    return placements, unresolved
+            failures.entry(entnum, "no frame reaches this entry")
+    return placements, failures.result()
 
 
 def _walk_chain(
@@ -291,7 +353,7 @@ def _walk_chain(
     layer: int,
     entries_by_num: dict[int, Record],
     placements: dict[int, list[Placement]],
-    unresolved: dict[int, list[str]],
+    failures: _Failures,
     guard: int,
     cap: int,
     capped: set[int],
@@ -299,8 +361,9 @@ def _walk_chain(
     """Follow one entry chain from `start` to `end` via each entry's `next`.
 
     Mirrors `locate_entries._walk_entry_chain`, but every place that function
-    raises, this records a message under entnum `0` and stops -- the entries
-    already placed on this walk stay placed.
+    raises, this records a message against the document (`_Failures.document`,
+    which is capped) and stops -- the entries already placed on this walk stay
+    placed.
 
     `cap` bounds placements for a single entry, shared across every call this
     document's walk makes (via the shared `placements` dict) -- it is what
@@ -315,23 +378,22 @@ def _walk_chain(
     while True:
         steps += 1
         if steps > guard:
-            unresolved.setdefault(0, []).append(
+            failures.document(
                 f"gfhold {key} frame {frame} entry chain exceeded {guard} steps (cycle?)"
             )
             return
         entry = entries_by_num.get(entnum)
         if entry is None:
-            unresolved.setdefault(0, []).append(
-                f"gfhold {key} frame {frame} chain references missing entry {entnum}"
-            )
+            failures.document(f"gfhold {key} frame {frame} chain references missing entry {entnum}")
             return
         if len(placements.get(entnum, ())) >= cap:
             if entnum not in capped:
                 capped.add(entnum)
-                unresolved.setdefault(entnum, []).append(
+                failures.entry(
+                    entnum,
                     f"entry {entnum} reached the {cap}-placement cap; further claims on it "
                     "are not recorded (a real mirror places one entry on a few staves, not "
-                    "this many)"
+                    "this many)",
                 )
             return
         placements.setdefault(entnum, []).append(
@@ -341,7 +403,7 @@ def _walk_chain(
             return
         next_entnum = _as_int(entry.attrs.get("next"))
         if next_entnum is None:
-            unresolved.setdefault(0, []).append(
+            failures.document(
                 f"gfhold {key} frame {frame} chain broke before reaching entry {end}: "
                 f"entry {entnum} has no valid next"
             )

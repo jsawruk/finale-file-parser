@@ -20,6 +20,7 @@ from finale_file_parser.enigma.music import NoteValue
 from finale_file_parser.enigma.pitch import StaffTransposition
 from finale_file_parser.report.entry_facts import (
     _DURATION_NAMES,
+    _MAX_DOCUMENT_FAILURES,
     Placement,
     Reference,
     _references_by_entnum,
@@ -238,6 +239,48 @@ def test_many_claims_on_one_entry_are_capped_across_chains() -> None:
 
     assert len(places[9]) == _MAX_PLACEMENTS_PER_ENTRY
     assert any("cap" in message for message in unresolved[9])
+
+
+_EXCESS_FAILURES = 50
+"""How far past the cap the document-cap test goes.
+
+Small and constant on purpose: the failures this drives are one Python string
+each, and the test's own allocation must be bounded by a number written here
+rather than by anything the walk decides -- see the module docstring's note on
+a prior test that allocated 28.8 GB.
+"""
+
+
+def test_document_level_failures_are_capped_with_a_counted_tail() -> None:
+    """How many broken frame links a document has is a number read out of the
+    file: `gfhold` count times four slots times `frameSpec` incidences, none of
+    them bounded relative to the others. Recording a message for each -- which
+    is exactly what a tolerant walk does, and what `locate_entries` never does
+    because it raises at the first one -- lets a small crafted document decide
+    how much text this holds in memory and embeds in the report.
+
+    The first messages are kept rather than the last: the first failure in a
+    document is the one a reader chasing a broken score needs.
+    """
+    entry = Record(tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024"})
+    gfholds = tuple(
+        Record(
+            tag="gfhold",
+            attrs={"cmper1": str(staff), "cmper2": "3"},
+            text="",
+            fields={"frame1": "12"},  # frameSpec 12 is absent, so each one fails
+        )
+        for staff in range(1, _MAX_DOCUMENT_FAILURES + _EXCESS_FAILURES + 1)
+    )
+
+    _, unresolved = placements_by_entry(_doc(details=gfholds, entries=(entry,)))
+
+    messages = unresolved[0]
+    assert len(messages) == _MAX_DOCUMENT_FAILURES + 1, "the list is capped, tail included"
+    assert "(cmper1 1, cmper2 3)" in messages[0], "the first failure is kept, not the last"
+    assert all("which is absent" in message for message in messages[:-1])
+    assert str(_EXCESS_FAILURES) in messages[-1], "the tail counts what it dropped"
+    assert "further" in messages[-1]
 
 
 def _entry_record(dura: str = "1024", notes: tuple[Record, ...] = EMPTY) -> Record:
