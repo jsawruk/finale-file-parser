@@ -403,6 +403,68 @@ def test_the_index_answers_both_questions_for_one_entry() -> None:
     assert facts.unresolved == ()
 
 
+def test_a_mirrored_entry_spells_from_the_first_placement() -> None:
+    """The rule `build_entry_index`'s docstring documents: a mirrored entry
+    carries two placements, and spelling always uses the *first* one's key and
+    transposition -- even though a real mirror can transpose differently on
+    each staff, which is exactly what would make the two answers disagree.
+
+    Staff 1 is concert pitch; staff 2 is a B-flat transposition (interval=1,
+    adjust=2, the same figures `test_spell_note_bb_staff_written_and_concert`
+    pins). The same stored note -- harmLev 0 in C major -- spells "C4" on
+    staff 1 and "D4" on staff 2, so this only passes if the index picked one
+    placement's transposition and held to it.
+    """
+    concert = Record(
+        tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )
+    transposing = Record(
+        tag="gfhold", attrs={"cmper1": "2", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )
+    frame = Record(
+        tag="frameSpec",
+        attrs={"cmper": "12"},
+        text="",
+        fields={"startEntry": "9", "endEntry": "9"},
+    )
+    meas = Record(
+        tag="measSpec",
+        attrs={"cmper": "3"},
+        text="",
+        fields={"keySig": Record(tag="keySig", attrs={}, text="", fields={"key": "0"})},
+    )
+    staff_concert = Record(tag="staffSpec", attrs={"cmper": "1"}, text="", fields={})
+    keysig = Record(tag="keysig", attrs={}, text="", fields={"interval": "1", "adjust": "2"})
+    transposition = Record(tag="transposition", attrs={}, text="", fields={"keysig": keysig})
+    staff_transposing = Record(
+        tag="staffSpec",
+        attrs={"cmper": "2"},
+        text="",
+        fields={"transposition": transposition},
+    )
+    entry = Record(
+        tag="entry",
+        attrs={"entnum": "9"},
+        text="",
+        fields={"dura": "1024", "numNotes": "1", "note": (_note("0"),)},
+    )
+
+    index = build_entry_index(
+        _doc(
+            details=(concert, transposing),
+            others=(frame, meas, staff_concert, staff_transposing),
+            entries=(entry,),
+        )
+    )
+
+    facts = index["9"]
+    assert len(facts.placements) == 2
+    assert sorted(s for p in facts.placements if (s := p.staff) is not None) == [1, 2]
+    assert facts.placements[0].staff == 1
+    assert facts.decode is not None
+    assert facts.decode.notes[0].spelled == "C4", "must spell from the first placement (staff 1)"
+
+
 def test_the_index_never_raises_on_a_broken_document() -> None:
     """The property the whole module exists for. `locate_entries` refuses this
     document; the index must still answer what it can."""

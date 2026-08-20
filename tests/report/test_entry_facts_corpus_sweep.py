@@ -119,6 +119,14 @@ def test_the_report_spells_with_the_key_locate_entries_resolved() -> None:
     is plumbing the report owns: feeding the wrong measure's key changes 262 of
     the spellings in twenty documents, measured by shifting it one measure.
 
+    This placement comparison is only pinned here where an entry has a single
+    placement: exactly 1 of 632 corpus documents places any entry more than
+    once (239 such entries, at most 2 placements each), and it falls outside
+    the documents this sweep walks. The first-placement rule for a genuinely
+    mirrored entry is pinned synthetically instead, by
+    `test_a_mirrored_entry_spells_from_the_first_placement` in
+    `tests/report/test_entry_facts.py`.
+
     The transposition is taken from the report's own table on purpose. It is the
     other input to spelling, and holding it fixed is what leaves the key as the
     only thing this can be measuring.
