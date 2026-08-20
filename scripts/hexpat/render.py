@@ -182,14 +182,28 @@ def _payload_structs() -> str:
     names = _struct_names()
     parts = ["\n// ---- record payloads, generated from formats/layouts.py ----\n"]
     for layout in LAYOUTS:
-        parts.append(_one_struct(layout, names.get(layout, layout.name)))
+        # `names` only holds non-computed layouts -- `_one_struct` never reads
+        # its `name` argument for a computed layout, so a placeholder is enough
+        # there; for anything else, indexing directly (rather than `.get` with a
+        # fallback) means a layout `_struct_names` failed to name raises loudly
+        # instead of silently re-emitting a colliding base name.
+        name = layout.name if layout.computed else names[layout]
+        parts.append(_one_struct(layout, name))
     parts.append(_tag_comment(names))
     return "\n".join(parts)
 
 
 def _base_struct_name(layout: Layout) -> str:
-    """The struct name a layout would get, before collisions are resolved."""
-    return f"{layout.name}Slot" if layout.stride else layout.name
+    """The struct name a layout would get, before collisions are resolved.
+
+    Not every `stride` layout needs the `Slot` suffix added: `LyricVerseSlot`
+    and `InstUsedSlot` already carry it in the catalog's own `name`, because
+    that is what the parser and the report call them too. Appending it again
+    here would name the struct `LyricVerseSlotSlot`.
+    """
+    if not layout.stride:
+        return layout.name
+    return layout.name if layout.name.endswith("Slot") else f"{layout.name}Slot"
 
 
 def _struct_names() -> dict[Layout, str]:
@@ -227,6 +241,16 @@ def _struct_names() -> dict[Layout, str]:
 
 
 def _one_struct(layout: Layout, name: str) -> str:
+    """The struct for one layout, with the catalog's gaps rendered as `padding`.
+
+    A layout's fields are sparse -- `StaffSpec`'s only field sits at `+20`, and
+    `TextExprDef`'s tail starts at `+36` -- so writing the fields back to back
+    would land every one after a gap at the wrong offset: exactly the
+    "confident, wrong values" harm the `computed` guard above exists to avoid,
+    just reached a different way. `padding[N]` closes each gap, and closes the
+    tail of a `stride` layout too, so an array of these structs stays aligned
+    slot to slot instead of drifting after the first one.
+    """
     tags = _tag_names(layout)
     if layout.computed:
         return (
@@ -237,8 +261,29 @@ def _one_struct(layout: Layout, name: str) -> str:
         )
 
     lines = [f"// {layout.record} -- {tags}", f"struct {name} {{"]
+    cursor = 0
+    tail = False
     for field in layout.fields:
+        if field.offset < cursor:
+            raise ValueError(
+                f"{layout.name}.{field.name} at +{field.offset} overlaps the previous "
+                f"field, which runs to +{cursor}"
+            )
+        if field.offset > cursor:
+            lines.append(f"    padding[{field.offset - cursor}];")
         lines.append(_one_field(field))
+        if field.is_tail:
+            tail = True
+            break
+        cursor = field.end
+    if layout.stride and not tail:
+        if cursor > layout.stride:
+            raise ValueError(
+                f"{layout.name}'s fields run past its stride: end +{cursor} > "
+                f"stride {layout.stride}"
+            )
+        if cursor < layout.stride:
+            lines.append(f"    padding[{layout.stride - cursor}];")
     lines.append("};")
     if layout.stride:
         lines.append(

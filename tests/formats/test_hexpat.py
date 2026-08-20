@@ -11,10 +11,30 @@ from __future__ import annotations
 
 import re
 
-from hexpat.render import HEXPAT_TYPES, render_pattern
+from hexpat.render import HEXPAT_TYPES, _struct_names, render_pattern
 
 from finale_file_parser.enigma.pool_file import HEADER_SIZE, MAGIC
 from finale_file_parser.formats.layouts import LAYOUTS
+
+_HEXPAT_WIDTH = {"u8": 1, "u16": 2, "u32": 4, "s16": 2}
+"""Bytes each fixed-size hexpat type occupies -- the arithmetic the offset
+reconstruction test below runs to check the generator against the catalog
+without needing ImHex."""
+
+_PADDING_LINE = re.compile(r"^\s*padding\[(\d+)\];\s*$")
+_FIELD_LINE = re.compile(r"^\s*(u8|u16|u32|s16|char) (\w+)(\[\d*\])?;(.*)$")
+
+
+def _struct_body(pattern: str, name: str) -> list[str]:
+    """The lines between `struct {name} {` and its closing `};`.
+
+    Matched by the exact opening brace, not just the name, so `TextExprDef`
+    cannot accidentally grab the body of `TextExprDefDcl`.
+    """
+    marker = f"struct {name} {{"
+    start = pattern.index(marker) + len(marker)
+    end = pattern.index("\n};", start)
+    return pattern[start:end].splitlines()
 
 
 def test_the_pattern_reads_the_file_the_extractor_writes() -> None:
@@ -47,11 +67,16 @@ def test_the_pattern_sets_its_endianness_from_the_file() -> None:
 
 
 def test_every_layout_that_can_be_laid_over_bytes_is_emitted() -> None:
+    """Matches the full declaration, including the opening brace: `struct
+    TextExprDef` (no brace) is also a substring of `struct TextExprDefDcl {`,
+    so a looser match would call the 2011 record present when only the DCL one
+    was ever emitted."""
     pattern = render_pattern()
+    names = _struct_names()
     for layout in LAYOUTS:
         if layout.computed:
             continue
-        assert f"struct {layout.name}" in pattern, f"{layout.name} missing"
+        assert f"struct {names[layout]} {{" in pattern, f"{layout.name} missing"
 
 
 def test_a_computed_layout_is_named_but_never_laid_over_bytes() -> None:
@@ -72,25 +97,95 @@ def test_a_computed_layout_is_named_but_never_laid_over_bytes() -> None:
 
 def test_every_field_note_travels_with_its_field() -> None:
     """The evidence is the point. A pattern that gives offsets without saying
-    what they mean is worth less than the docstring it came from."""
+    what they mean is worth less than the docstring it came from -- and the
+    note has to sit on the *same line* as the field it explains, not merely
+    appear somewhere in the document, or a note for one field could satisfy the
+    check for an unrelated one. Covers every noted field, not a sample: a note
+    that only the 21st-and-later fields dropped would be invisible to a slice."""
     pattern = render_pattern()
+    names = _struct_names()
     noted = [
-        field for layout in LAYOUTS if not layout.computed for field in layout.fields if field.note
+        (layout, field)
+        for layout in LAYOUTS
+        if not layout.computed
+        for field in layout.fields
+        if field.note
     ]
     assert noted, "the catalog has notes; this test is meaningless without them"
-    for field in noted[:20]:
-        assert field.note.split(".")[0][:40] in pattern, f"note for {field.name} missing"
+    for layout, field in noted:
+        body = _struct_body(pattern, names[layout])
+        line = next(
+            (
+                candidate
+                for candidate in body
+                if (m := _FIELD_LINE.match(candidate)) and m.group(2) == field.name
+            ),
+            None,
+        )
+        assert line is not None, f"{field.name} not found in struct {names[layout]}"
+        assert field.note.split(".")[0][:40] in line, f"note for {field.name} not beside its field"
 
 
 def test_a_slot_array_layout_says_it_repeats() -> None:
     """Four layouts have a non-zero `stride`: their payload is an array of
     fixed-size slots, each laid out by the same fields. Emitting one slot and
-    stopping would describe a fraction of the record."""
+    stopping would describe a fraction of the record. Checked by the actual
+    "array of N-byte slots" comment text, not by the presence of a `Slot` name
+    suffix -- the struct name alone says nothing about repetition, and a name
+    ending in `Slot` proves nothing if the sentence explaining why was deleted."""
     pattern = render_pattern()
     striped = [layout for layout in LAYOUTS if layout.stride and not layout.computed]
     assert striped, "the catalog has slot arrays; this test is meaningless without them"
     for layout in striped:
-        assert f"{layout.name}Slot" in pattern, f"{layout.name} does not emit a slot type"
+        assert f"array of {layout.stride}-byte" in pattern, (
+            f"{layout.name} does not say its payload repeats"
+        )
+
+
+def test_every_emitted_field_lands_at_its_catalog_offset() -> None:
+    """The one thing that matters most: a struct is read by laying it directly
+    over real bytes, so a field's position in the rendered text has to equal
+    `field.offset`, or every field after the first gap misreads. `StaffSpec`'s
+    only field sits at `+20`; packed, it lands at `+0`. Reconstructs each
+    struct's offsets from its declared fields and `padding[N]` lines -- pure
+    arithmetic, so it needs no ImHex -- and checks every non-computed layout,
+    plus that a slot struct's total size equals its `stride`."""
+    pattern = render_pattern()
+    names = _struct_names()
+    for layout in LAYOUTS:
+        if layout.computed:
+            continue
+        name = names[layout]
+        cursor = 0
+        seen = 0
+        for line in _struct_body(pattern, name):
+            if not line.strip():
+                continue
+            pad = _PADDING_LINE.match(line)
+            if pad:
+                cursor += int(pad.group(1))
+                continue
+            fld = _FIELD_LINE.match(line)
+            assert fld, f"unparsed line in struct {name}: {line!r}"
+            hexpat_type, field_name, brackets, _rest = fld.groups()
+            catalog_field = layout.fields[seen]
+            assert field_name == catalog_field.name, (
+                f"{name}: expected {catalog_field.name} next, found {field_name}"
+            )
+            assert cursor == catalog_field.offset, (
+                f"{name}.{field_name} rendered at +{cursor}, catalog says +{catalog_field.offset}"
+            )
+            seen += 1
+            if brackets == "[]":  # a NUL-terminated tail: no fixed width, must be last
+                break
+            cursor += _HEXPAT_WIDTH[hexpat_type]
+        assert seen == len(layout.fields), (
+            f"{name}: rendered {seen} of {len(layout.fields)} catalog fields"
+        )
+        if layout.stride:
+            assert cursor == layout.stride, (
+                f"{name}: rendered body totals {cursor} bytes, stride says {layout.stride}"
+            )
 
 
 def test_no_duplicate_struct_names() -> None:
