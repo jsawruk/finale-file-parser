@@ -198,3 +198,20 @@ def test_no_duplicate_struct_names() -> None:
     names = re.findall(r"struct (\w+) \{", pattern)
     duplicates = sorted({n for n in names if names.count(n) > 1})
     assert not duplicates, f"duplicate struct names: {duplicates}"
+
+
+def test_the_committed_pattern_is_current() -> None:
+    """The pattern is generated, and a generated file that is committed can go
+    stale silently. Adding a field to a layout must either update this file or
+    fail this test -- there is no third outcome worth having.
+
+    `docs/formats/finale-formats.{html,pdf}` are generated and committed with no
+    such check; this is the one that has it.
+    """
+    from pathlib import Path
+
+    committed = Path(__file__).parent.parent.parent / "docs" / "formats" / "finale-mus.hexpat"
+    assert committed.exists(), "run: make hexpat"
+    assert committed.read_text(encoding="utf-8") == render_pattern(), (
+        "docs/formats/finale-mus.hexpat is stale -- run: make hexpat"
+    )
