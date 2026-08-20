@@ -3,6 +3,8 @@ built in process, so CI runs these even though `corpus/` is gitignored."""
 
 from __future__ import annotations
 
+import time
+
 from finale_file_parser.enigma.document import (
     DetailsPool,
     EnigmaDocument,
@@ -20,6 +22,7 @@ from finale_file_parser.report.entry_facts import (
     _DURATION_NAMES,
     Placement,
     Reference,
+    _references_by_entnum,
     build_entry_index,
     decode_entry,
     placements_by_entry,
@@ -521,3 +524,78 @@ def test_a_dotted_sixteenth_reads_as_one_phrase() -> None:
 
     assert decode is not None
     assert decode.duration_name == "dotted 16th"
+
+
+def test_grouped_references_agree_with_references_to_for_every_entnum() -> None:
+    """`_references_by_entnum` is a grouped rewrite of `references_to`'s answer,
+    not a new rule -- the two must agree for every entnum, including one that
+    nothing points at, which must come back as an empty tuple rather than a
+    missing key (a reader asking "what points at entry 3" gets a real, empty
+    answer, not a `KeyError`)."""
+    refs = (
+        Record(tag="articAssign", attrs={"entnum": "1", "inci": "0"}, text="", fields={}),
+        Record(tag="articAssign", attrs={"entnum": "1", "inci": "1"}, text="", fields={}),
+        Record(tag="expression", attrs={"entnum": "2", "inci": "0"}, text="", fields={}),
+    )
+    doc = _doc(details=refs)
+    grouped = _references_by_entnum(doc)
+
+    for entnum in (1, 2, 3):  # 3 is an entry nothing points at
+        assert grouped.get(str(entnum), ()) == references_to(doc, entnum)
+    assert grouped.get("3", ()) == ()
+    assert len(grouped["1"]) == 2
+
+
+_STRESS_ENTRY_COUNT = 8_000
+"""Entries in the quadratic-cost stress test. Kept in the thousands, not the
+million-record pool cap, so the test's own allocation stays small and bounded
+-- see the module docstring's note on a prior test that allocated 28.8 GB.
+Measured directly against this repo's `references_to`: at this size the old
+per-entry rescan takes ~3.4s; the grouped lookup takes ~0.05s. A smaller count
+(e.g. 3,000, giving 9,000,000 comparisons) still passes even unfixed --
+CPython's string-compare loop is fast enough that the quadratic cost only
+becomes clearly, reliably slow once `entries x details` reaches this size."""
+
+_STRESS_DETAIL_COUNT = 8_000
+"""Details records in the quadratic-cost stress test, same rationale as
+`_STRESS_ENTRY_COUNT`. `entries x details` here is 64,000,000."""
+
+
+def test_build_entry_index_is_linear_not_quadratic_in_entries_and_details() -> None:
+    """Before the grouped lookup, `build_entry_index` called `references_to`
+    (a full scan of `doc.details.records`) once per entry, costing
+    `entries x details`. With `_STRESS_ENTRY_COUNT` entries and
+    `_STRESS_DETAIL_COUNT` details that is 64,000,000 string comparisons --
+    measured at ~3.4s against the unfixed code, ~0.05s against the grouped
+    lookup. This asserts the index still comes back promptly (well under
+    either number) and with the right references, not just that it
+    eventually returns."""
+    entries = tuple(
+        Record(
+            tag="entry",
+            attrs={"entnum": str(n)},
+            text="",
+            fields={"dura": "1024", "numNotes": "0"},
+        )
+        for n in range(1, _STRESS_ENTRY_COUNT + 1)
+    )
+    # Every detail names an entry that exists, spread across the whole range,
+    # so the grouped lookup and the naive scan would find the same references.
+    details = tuple(
+        Record(
+            tag="articAssign",
+            attrs={"entnum": str((n % _STRESS_ENTRY_COUNT) + 1), "inci": "0"},
+            text="",
+            fields={},
+        )
+        for n in range(_STRESS_DETAIL_COUNT)
+    )
+
+    started = time.perf_counter()
+    index = build_entry_index(_doc(details=details, entries=entries))
+    elapsed = time.perf_counter() - started
+
+    assert elapsed < 1.0, f"build_entry_index took {elapsed:.2f}s -- looks quadratic again"
+    assert len(index) == _STRESS_ENTRY_COUNT
+    assert len(index["1"].named_by) >= 1
+    assert index["1"].named_by[0].tag == "articAssign"

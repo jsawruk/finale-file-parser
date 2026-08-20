@@ -150,6 +150,41 @@ def references_to(doc: EnigmaDocument, entnum: int) -> tuple[Reference, ...]:
     return tuple(out)
 
 
+def _references_by_entnum(doc: EnigmaDocument) -> dict[str, tuple[Reference, ...]]:
+    """`references_to`, grouped for every entnum in one pass.
+
+    `references_to(doc, entnum)` rescans all of `doc.details.records` on every
+    call; called once per entry from `build_entry_index`'s loop that makes the
+    whole index cost `entries x details`, both counts read straight out of the
+    file and uncapped relative to each other. This groups once instead: one
+    pass over `doc.details.records`, and the loop then does a dict lookup per
+    entry -- linear in each count rather than their product.
+
+    Grouped by the record's raw `entnum` attribute string, not by an `int` of
+    it, so an entnum this can't parse still groups (and simply never matches
+    any real entry's `str(entnum)` lookup) -- the same fate `references_to`
+    gives it via its `== str(entnum)` string comparison. Keeping the two
+    string-keyed lets them agree by construction rather than by two separate
+    int-parsing rules staying in sync.
+    """
+    grouped: dict[str, list[Reference]] = {}
+    for record in doc.details.records:
+        raw_entnum = record.attrs.get("entnum")
+        if not isinstance(raw_entnum, str):
+            continue
+        key = _identity(record)
+        grouped.setdefault(raw_entnum, []).append(
+            Reference(
+                pool="details",
+                tag=record.tag,
+                key=key,
+                tree_tag=record.tag,
+                tree_key=key,
+            )
+        )
+    return {entnum: tuple(references) for entnum, references in grouped.items()}
+
+
 def placements_by_entry(
     doc: EnigmaDocument,
 ) -> tuple[dict[int, list[Placement]], dict[int, list[str]]]:
@@ -466,6 +501,7 @@ def build_entry_index(doc: EnigmaDocument) -> dict[str, EntryFacts]:
             f"{type(error).__name__}: {error}"
         )
     transpositions = _transpositions(doc)
+    references = _references_by_entnum(doc)
 
     index: dict[str, EntryFacts] = {}
     for record in doc.entries.of_tag("entry"):
@@ -484,7 +520,7 @@ def build_entry_index(doc: EnigmaDocument) -> dict[str, EntryFacts]:
             messages.append("this record does not read as an entry")
         index[str(entnum)] = EntryFacts(
             placements=places,
-            named_by=references_to(doc, entnum),
+            named_by=references.get(str(entnum), ()),
             decode=decode,
             unresolved=tuple(messages),
         )
