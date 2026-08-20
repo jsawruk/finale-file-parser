@@ -577,12 +577,29 @@ records to the entries filling a measure, and it raises on a document that gets 
 right for a converter, where a broken join means there is no score to build. A diagnostic exists for
 those documents, so `report.entry_facts.placements_by_entry` walks the same join tolerantly: each
 break becomes a string a reader can see, and nothing stops the rest of the report being written. The
-two must never disagree about a document they can both read, and
-`tests/report/test_entry_facts_corpus_sweep.py` is what keeps them from drifting — it compares
-placements entry by entry across both containers, and separately asserts the tolerant walk raises on
-nothing in the corpus, including the document `locate_entries` refuses. Both walks import
+two must never disagree about a document they can both read, and two tests keep them from drifting.
+`tests/report/test_entry_facts_corpus_sweep.py` compares placements entry by entry across both
+containers, and separately asserts the tolerant walk raises on nothing in the corpus, including the
+document `locate_entries` refuses — wide, but `corpus/` is gitignored, so it is skipped in CI.
+`test_the_two_walks_agree_on_a_document_locate_entries_accepts` therefore runs both walks over
+synthetic documents (a clean chain, a linked-part gfhold, a mirror, and one with several gfholds,
+two layers and a real `next` chain) and compares the placements **in order**, which the sweep sorts
+away — so the drifts that matter are caught everywhere the suite runs. Both walks import
 `_CHAIN_GUARD` and `_MAX_PLACEMENTS_PER_ENTRY` from `location.py` rather than restating them, so a
 bound tightened in one cannot be forgotten in the other.
+
+**Tolerance is what has to be bounded.** `locate_entries` raises at the first failure, so it never
+accumulates; a walk that records and continues can be asked for as much work and as much text as the
+file likes. Three bounds keep it linear, each with its measurement in its docstring:
+`_MAX_DOCUMENT_FAILURES` caps the messages that belong to no single entry (the count is
+`gfholds × 4 slots × frameSpec incidences`) and ends the list with what it dropped;
+`_MAX_FRAME_INCIDENCES` caps the incidences one frame contributes, and the filtered list is built
+once per frame number rather than once per gfhold slot naming it — without both, 1,000 gfholds
+naming one 1,000-incidence frame took 0.39 s and quadrupled per doubling; and `effective_keys` now
+refuses a `measSpec` span wider than `_MAX_MEASURE_SPAN`, since it walks a dense range between two
+cmpers read straight out of the file (the largest cmper in 633 corpus documents is 1,028).
+Failures belonging to no entry are filed under `DOCUMENT_KEY`, a key no `str(entnum)` can equal, so
+a document declaring an entry numbered 0 cannot absorb them.
 
 A mirrored entry has more than one placement (see `_mirrored_cells`), and mirrored staves may
 transpose differently, so the index spells from the **first** placement and the pane shows every
