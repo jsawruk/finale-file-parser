@@ -218,6 +218,12 @@ function renderRecords() {
     const row = document.createElement('div');
     row.className = 'rec';
     row.textContent = label;
+    // Read back by selectRecord, so a "named by" reference in the entry-facts
+    // panel can find and click the row that already exists here rather than
+    // reimplementing selection.
+    row.dataset.pool = pool;
+    row.dataset.tag = tag;
+    row.dataset.key = rec.key;
     row.addEventListener('click', () => {
       for (const other of left.querySelectorAll('.rec.on')) { other.classList.remove('on'); }
       row.classList.add('on');
@@ -472,6 +478,77 @@ function layoutTable(layout, bin, order) {
   });
   return table;
 }
+// Selection lives in one place -- the click handler `recordRow` already
+// attaches in `renderRecords` -- so a reference elsewhere on the page finds
+// the row that handler built and clicks it, rather than repeating what
+// clicking a record means. If the reference names a record in a pool the
+// tree did not render, no row matches and nothing happens.
+function selectRecord(pool, tag, key) {
+  for (const row of document.querySelectorAll('.rec')) {
+    if (row.dataset.pool === pool && row.dataset.tag === tag && row.dataset.key === key) {
+      row.click();
+      return;
+    }
+  }
+}
+// Entry facts: what points at this entry, and what it decodes to. Rendered
+// from `data.entryIndex` and nothing else -- this function does no decoding
+// and no joining, which is why the index is built in Python.
+function renderEntryFacts(right, entnum) {
+  const facts = (data.entryIndex || {})[entnum];
+  if (!facts) { return; }
+
+  if (facts.decode) {
+    const head = document.createElement('h4');
+    head.textContent = 'Decodes as';
+    right.appendChild(head);
+    const box = document.createElement('div');
+    const d = facts.decode;
+    const dur = document.createElement('div');
+    dur.className = 'leaf';
+    dur.textContent = 'dura ' + d.duration_edu + '  ->  ' +
+                      d.duration_name.toLowerCase() + (d.is_rest ? '  (rest)' : '');
+    box.appendChild(dur);
+    (d.notes || []).forEach((n, i) => {
+      const line = document.createElement('div');
+      line.className = 'leaf';
+      const raw = 'note ' + (i + 1) + '   harmLev ' + n.harm_lev + '  harmAlt ' + n.harm_alt;
+      line.textContent = raw + '  ->  ' + (n.spelled || ('— ' + (n.why_not || 'unknown')));
+      box.appendChild(line);
+    });
+    right.appendChild(box);
+  }
+
+  const refs = (facts.placements || []).length + (facts.named_by || []).length;
+  if (refs || (facts.unresolved || []).length) {
+    const head = document.createElement('h4');
+    head.textContent = 'Pointed to by';
+    right.appendChild(head);
+    const box = document.createElement('div');
+    for (const p of facts.placements || []) {
+      const line = document.createElement('div');
+      line.className = 'leaf';
+      line.textContent = 'placed by   gfhold ' + (p.gfhold_key || '?') +
+                         '  staff ' + p.staff + ', measure ' + p.measure +
+                         ', layer ' + p.layer + '   frameSpec ' + p.frame;
+      box.appendChild(line);
+    }
+    for (const r of facts.named_by || []) {
+      const line = document.createElement('div');
+      line.className = 'leaf rec';
+      line.textContent = 'named by    ' + r.pool + ' / ' + r.tag + ' ' + r.key;
+      line.addEventListener('click', () => selectRecord(r.pool, r.tag, r.key));
+      box.appendChild(line);
+    }
+    for (const why of facts.unresolved || []) {
+      const line = document.createElement('div');
+      line.className = 'leaf stopped';
+      line.textContent = 'unresolved  ' + why;
+      box.appendChild(line);
+    }
+    right.appendChild(box);
+  }
+}
 // `payload` and `extra` ARE the bytes shown above, so listing them again as
 // decoded values would just repeat the hex in base64.
 const BYTE_FIELDS = ['payload', 'extra'];
@@ -601,6 +678,7 @@ function showRecord(right, pool, tag, rec) {
   if (Object.keys(rest).length !== 0) {
     right.appendChild(fields(rest));
   }
+  if (rec.entnum) { renderEntryFacts(right, rec.entnum); }
 }
 // Both trees are built from DOM nodes rather than an innerHTML string: every
 // key, tag and value goes in as text, so there is no second escaper to get

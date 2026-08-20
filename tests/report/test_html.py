@@ -574,3 +574,26 @@ def test_a_hostile_source_cannot_break_out_of_the_xml_pane() -> None:
     html = render_html(_inspection(xml='</pre></section><script>alert("x")</script>'))
     assert "</pre></section><script>" not in html
     assert "&lt;/pre&gt;&lt;/section&gt;" in html
+
+
+def test_the_record_pane_shows_entry_facts_when_one_is_selected() -> None:
+    """The page renders `entryIndex[entnum]` and does nothing else -- no
+    decoding, no joining. That line is what keeps a second decoder out of the
+    page, which is why the index is built in Python."""
+    html = render_html(
+        _inspection(
+            entry_index={"9": {"placements": [], "named_by": [], "decode": None, "unresolved": []}}
+        )
+    )
+    assert '"entryIndex"' in html
+    assert "function renderEntryFacts(" in html
+    assert "Decodes as" in html
+    assert "Pointed to by" in html
+
+
+def test_the_page_does_no_decoding_of_its_own() -> None:
+    """A guard, not a formality: a spelled pitch computed in JavaScript would be
+    a second decoder, and the two would drift."""
+    html = render_html(_inspection())
+    for forbidden in ("harmLev +", "decodeKey(", "spellNote("):
+        assert forbidden not in html
