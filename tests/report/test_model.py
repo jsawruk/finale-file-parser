@@ -973,6 +973,36 @@ def test_a_details_reader_bug_is_a_crashed_stage_and_not_a_lost_report(
     assert inspection.entry_index
 
 
+def test_a_bug_building_the_entry_index_is_a_crashed_stage_with_its_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`build_entry_index` does not raise by construction, so if it ever does,
+    that is a bug in this reader -- which is the thing this tool exists to
+    find. Caught by a bare `except` it became one fixed sentence in `notes`,
+    with the exception's type and message thrown away and no stage to see: a
+    reader would take it for a limitation rather than a crash, and a sweep
+    scanning `stages` for CRASHED could not count it at all.
+
+    `halt=False`, because the index is a depth beside the pipeline rather than
+    a value the score stages consume: the report is still written and the
+    stages after it still run.
+    """
+    details, document = _entry_501()
+    path = _synthetic_mus(monkeypatch, tmp_path, details, document)
+    monkeypatch.setattr(
+        model, "build_entry_index", lambda d: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
+
+    inspection = model.inspect_document(path, engrave_notation=False)
+
+    by_name = {s.name: s for s in inspection.stages}
+    assert by_name["build entry facts"].status == CRASHED
+    assert "RuntimeError" in (by_name["build entry facts"].error or "")
+    assert "boom" in (by_name["build entry facts"].error or "")
+    assert by_name["build score"].status in (OK, REFUSED), "the ladder was not halted"
+    assert inspection.entry_index == {}
+
+
 def test_a_crash_building_a_details_row_costs_the_targets_and_not_the_report(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

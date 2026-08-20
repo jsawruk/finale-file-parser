@@ -1130,14 +1130,14 @@ def _finish(
         ladder.run("engrave notation", _unreachable)
         return
     inspection.document = summarise_document(document)
-    # Never fatal. `build_entry_index` does not raise by construction, but this
-    # is a diagnostic depth on a report whose whole purpose is documents that
-    # do not work -- it must not be what stops one being written.
-    try:
-        index = build_entry_index(document)
-    except Exception:  # noqa: BLE001 -- a report is written or nothing is
-        inspection.notes.append("entry facts unavailable: the index could not be built")
-    else:
+    # A rung rather than a `try`. `build_entry_index` does not raise by
+    # construction, so a failure here is a bug in our own reader -- exactly what
+    # this tool exists to surface -- and the ladder is where a failure becomes
+    # visible data carrying its own type and message. `halt=False`: the index is
+    # a depth beside the pipeline, not a value the score stages consume, so the
+    # report is still written and the rungs after it still run.
+    index = ladder.run("build entry facts", lambda: build_entry_index(document), halt=False)
+    if index is not None:
         inspection.entry_index = {entnum: asdict(facts) for entnum, facts in index.items()}
         _note_document_failures(inspection, index.get("0"))
     if after_index is not None:
