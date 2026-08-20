@@ -14,9 +14,11 @@ from finale_file_parser.enigma.document import (
     TextsPool,
 )
 from finale_file_parser.enigma.location import _MAX_PLACEMENTS_PER_ENTRY
+from finale_file_parser.enigma.pitch import StaffTransposition
 from finale_file_parser.report.entry_facts import (
     Placement,
     Reference,
+    decode_entry,
     placements_by_entry,
     references_to,
 )
@@ -224,3 +226,74 @@ def test_many_claims_on_one_entry_are_capped_across_chains() -> None:
 
     assert len(places[9]) == _MAX_PLACEMENTS_PER_ENTRY
     assert any("cap" in message for message in unresolved[9])
+
+
+def _entry_record(dura: str = "1024", notes: tuple[Record, ...] = EMPTY) -> Record:
+    return Record(
+        tag="entry",
+        attrs={"entnum": "9"},
+        text="",
+        fields={"dura": dura, "numNotes": str(len(notes)), "note": notes},
+    )
+
+
+def _note(harm_lev: str, harm_alt: str = "0") -> Record:
+    return Record(tag="note", attrs={}, text="", fields={"harmLev": harm_lev, "harmAlt": harm_alt})
+
+
+def test_duration_and_raw_values_need_nothing_but_the_entry() -> None:
+    """The half that always works: no key, no transposition, still a decode."""
+    decode = decode_entry(_entry_record(notes=(_note("4"),)), key_raw=None, transposition=None)
+
+    assert decode is not None
+    assert (decode.duration_edu, decode.duration_name) == (1024, "QUARTER")
+    assert decode.notes[0].harm_lev == 4
+    assert decode.notes[0].spelled is None
+
+
+def test_a_missing_key_produces_no_spelling_and_says_why() -> None:
+    """Never a C-major default: an absent key means the pitch is unknown, and
+    the report says which input was missing rather than inventing one."""
+    decode = decode_entry(
+        _entry_record(notes=(_note("4"),)),
+        key_raw=None,
+        transposition=StaffTransposition(interval=0, adjust=0),
+    )
+
+    assert decode is not None
+    assert decode.notes[0].spelled is None
+    assert decode.notes[0].why_not == "no key in force (placement unresolved)"
+
+
+def test_a_missing_transposition_produces_no_spelling_and_says_why() -> None:
+    decode = decode_entry(_entry_record(notes=(_note("4"),)), key_raw=2, transposition=None)
+
+    assert decode is not None
+    assert decode.notes[0].spelled is None
+    assert decode.notes[0].why_not == "no staffSpec transposition for this staff"
+
+
+def test_a_resolved_note_spells_a_pitch() -> None:
+    """harmLev 2 in D major (raw key 2) is F#4: two diatonic letters above the
+    D tonic is F, and D major's two sharps (F, C) put a sharp on F."""
+    decode = decode_entry(
+        _entry_record(notes=(_note("2"),)),
+        key_raw=2,
+        transposition=StaffTransposition(interval=0, adjust=0),
+    )
+
+    assert decode is not None
+    assert decode.notes[0].spelled == "F#4"
+    assert decode.notes[0].why_not is None
+
+
+def test_an_entry_that_will_not_read_yields_no_decode() -> None:
+    """`read_entry` raises `MalformedEntryError` on a record it cannot type.
+    That is one entry's problem, not the report's: return None and let the
+    caller record it in `unresolved`."""
+    assert (
+        decode_entry(
+            Record(tag="entry", attrs={}, text="", fields={}), key_raw=2, transposition=None
+        )
+        is None
+    )

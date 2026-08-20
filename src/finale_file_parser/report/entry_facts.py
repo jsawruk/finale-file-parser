@@ -18,6 +18,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from finale_file_parser.enigma.document import EnigmaDocument, Record
+from finale_file_parser.enigma.key import decode_key
+from finale_file_parser.enigma.music import Note, read_entry
+from finale_file_parser.enigma.pitch import StaffTransposition, spell_note
+from finale_file_parser.errors import FinaleFileError
 
 __all__ = [
     "EntryDecode",
@@ -25,6 +29,7 @@ __all__ = [
     "NoteFacts",
     "Placement",
     "Reference",
+    "decode_entry",
     "placements_by_entry",
     "references_to",
 ]
@@ -268,6 +273,65 @@ def _walk_chain(
             )
             return
         entnum = next_entnum
+
+
+def decode_entry(
+    record: Record,
+    key_raw: int | None,
+    transposition: StaffTransposition | None,
+) -> EntryDecode | None:
+    """What this entry decodes to: duration always, pitch where it is knowable.
+
+    `read_entry` needs nothing but the record, so the duration and each note's
+    stored values are always available. Spelling needs the key in force and the
+    staff's transposition, both of which come from the placement -- so both can
+    be missing, and when either is the note carries `why_not` instead of a
+    pitch. There is no default key: a spelled pitch here is one the document
+    supports, or there is none.
+
+    Returns None when the record will not read as an entry at all, which is the
+    caller's cue to record that in `unresolved`.
+    """
+    try:
+        entry = read_entry(record)
+    except FinaleFileError:
+        return None
+
+    notes: list[NoteFacts] = []
+    for note in entry.notes:
+        spelled, why_not = _spell(note, key_raw, transposition)
+        notes.append(
+            NoteFacts(
+                harm_lev=note.harm_lev, harm_alt=note.harm_alt, spelled=spelled, why_not=why_not
+            )
+        )
+    return EntryDecode(
+        duration_edu=entry.duration.edu,
+        duration_name=entry.duration.base.name,
+        is_rest=entry.is_rest,
+        notes=tuple(notes),
+    )
+
+
+def _spell(
+    note: Note, key_raw: int | None, transposition: StaffTransposition | None
+) -> tuple[str | None, str | None]:
+    """`(spelled, why_not)` -- exactly one of the two is ever set."""
+    if key_raw is None:
+        return None, "no key in force (placement unresolved)"
+    if transposition is None:
+        return None, "no staffSpec transposition for this staff"
+    try:
+        spelled = spell_note(note, decode_key(key_raw), transposition)
+    except FinaleFileError as error:
+        return None, f"{type(error).__name__}: {error}"
+    written = spelled.written
+    return f"{written.letter}{_ACCIDENTAL.get(written.alteration, '')}{written.octave}", None
+
+
+_ACCIDENTAL = {-2: "bb", -1: "b", 0: "", 1: "#", 2: "x"}
+"""How an alteration is written beside a step. Report text, not a decode: the
+alteration itself comes from `spell_note` and is not reinterpreted here."""
 
 
 def _as_int(value: object) -> int | None:
