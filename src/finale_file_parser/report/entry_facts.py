@@ -156,6 +156,23 @@ pool itself.
 """
 
 
+_MAX_FRAME_INCIDENCES = 16
+"""Incidences of one frame number this walk follows, at most.
+
+A frame cmper legitimately carries more than one `frameSpec` incidence, and
+`all_with` returns every one of them -- so without a bound the walk costs
+`gfholds x 4 slots x incidences`, two file-supplied counts multiplied. Measured
+against this walk before the bound: 1,000 gfholds naming one frame that carries
+1,000 incidences took 0.39 s, quadrupling per doubling, which is the shape that
+took 65.7 s on 1.70 MB elsewhere in this project.
+
+Sized on what the corpus holds: 73 of its 67,558 frame cmpers carry two
+incidences and the rest carry one (see `enigma.location`'s module docstring),
+so 16 is eight times the largest honest figure. Past it the walk says so and
+follows the first 16 -- it does not raise, because nothing in this module does.
+"""
+
+
 @dataclass
 class _Failures:
     """The unresolved messages a walk has recorded, under the document cap.
@@ -295,6 +312,13 @@ def placements_by_entry(
     of those a document has is a number the file decides, so they are capped at
     `_MAX_DOCUMENT_FAILURES` with a counted tail; see that constant.
 
+    The incidences of one frame are capped at `_MAX_FRAME_INCIDENCES`, and the
+    filtered list per frame number is built once and reused: without both, the
+    cost is `gfholds x 4 slots x incidences`, a product of two file-supplied
+    counts. Measured before the fix: 1,000 gfholds all naming one frame that
+    carries 1,000 incidences took 0.39 s, and it quadruples per doubling -- the
+    65.7 s shape this project has already met once.
+
     Placements per entry are capped at `_MAX_PLACEMENTS_PER_ENTRY`, the same
     bound `locate_entries` enforces and for the same reason: `_CHAIN_GUARD`
     only bounds one chain walk, and nothing else bounds how many separate
@@ -312,6 +336,8 @@ def placements_by_entry(
     placements: dict[int, list[Placement]] = {}
     failures = _Failures()
     capped: set[int] = set()
+    # One filtered list per frame number, not one per gfhold slot naming it.
+    specs_by_frame: dict[int, tuple[Record, ...]] = {}
     entries_by_num: dict[int, Record] = {}
     for record in doc.entries.of_tag("entry"):
         n = _as_int(record.attrs.get("entnum"))
@@ -334,9 +360,17 @@ def placements_by_entry(
                     f"gfhold {key} {field_name} is {value!r}, which is not a frame number"
                 )
                 continue
-            specs = tuple(
-                f for f in doc.others.all_with("frameSpec", frame) if "part" not in f.attrs
-            )
+            if frame not in specs_by_frame:
+                found = tuple(
+                    f for f in doc.others.all_with("frameSpec", frame) if "part" not in f.attrs
+                )
+                if len(found) > _MAX_FRAME_INCIDENCES:
+                    failures.document(
+                        f"frameSpec {frame} has {len(found)} incidences, more than the "
+                        f"{_MAX_FRAME_INCIDENCES} this walks; the rest are not followed"
+                    )
+                specs_by_frame[frame] = found[:_MAX_FRAME_INCIDENCES]
+            specs = specs_by_frame[frame]
             if not specs:
                 failures.document(
                     f"gfhold {key} {field_name} names frameSpec {frame}, which is absent"

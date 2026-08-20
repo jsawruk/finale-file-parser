@@ -21,6 +21,7 @@ from finale_file_parser.enigma.pitch import StaffTransposition
 from finale_file_parser.report.entry_facts import (
     _DURATION_NAMES,
     _MAX_DOCUMENT_FAILURES,
+    _MAX_FRAME_INCIDENCES,
     DOCUMENT_KEY,
     Placement,
     Reference,
@@ -887,3 +888,90 @@ def test_an_entry_numbered_zero_does_not_absorb_the_document_failures() -> None:
     assert index["0"].unresolved == ("no frame reaches this entry",), "the entry's own, only"
     assert index["0"].decode is not None, "and it is still a real entry with real facts"
     assert any("which is absent" in message for message in index[DOCUMENT_KEY].unresolved)
+
+
+def test_a_frame_carrying_more_incidences_than_the_cap_walks_the_first_of_them() -> None:
+    """A frame cmper can carry more than one `frameSpec` incidence, and
+    `all_with` returns every one -- a count read out of the file, multiplied by
+    the gfhold count, which is another. The walk follows the first
+    `_MAX_FRAME_INCIDENCES` and says it stopped.
+
+    Counted rather than timed: each incidence here places its own entry, so the
+    number of entries placed *is* the number of incidences walked.
+    """
+    incidences = tuple(
+        Record(
+            tag="frameSpec",
+            attrs={"cmper": "12", "inci": str(n)},
+            text="",
+            fields={"startEntry": str(n), "endEntry": str(n)},
+        )
+        for n in range(_MAX_FRAME_INCIDENCES + 4)
+    )
+    entries = tuple(
+        Record(
+            tag="entry",
+            attrs={"entnum": str(n)},
+            text="",
+            fields={"dura": "1024", "numNotes": "0"},
+        )
+        for n in range(_MAX_FRAME_INCIDENCES + 4)
+    )
+    gfhold = Record(
+        tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )
+
+    places, unresolved = placements_by_entry(
+        _doc(details=(gfhold,), others=incidences, entries=entries)
+    )
+
+    assert len(places) == _MAX_FRAME_INCIDENCES
+    assert any("incidences" in message for message in unresolved[DOCUMENT_KEY])
+
+
+_CROWDED_FRAME_COUNT = 3_000
+"""gfholds, and incidences of the one frame they all name, in the test below.
+
+Two thousand records of each kind is a fraction of a megabyte and a bounded,
+constant allocation -- see the note on `_STRESS_ENTRY_COUNT`. Measured against
+this walk before the fix: 250 of each took 0.02 s, 500 took 0.10 s and 1,000
+took 0.39 s, so 3,000 is about 3.5 s unfixed against 0.02 s fixed.
+"""
+
+
+def test_many_gfholds_naming_one_crowded_frame_do_not_cost_their_product() -> None:
+    """`gfholds x 4 slots x frameSpec incidences`, both counts file-supplied.
+    The filtered incidence list is built once per frame number rather than once
+    per gfhold slot naming it, and the incidences walked are capped, so the
+    cost is linear in each count rather than in their product."""
+    gfholds = tuple(
+        Record(
+            tag="gfhold",
+            attrs={"cmper1": str(staff), "cmper2": "3"},
+            text="",
+            fields={"frame1": "12"},
+        )
+        for staff in range(_CROWDED_FRAME_COUNT)
+    )
+    incidences = tuple(
+        Record(
+            tag="frameSpec",
+            attrs={"cmper": "12", "inci": str(n)},
+            text="",
+            fields={"startEntry": "9", "endEntry": "9"},
+        )
+        for n in range(_CROWDED_FRAME_COUNT)
+    )
+    entry = Record(
+        tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024", "numNotes": "0"}
+    )
+
+    started = time.perf_counter()
+    places, _ = placements_by_entry(_doc(details=gfholds, others=incidences, entries=(entry,)))
+    elapsed = time.perf_counter() - started
+
+    # 2.0s sits between the fixed measurement (~0.02s) and the unfixed one
+    # (~3.5s), the same margin `test_build_entry_index_is_linear...` uses and
+    # for the same reason: a tighter bound would flake on a loaded machine.
+    assert elapsed < 2.0, f"the walk took {elapsed:.2f}s -- looks quadratic again"
+    assert len(places[9]) == _MAX_PLACEMENTS_PER_ENTRY
