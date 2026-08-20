@@ -70,7 +70,7 @@ has no byte order to get wrong:
     8-    the pool chain, each entry:
           0-1   kind      15 others, 16 details, 17 entries, 18 text
           2-5   length    the whole entry, this 10-byte header included
-          6-9   checksum  the container's, or 0 where the container carries none
+          6-9   checksum  always 0 -- see below
           10-   payload   `length - 10` decompressed bytes
 
 **The chain is the DCL container's own framing**, not something invented for this file. A DCL `.mus`
@@ -79,6 +79,10 @@ from `0x200` with no gaps, and `length` already counts its own header. Two thing
 file on disk, and only two: each payload is decompressed, so `length` reflects the decompressed
 size; and a magic header is prepended so the file announces what it is rather than impersonating a
 `.mus`.
+
+**The checksum is always zero.** The container's checksum covers the *compressed* stream, which
+this file does not contain, so carrying it across would invite a reader to verify it against bytes
+it never described. The field is kept because the chain's shape is the point; its value is not.
 
 **An empty pool keeps its shape:** `length == 6`, no checksum and no payload, which is how the DCL
 container itself says a pool exists and holds nothing. Three corpus documents carry an empty entry
