@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from finale_file_parser.enigma.document import EnigmaDocument, Record
 from finale_file_parser.enigma.key import decode_key
 from finale_file_parser.enigma.location import effective_keys
-from finale_file_parser.enigma.music import Note, read_entry
+from finale_file_parser.enigma.music import Note, NoteValue, read_entry
 from finale_file_parser.enigma.pitch import StaffTransposition, read_transposition, spell_note
 from finale_file_parser.errors import FinaleFileError
 
@@ -56,6 +56,23 @@ class Reference:
     pool: str
     tag: str
     key: str
+
+    tree_tag: str | None = None
+    tree_key: str | None = None
+    """Which Records-tree row this reference selects, or None for neither.
+
+    Separate from `tag`/`key` because the two are not always the same record
+    *name*. A `.musx` tree renders the very records this walk read, so the two
+    pairs are equal. A `.mus` tree is built from the raw numeric pool instead
+    (`report.model._mus_detail_entry`), so its rows are keyed
+    `(cmper1, cmper2, inci)` under a numeric tag and nothing here could match
+    one -- `report.model` retargets these two fields against the raw records
+    after the index is built.
+
+    None on either means the reference has no row to point at, and the page
+    must render it as plain text with no click affordance. Pointing at the
+    wrong record would be worse than pointing at nothing.
+    """
 
 
 @dataclass(frozen=True)
@@ -117,7 +134,19 @@ def references_to(doc: EnigmaDocument, entnum: int) -> tuple[Reference, ...]:
     out: list[Reference] = []
     for record in doc.details.records:
         if record.attrs.get("entnum") == str(entnum):
-            out.append(Reference(pool="details", tag=record.tag, key=_identity(record)))
+            key = _identity(record)
+            # The `.musx` targeting, which is the identity itself: there the
+            # tree renders these same records. `report.model` replaces both
+            # fields on the `.mus` path, where it does not.
+            out.append(
+                Reference(
+                    pool="details",
+                    tag=record.tag,
+                    key=key,
+                    tree_tag=record.tag,
+                    tree_key=key,
+                )
+            )
     return tuple(out)
 
 
@@ -315,7 +344,7 @@ def decode_entry(
                 harm_lev=note.harm_lev, harm_alt=note.harm_alt, spelled=spelled, why_not=why_not
             )
         )
-    base_name = entry.duration.base.name.lower().replace("_", " ")
+    base_name = _base_name(entry.duration.base)
     return EntryDecode(
         duration_edu=entry.duration.edu,
         duration_base=base_name,
@@ -324,6 +353,39 @@ def decode_entry(
         is_rest=entry.is_rest,
         notes=tuple(notes),
     )
+
+
+_DURATION_NAMES: dict[NoteValue, str] = {
+    NoteValue.BREVE: "breve",
+    NoteValue.WHOLE: "whole",
+    NoteValue.HALF: "half",
+    NoteValue.QUARTER: "quarter",
+    NoteValue.EIGHTH: "eighth",
+    NoteValue.SIXTEENTH: "16th",
+    NoteValue.THIRTY_SECOND: "thirty-second",
+    NoteValue.SIXTY_FOURTH: "64th",
+    NoteValue.ONE_TWENTY_EIGHTH: "128th",
+}
+"""What a musician calls each note value.
+
+Spelled out rather than derived from the member name: `NoteValue.name` lowered
+with its underscores turned to spaces gives "thirty second" and "one twenty
+eighth", which are the enum's spelling of a number and not notation's spelling
+of a duration. Every member is covered, and
+`test_every_note_value_is_spelled_the_way_a_musician_writes_it` fails if a
+member is added without one.
+"""
+
+
+def _base_name(base: NoteValue) -> str:
+    """The readable name of a base note value.
+
+    Falls back to the member name for a value added without an entry above --
+    ugly, and deliberately so: this is a diagnostic report and a wrong-but-tidy
+    name would be worse than an obviously unnamed one. The test pins the table
+    complete so the fallback stays unreachable.
+    """
+    return _DURATION_NAMES.get(base, base.name.lower().replace("_", " "))
 
 
 def _dotted_name(base_name: str, dots: int) -> str:

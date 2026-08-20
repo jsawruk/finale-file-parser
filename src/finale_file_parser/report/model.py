@@ -21,7 +21,12 @@ from defusedxml import ElementTree as DefusedET
 
 from finale_file_parser.enigma.document import EnigmaDocument, Record, parse_enigma
 from finale_file_parser.enigma.location import locate_entries
-from finale_file_parser.enigma.mus_details import MusDetailRecord, read_mus_details
+from finale_file_parser.enigma.mus_details import (
+    ENTRY_DETAIL_TAGS,
+    MusDetailRecord,
+    entry_key,
+    read_mus_details,
+)
 from finale_file_parser.enigma.mus_document import read_mus_document
 from finale_file_parser.enigma.mus_entries import read_mus_entry_records
 from finale_file_parser.enigma.mus_others import OPTIONS_CMPER, MusOther, read_mus_others
@@ -37,7 +42,7 @@ from finale_file_parser.errors import FinaleFileError
 from finale_file_parser.export.musicxml import to_musicxml
 from finale_file_parser.formats.layouts import Layout, layout_for
 from finale_file_parser.formats.tags import name_for
-from finale_file_parser.report.entry_facts import build_entry_index
+from finale_file_parser.report.entry_facts import EntryFacts, build_entry_index
 from finale_file_parser.report.ladder import NOT_REQUESTED, Ladder, Stage
 from finale_file_parser.report.notation import Engraving, engrave
 from finale_file_parser.report.summary import (
@@ -244,13 +249,18 @@ def _mus_stages(
     ladder: Ladder, target: Path, inspection: Inspection, *, engrave_notation: bool
 ) -> None:
     pools = ladder.run("decode payload", lambda: read_mus_pools(target), _pools_detail)
+    details: tuple[MusDetailRecord, ...] | None = None
     if pools is not None:
         # The same pool `_pools_detail` reports the order from, so the Debug tab
         # and the record pane's decoding cannot disagree about it.
         inspection.byte_order = pools[0].byte_order if pools else ""
+        # Read once and used twice: the records tree renders these rows, and
+        # the entry references are retargeted at the rows it rendered. Reading
+        # the pool a second time for the second use would let the two disagree.
+        details = _mus_details(target)
         records = ladder.run(
             "read records",
-            lambda: _mus_records(target),
+            lambda: _mus_records(target, details),
             lambda r: {"pools": str(len(r))},
             halt=False,
         )
@@ -260,6 +270,9 @@ def _mus_stages(
             inspection.layouts = _layouts_present(records)
     document = ladder.run("build document", lambda: read_mus_document(target))
     _finish(ladder, document, inspection, engrave_notation=engrave_notation)
+    # After `_finish`, because it is what builds the index being retargeted,
+    # and before `inspect_document` applies the budget, which weighs it.
+    _retarget_mus_references(inspection, document, details)
 
 
 def _musx_stages(
@@ -404,7 +417,23 @@ def _group_by_tag(
     return grouped
 
 
-def _mus_records(target: Path) -> dict[str, object]:
+def _mus_details(target: Path) -> tuple[MusDetailRecord, ...] | None:
+    """The raw `details` pool, or None when this file has none this reader
+    recognises -- a 2001-2005 document, whose pools are ETF rows instead.
+
+    None rather than an empty tuple, because the two mean different things
+    here: no pool at all is why the tree falls back to `read_mus_rows`, and a
+    reference into a tree built that way has no row to point at.
+    """
+    try:
+        return read_mus_details(target)
+    except FinaleFileError:
+        return None
+
+
+def _mus_records(
+    target: Path, details: tuple[MusDetailRecord, ...] | None = None
+) -> dict[str, object]:
     """The `others`/`details` pools' own records, read raw rather than via the
     built `EnigmaDocument`.
 
@@ -423,17 +452,19 @@ def _mus_records(target: Path) -> dict[str, object]:
     REFUSED stage and anything else (a bug in the entry-building below, not
     just the reading) into a CRASHED one, without stopping the pipeline for
     either.
+
+    `details` is the already-read pool where the caller holds one (see
+    `_mus_stages`, which needs the same records to retarget the entry
+    references at the rows built here). Passing None reads it here, which is
+    what a caller holding only a path does.
     """
     others: tuple[MusOther, ...] | None = None
-    details: tuple[MusDetailRecord, ...] | None = None
     try:
         others = read_mus_others(target)
     except FinaleFileError:
         others = None
-    try:
-        details = read_mus_details(target)
-    except FinaleFileError:
-        details = None
+    if details is None:
+        details = _mus_details(target)
 
     records: dict[str, object] = {}
     if others is not None:
@@ -650,6 +681,119 @@ def _musx_key(record: Record, index: int) -> str:
     return _key(*parts) if parts else _key(("position", index))
 
 
+def _attr_int(value: object) -> int | None:
+    """An attribute as an int, or None when it is not one. Absence is ordinary
+    here -- `tupletDef` carries no `inci` at all -- and never an error."""
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _mus_entry_rows(
+    details: tuple[MusDetailRecord, ...],
+) -> tuple[dict[tuple[int, int, int], str], dict[tuple[int, int], str]]:
+    """Where each entry-keyed raw row sits in the Records tree, by two keys:
+    `(tag, entnum, inci)` and `(tag, entnum)`.
+
+    The tree key comes from `_mus_detail_entry`, the function that wrote the
+    row, rather than from a second copy of that string format here -- the whole
+    point is that the two agree, and a copy is a thing that can drift.
+
+    Both maps use `setdefault`, so the entry key names the *first* row for an
+    entry: with nothing to tell later rows apart, the first is the only one
+    that can be pointed at honestly.
+    """
+    by_inci: dict[tuple[int, int, int], str] = {}
+    by_entry: dict[tuple[int, int], str] = {}
+    wanted = set(ENTRY_DETAIL_TAGS.values())
+    for record in details:
+        if record.tag not in wanted:
+            continue
+        # `entry_key` and not a shift written out again: the high-word-first
+        # reading is confirmed against the paired `.musx` on every corpus
+        # `tupletDef`, and that evidence lives with the function.
+        entnum = entry_key(record)
+        key = str(_mus_detail_entry(record)["key"])
+        by_inci.setdefault((record.tag, entnum, record.inci), key)
+        by_entry.setdefault((record.tag, entnum), key)
+    return by_inci, by_entry
+
+
+def _mus_reference_targets(
+    document: EnigmaDocument, details: tuple[MusDetailRecord, ...]
+) -> dict[tuple[str, str], tuple[str, str]]:
+    """For each entry-naming details record, the tree row it was read from.
+
+    Keyed by the pair `references_to` puts on a `Reference` -- the record's tag
+    and `_musx_key` -- so the join needs no key string parsed back apart.
+
+    An `inci` is matched first and only then fallen back on, because it means
+    different things per tag: `articAssign` carries the raw row's incidence and
+    joins exactly, `tupletDef` carries none, and `lyrDataVerse` carries a
+    per-entry verse counter `mus_document` invents, which is not an incidence
+    at all and finds nothing. A record with no row is left out entirely rather
+    than pointed at a neighbour.
+    """
+    by_inci, by_entry = _mus_entry_rows(details)
+    targets: dict[tuple[str, str], tuple[str, str]] = {}
+    for record in document.details.records:
+        tag = ENTRY_DETAIL_TAGS.get(record.tag)
+        if tag is None:
+            continue
+        entnum = _attr_int(record.attrs.get("entnum"))
+        if entnum is None:
+            continue
+        inci = _attr_int(record.attrs.get("inci"))
+        key = by_inci.get((tag, entnum, inci)) if inci is not None else None
+        if key is None:
+            key = by_entry.get((tag, entnum))
+        if key is not None:
+            targets[(record.tag, _musx_key(record, 0))] = (str(tag), key)
+    return targets
+
+
+def _retarget_mus_references(
+    inspection: Inspection,
+    document: EnigmaDocument | None,
+    details: tuple[MusDetailRecord, ...] | None,
+) -> None:
+    """Point every entry reference at the `.mus` row that names it.
+
+    `references_to` targets the record it read, which is what a `.musx` tree
+    renders and what a `.mus` tree does not: there the rows come from the raw
+    pool, numerically tagged and keyed by cmper pair. Left alone, not one
+    reference on a `.mus` could ever select anything -- and 43 of 80 corpus
+    documents carry details naming an entry, so that is the ordinary case.
+
+    Whatever cannot be joined is cleared to None, which the page renders as
+    plain text with no click affordance. That covers a document with no
+    readable details pool (the 2001-2005 era, whose tree is built from ETF
+    rows) as much as a single record with no row: in both, there is no row to
+    point at, and saying so is the answer.
+    """
+    targets = (
+        _mus_reference_targets(document, details)
+        if document is not None and details is not None
+        else {}
+    )
+    for facts in inspection.entry_index.values():
+        if not isinstance(facts, dict):
+            continue
+        # A tuple, because `asdict` keeps a dataclass's tuple field a tuple.
+        # The references inside it are dicts and stay mutable, which is what
+        # this needs; nothing here replaces the sequence itself.
+        references = facts.get("named_by")
+        if not isinstance(references, (list, tuple)):
+            continue
+        for reference in references:
+            if not isinstance(reference, dict):
+                continue
+            target = targets.get((str(reference.get("tag")), str(reference.get("key"))))
+            reference["tree_tag"] = target[0] if target is not None else None
+            reference["tree_key"] = target[1] if target is not None else None
+
+
 def _pool_record_entry(record: Record, index: int, source: str = "") -> dict[str, object]:
     entry = _record_entry(
         key=_musx_key(record, index),
@@ -840,6 +984,36 @@ def apply_budget(inspection: Inspection, limit: int = MAX_JSON_BYTES) -> None:
         inspection.notes.append(f"music tree omitted: the report exceeded its {limit} byte budget")
 
 
+_MAX_ENTRY_FACT_NOTES = 20
+"""How many document-level entry failures the notes list, at most.
+
+`build_entry_index` files a message per broken frame chain, and how many of
+those a document has is a number read out of the file -- so copying the list
+whole would let a hostile document decide the size of the notes the page
+renders. The full list is never lost: it stays under entry 0 in the index,
+where the count below points.
+"""
+
+
+def _note_document_failures(inspection: Inspection, facts: EntryFacts | None) -> None:
+    """Surface the entry failures that belong to no single entry.
+
+    `build_entry_index` files them under entnum 0 -- including "no key could be
+    resolved for this document", the single most useful thing it says. No
+    record row has entnum 0, so the record pane can never show that bucket, and
+    a diagnostic nobody can reach is one this report may as well not produce.
+    """
+    if facts is None:
+        return
+    messages = list(facts.unresolved)
+    inspection.notes.extend(messages[:_MAX_ENTRY_FACT_NOTES])
+    if len(messages) > _MAX_ENTRY_FACT_NOTES:
+        inspection.notes.append(
+            f"... and {len(messages) - _MAX_ENTRY_FACT_NOTES} further entry-facts failures, "
+            "listed in full under entry 0 of the entry index"
+        )
+
+
 def _finish(
     ladder: Ladder,
     document: EnigmaDocument | None,
@@ -859,11 +1033,12 @@ def _finish(
     # is a diagnostic depth on a report whose whole purpose is documents that
     # do not work -- it must not be what stops one being written.
     try:
-        inspection.entry_index = {
-            entnum: asdict(facts) for entnum, facts in build_entry_index(document).items()
-        }
+        index = build_entry_index(document)
     except Exception:  # noqa: BLE001 -- a report is written or nothing is
         inspection.notes.append("entry facts unavailable: the index could not be built")
+    else:
+        inspection.entry_index = {entnum: asdict(facts) for entnum, facts in index.items()}
+        _note_document_failures(inspection, index.get("0"))
     score = ladder.run("build score", lambda: build_score(document))
     if score is None:
         ladder.run("export MusicXML", _unreachable)

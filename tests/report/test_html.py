@@ -4,12 +4,27 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import asdict
 
 from defusedxml import ElementTree as DET
 
+from finale_file_parser.enigma.document import Record
+from finale_file_parser.report.entry_facts import EntryFacts, decode_entry
 from finale_file_parser.report.html import render_html
 from finale_file_parser.report.ladder import OK, Stage
 from finale_file_parser.report.model import Inspection
+
+
+def _script(html: str) -> str:
+    """The page's own JavaScript, without the JSON island it renders.
+
+    The island carries values Python composed and the script must not, so a
+    test that searched the whole page for a composed word could never tell the
+    two apart.
+    """
+    match = re.search(r"//<!\[CDATA\[\n(.*?)\n//\]\]>", html, re.S)
+    assert match is not None
+    return match.group(1)
 
 
 def _inspection(**kwargs: object) -> Inspection:
@@ -623,9 +638,84 @@ def test_entry_facts_render_the_dotted_duration_name_not_the_base_alone() -> Non
     assert "d.dots" in html
 
 
-def test_the_page_does_no_decoding_of_its_own() -> None:
-    """A guard, not a formality: a spelled pitch computed in JavaScript would be
-    a second decoder, and the two would drift."""
-    html = render_html(_inspection())
-    for forbidden in ("harmLev +", "decodeKey(", "spellNote("):
-        assert forbidden not in html
+def test_the_page_never_composes_a_duration_name_of_its_own() -> None:
+    """A guard that can actually fail.
+
+    What it replaced forbade three strings (`"harmLev +"`, `"decodeKey("`,
+    `"spellNote("`) that no plausible implementation would have contained, so
+    it passed by construction. The rule it was meant to defend is that the page
+    renders and does not compute -- and the nearest that rule has come to being
+    broken is the duration name, whose one-line JavaScript version ("dotted " +
+    base) is the obvious way to write it. Every word only the composition
+    produces is forbidden here, so moving it back into the browser fails this.
+    """
+    script = _script(render_html(_inspection()))
+    for forbidden in ("dotted", "-dot", "double dot", "thirty-second", "128th"):
+        assert forbidden not in script
+
+
+def test_an_entry_facts_payload_carries_the_name_python_composed() -> None:
+    """The seam end to end: a real `decode_entry` result, serialised the way
+    `report.model` serialises it, reaching the page.
+
+    The test that came before this one asserted `"dotted quarter"` was in the
+    HTML while supplying that string itself from a hand-written dict, so the
+    only thing it proved was that `json.dumps` works. Here 1536 EDU goes in and
+    the phrase comes out, through the code that composes it.
+    """
+    entry = Record(
+        tag="entry",
+        attrs={"entnum": "9"},
+        text="",
+        fields={"dura": "1536", "numNotes": "0"},
+    )
+    decode = decode_entry(entry, key_raw=None, transposition=None)
+    assert decode is not None
+    facts = EntryFacts(decode=decode)
+
+    html = render_html(_inspection(entry_index={"9": asdict(facts)}))
+
+    assert '"dotted quarter"' in html
+    assert '"duration_base": "quarter"' in html or '"duration_base":"quarter"' in html
+
+
+def test_a_named_by_reference_selects_the_row_python_targeted() -> None:
+    """`tag`/`key` name the record as the document calls it; `tree_tag`/
+    `tree_key` name the row the Records tree actually rendered. On a `.mus`
+    those differ -- the tree is built from the raw numeric pool -- so selecting
+    on the first pair matched nothing on the corpus's primary format."""
+    script = _script(render_html(_inspection()))
+
+    assert "selectRecord(r.pool, r.tree_tag, r.tree_key)" in script
+    assert "selectRecord(r.pool, r.tag, r.key)" not in script
+
+
+def test_a_reference_with_no_row_is_rendered_without_a_click_affordance() -> None:
+    """Python decides whether a reference has a row; the page must not work one
+    out for itself, and must not offer a click that does nothing."""
+    script = _script(render_html(_inspection()))
+
+    assert "if (r.tree_tag && r.tree_key)" in script
+    # The class that says "clickable" is applied inside that guard, so a
+    # reference without a target looks like the plain text it is.
+    assert "'leaf rec'" not in script
+
+
+def test_named_by_lines_are_not_records_tree_rows() -> None:
+    """`selectRecord` scans `.rec`, so a "named by" line carrying that class put
+    it in the set of rows being searched. One class, one meaning."""
+    script = _script(render_html(_inspection()))
+
+    assert ".rec" in script
+    assert "'leaf ref'" in script
+
+
+def test_selecting_a_row_opens_the_section_it_is_folded_inside() -> None:
+    """A row inside a collapsed `<details>` is selected and never seen, which is
+    why a manual check of this feature looked like it did nothing. Opening the
+    ancestors and scrolling to the row is rendering, not deciding."""
+    script = _script(render_html(_inspection()))
+
+    assert "DETAILS" in script
+    assert "node.open = true" in script
+    assert "scrollIntoView" in script

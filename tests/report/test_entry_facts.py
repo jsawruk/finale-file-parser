@@ -14,8 +14,10 @@ from finale_file_parser.enigma.document import (
     TextsPool,
 )
 from finale_file_parser.enigma.location import _MAX_PLACEMENTS_PER_ENTRY
+from finale_file_parser.enigma.music import NoteValue
 from finale_file_parser.enigma.pitch import StaffTransposition
 from finale_file_parser.report.entry_facts import (
+    _DURATION_NAMES,
     Placement,
     Reference,
     build_entry_index,
@@ -53,7 +55,13 @@ def test_references_name_only_records_holding_this_entnum() -> None:
     doc = _doc(details=(artic, other))
 
     assert references_to(doc, 9) == (
-        Reference(pool="details", tag="articAssign", key="(entnum 9, inci 0)"),
+        Reference(
+            pool="details",
+            tag="articAssign",
+            key="(entnum 9, inci 0)",
+            tree_tag="articAssign",
+            tree_key="(entnum 9, inci 0)",
+        ),
     )
 
 
@@ -459,3 +467,57 @@ def test_the_index_never_raises_on_a_malformed_measspec() -> None:
     assert "0" in index
     assert len(index["0"].unresolved) == 1
     assert "no key could be resolved for this document" in index["0"].unresolved[0]
+
+
+def test_a_reference_carries_the_tree_row_it_should_select() -> None:
+    """A reference is only useful if the reader can get from it to the record.
+
+    On a `.musx` the record the reference names *is* the row the tree rendered,
+    so the two targeting fields repeat the identity. On a `.mus` they are
+    retargeted at the numeric row (see `report.model`), and either being None
+    means "no row to point at" rather than "point at this one anyway".
+    """
+    artic = Record(tag="articAssign", attrs={"entnum": "9", "inci": "0"}, text="", fields={})
+
+    (reference,) = references_to(_doc(details=(artic,)), 9)
+
+    assert reference.tree_tag == reference.tag
+    assert reference.tree_key == reference.key
+
+
+def test_every_note_value_is_spelled_the_way_a_musician_writes_it() -> None:
+    """Covers the enum rather than a sample: a value added later with no name
+    would otherwise render as its own member name -- "one twenty eighth" -- and
+    nothing would say so.
+    """
+    for value in NoteValue:
+        name = _DURATION_NAMES.get(value)
+        assert name is not None, f"{value.name} has no readable name"
+        assert "_" not in name
+        assert name == name.lower()
+
+
+def test_the_short_values_are_named_by_number_not_by_syllable() -> None:
+    """The regression: `NoteValue.name.lower().replace("_", " ")` rendered
+    "thirty second" and "one twenty eighth", neither of which is notation."""
+    assert _DURATION_NAMES[NoteValue.SIXTEENTH] == "16th"
+    assert _DURATION_NAMES[NoteValue.THIRTY_SECOND] == "thirty-second"
+    assert _DURATION_NAMES[NoteValue.SIXTY_FOURTH] == "64th"
+    assert _DURATION_NAMES[NoteValue.ONE_TWENTY_EIGHTH] == "128th"
+
+
+def test_a_thirty_second_decodes_under_its_notation_name() -> None:
+    decode = decode_entry(_entry_record(dura="128"), key_raw=None, transposition=None)
+
+    assert decode is not None
+    assert decode.duration_base == "thirty-second"
+    assert decode.duration_name == "thirty-second"
+
+
+def test_a_dotted_sixteenth_reads_as_one_phrase() -> None:
+    """384 EDU = 256 + 128, a dotted 16th -- the composed phrase, not "dotted
+    sixteenth" and not "dotted 16"."""
+    decode = decode_entry(_entry_record(dura="384"), key_raw=None, transposition=None)
+
+    assert decode is not None
+    assert decode.duration_name == "dotted 16th"

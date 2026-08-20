@@ -44,8 +44,11 @@ from finale_file_parser.enigma.models import CorruptScoreError
 from finale_file_parser.enigma.mus_payload import read_mus_streams, u16_le, u32_le
 
 __all__ = [
+    "ENTRY_DETAIL_TAGS",
     "MusDetailRecord",
+    "TAG_ARTIC_ASSIGN",
     "TAG_GFHOLD",
+    "TAG_LYRIC_VERSE",
     "TAG_STAFF_GROUP",
     "TAG_TUPLET_DEF",
     "read_mus_details",
@@ -89,6 +92,28 @@ order `etfspec.pdf` documents for the ETF `NG` record; see `enigma.groups`."""
 
 TAG_TUPLET_DEF = 1072
 """`tupletDef` -- keyed by entry, not by a (staff, measure) pair. See `entry_key`."""
+
+ENTRY_DETAIL_TAGS: dict[str, int] = {
+    "articAssign": TAG_ARTIC_ASSIGN,
+    "tupletDef": TAG_TUPLET_DEF,
+    "lyrDataVerse": TAG_LYRIC_VERSE,
+}
+"""The detail records that hang off an *entry*, by the name `mus_document`
+gives them.
+
+Exactly three, measured over 114 `.mus` documents: `articAssign` (4,802),
+`tupletDef` (373) and `lyrDataVerse` (321). Every other detail tag is keyed by
+a (staff, measure) pair or by an instrument list, and `entry_key` means nothing
+for one.
+
+Written out rather than derived, because the two sides are read by different
+code: a `.mus` records tree is built from the numeric tags on the left of
+`entry_key`, and an `EnigmaDocument` names the same records on the right. The
+report's "named by" click-through is the join between them, and it fails
+silently -- a reference simply stops being clickable -- so a fourth entry-keyed
+tag appearing here without an entry is drift with nothing to show for it. The
+adapter's own tests pin this map against every `Record` it emits.
+"""
 
 _PADDING = frozenset({0x0000, 0xFFFF})
 """Two-byte filler words that separate sections, skipped rather than parsed.

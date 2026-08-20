@@ -15,9 +15,25 @@ from unittest import mock
 
 import pytest
 
+from finale_file_parser.enigma.document import (
+    DetailsPool,
+    EnigmaDocument,
+    EntriesPool,
+    OptionsPool,
+    OthersPool,
+    Pool,
+    Record,
+    TextsPool,
+)
+from finale_file_parser.enigma.mus_details import (
+    TAG_ARTIC_ASSIGN,
+    TAG_LYRIC_VERSE,
+    TAG_TUPLET_DEF,
+    MusDetailRecord,
+)
 from finale_file_parser.errors import FinaleFileError
 from finale_file_parser.report import model
-from finale_file_parser.report.ladder import CRASHED, OK, REFUSED, SKIPPED
+from finale_file_parser.report.ladder import CRASHED, OK, REFUSED, SKIPPED, Ladder
 
 CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
@@ -109,7 +125,7 @@ def test_a_crash_in_the_records_depth_does_not_stop_the_ladder(
     monkeypatch.setattr(model, "detect_version", lambda p: _FakeVersion())
     monkeypatch.setattr(model, "read_mus_pools", lambda p: (MusPool(data=b"abc"),))
 
-    def crash(target: Path) -> dict[str, object]:
+    def crash(target: Path, details: object = None) -> dict[str, object]:
         raise RuntimeError("boom")
 
     monkeypatch.setattr(model, "_mus_records", crash)
@@ -714,3 +730,156 @@ def test_an_inspection_carries_facts_for_each_entry() -> None:
     model._finish(Ladder(), doc, inspection, engrave_notation=False)
 
     assert "9" in inspection.entry_index
+
+
+def _mus_document(details: tuple[Record, ...], entries: tuple[Record, ...]) -> EnigmaDocument:
+    """An `EnigmaDocument` holding only the two pools these tests need.
+
+    A `.mus` reaches `EnigmaDocument` through `mus_document`, which synthesises
+    exactly these records -- so a document built by hand here stands in for one
+    a real `.mus` produces, without a corpus.
+    """
+    return EnigmaDocument(
+        version="test",
+        header=Pool(records=()),
+        mappings=Pool(records=()),
+        options=OptionsPool(records=()),
+        others=OthersPool(records=()),
+        details=DetailsPool(records=details),
+        entries=EntriesPool(records=entries),
+        texts=TextsPool(records=()),
+    )
+
+
+def _an_entry(entnum: str) -> Record:
+    return Record(
+        tag="entry", attrs={"entnum": entnum}, text="", fields={"dura": "1024", "numNotes": "0"}
+    )
+
+
+def _named(tag: str, **attrs: str) -> Record:
+    """One details record as `mus_document` synthesises it: named, and keyed by
+    the entry it hangs off rather than by a cmper pair."""
+    return Record(tag=tag, attrs=attrs, text="", fields={})
+
+
+def _raw(tag: int, entnum: int, inci: int = 0) -> MusDetailRecord:
+    """One raw details row for `entnum`, keyed the way `entry_key` reads it:
+    cmper1 is the high word, cmper2 the low one."""
+    return MusDetailRecord(
+        tag=tag, cmper1=entnum >> 16, cmper2=entnum & 0xFFFF, inci=inci, payload=b"\x07\x00"
+    )
+
+
+def _retargeted(
+    details: tuple[MusDetailRecord, ...] | None, *named: Record
+) -> tuple[dict[str, object], ...]:
+    """The `named_by` references for entry 501, after the `.mus` retargeting."""
+    document = _mus_document(named, (_an_entry("501"),))
+    inspection = model.Inspection(file={"name": "x.mus"})
+    model._finish(Ladder(), document, inspection, engrave_notation=False)
+    model._retarget_mus_references(inspection, document, details)
+    facts = inspection.entry_index["501"]
+    assert isinstance(facts, dict)
+    references = facts["named_by"]
+    assert isinstance(references, tuple)
+    return references
+
+
+def test_a_mus_reference_points_at_the_numeric_row_the_tree_rendered() -> None:
+    """The join this whole fix exists for. A `.mus` Records tree is built from
+    the raw pool, so its rows are numeric (`1009`) and keyed by cmper pair --
+    while the reference comes from the document, where the same record is
+    `articAssign` keyed by entnum. Untargeted, clicking the reference is a
+    silent no-op on every `.mus` that has one.
+    """
+    references = _retargeted(
+        (_raw(TAG_ARTIC_ASSIGN, 501),), _named("articAssign", entnum="501", inci="0")
+    )
+
+    assert references[0]["tag"] == "articAssign"
+    assert references[0]["tree_tag"] == str(TAG_ARTIC_ASSIGN)
+    assert references[0]["tree_key"] == "(cmper1 0, cmper2 501, inci 0)"
+
+
+def test_a_tuplet_reference_carries_no_inci_and_still_finds_its_row() -> None:
+    """`tupletDef` is emitted with no `inci` attribute at all, so it can only
+    ever match on the entry."""
+    references = _retargeted((_raw(TAG_TUPLET_DEF, 501),), _named("tupletDef", entnum="501"))
+
+    assert references[0]["tree_tag"] == str(TAG_TUPLET_DEF)
+    assert references[0]["tree_key"] == "(cmper1 0, cmper2 501, inci 0)"
+
+
+def test_every_verse_of_a_lyric_reference_points_at_the_one_row_that_holds_them() -> None:
+    """The trap. A `lyrDataVerse` record's `inci` is a per-entry assignment
+    counter that `mus_document` invents, not the raw row's incidence: one raw
+    row expands into a verse record per verse, numbered 0, 1, 2. Matching those
+    against a raw `inci` would name a different record for every verse but the
+    first, so they all fall back to the row for their entry.
+    """
+    references = _retargeted(
+        (_raw(TAG_LYRIC_VERSE, 501),),
+        _named("lyrDataVerse", entnum="501", inci="0"),
+        _named("lyrDataVerse", entnum="501", inci="1"),
+        _named("lyrDataVerse", entnum="501", inci="2"),
+    )
+
+    assert len(references) == 3
+    for reference in references:
+        assert reference["tree_tag"] == str(TAG_LYRIC_VERSE)
+        assert reference["tree_key"] == "(cmper1 0, cmper2 501, inci 0)"
+
+
+def test_a_reference_with_no_row_of_its_own_is_marked_unselectable() -> None:
+    """No row means no target -- never the nearest row. Pointing at the wrong
+    record is worse than pointing at nothing."""
+    references = _retargeted((), _named("articAssign", entnum="501", inci="0"))
+
+    assert references[0]["tree_tag"] is None
+    assert references[0]["tree_key"] is None
+
+
+def test_a_document_whose_details_pool_would_not_read_has_no_selectable_reference() -> None:
+    """The 2001-2005 era: the tree is built from ETF rows instead, and no row
+    in it corresponds to a detail record. Every reference is unselectable, and
+    that is the correct answer rather than a gap."""
+    references = _retargeted(None, _named("articAssign", entnum="501", inci="0"))
+
+    assert references[0]["tree_tag"] is None
+    assert references[0]["tree_key"] is None
+
+
+def test_a_document_level_entry_failure_is_named_in_the_notes() -> None:
+    """Failures belonging to no single entry are filed under entnum 0, and no
+    record row has entnum 0 -- so without this the most useful diagnostic the
+    index produces had no surface anywhere in the report."""
+    gfhold = Record(
+        tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )
+    document = _mus_document((gfhold,), (_an_entry("9"),))
+    inspection = model.Inspection(file={"name": "x.mus"})
+    model._finish(Ladder(), document, inspection, engrave_notation=False)
+
+    assert any("frameSpec 12, which is absent" in note for note in inspection.notes)
+
+
+def test_document_level_failures_stop_after_the_note_cap() -> None:
+    """A hostile file can carry thousands of broken frames, and every one of
+    them would otherwise be copied into the notes the page renders. The full
+    list stays under entry 0 in the index."""
+    broken = tuple(
+        Record(
+            tag="gfhold",
+            attrs={"cmper1": "1", "cmper2": str(measure)},
+            text="",
+            fields={"frame1": "12"},
+        )
+        for measure in range(model._MAX_ENTRY_FACT_NOTES + 5)
+    )
+    document = _mus_document(broken, (_an_entry("9"),))
+    inspection = model.Inspection(file={"name": "x.mus"})
+    model._finish(Ladder(), document, inspection, engrave_notation=False)
+
+    assert len(inspection.notes) == model._MAX_ENTRY_FACT_NOTES + 1
+    assert inspection.notes[-1].startswith("... and 5 further")
