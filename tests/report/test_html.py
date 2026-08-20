@@ -591,6 +591,38 @@ def test_the_record_pane_shows_entry_facts_when_one_is_selected() -> None:
     assert "Pointed to by" in html
 
 
+def test_entry_facts_render_the_dotted_duration_name_not_the_base_alone() -> None:
+    """Regression test for the report showing "dura 1536 -> quarter": 1536 EDU
+    is a dotted quarter (1024 + 512), and the pane must say so, not drop the
+    dot. `duration_name` arrives from Python already composed as "dotted
+    quarter" -- this pins that the embedded page carries that composed string,
+    and that the renderer references the base and dot count too rather than
+    folding everything into one opaque phrase."""
+    html = render_html(
+        _inspection(
+            entry_index={
+                "9": {
+                    "placements": [],
+                    "named_by": [],
+                    "decode": {
+                        "duration_edu": 1536,
+                        "duration_base": "quarter",
+                        "dots": 1,
+                        "duration_name": "dotted quarter",
+                        "is_rest": False,
+                        "notes": [],
+                    },
+                    "unresolved": [],
+                }
+            }
+        )
+    )
+    assert '"dotted quarter"' in html
+    assert "d.duration_name" in html
+    assert "d.duration_base" in html
+    assert "d.dots" in html
+
+
 def test_the_page_does_no_decoding_of_its_own() -> None:
     """A guard, not a formality: a spelled pitch computed in JavaScript would be
     a second decoder, and the two would drift."""

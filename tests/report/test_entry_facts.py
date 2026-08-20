@@ -247,9 +247,45 @@ def test_duration_and_raw_values_need_nothing_but_the_entry() -> None:
     decode = decode_entry(_entry_record(notes=(_note("4"),)), key_raw=None, transposition=None)
 
     assert decode is not None
-    assert (decode.duration_edu, decode.duration_name) == (1024, "QUARTER")
+    assert decode.duration_edu == 1024
+    assert decode.duration_base == "quarter"
+    assert decode.dots == 0
+    assert decode.duration_name == "quarter"
     assert decode.notes[0].harm_lev == 4
     assert decode.notes[0].spelled is None
+
+
+def test_an_undotted_quarter_decodes_with_zero_dots() -> None:
+    decode = decode_entry(_entry_record(dura="1024"), key_raw=None, transposition=None)
+
+    assert decode is not None
+    assert decode.duration_edu == 1024
+    assert decode.duration_base == "quarter"
+    assert decode.dots == 0
+    assert decode.duration_name == "quarter"
+
+
+def test_a_dotted_quarter_names_itself_dotted_not_bare_quarter() -> None:
+    """The regression this whole change exists for: 1536 EDU (1024 + 512) is a
+    dotted quarter, and the dot must not be silently dropped from the name."""
+    decode = decode_entry(_entry_record(dura="1536"), key_raw=None, transposition=None)
+
+    assert decode is not None
+    assert decode.duration_edu == 1536
+    assert decode.duration_base == "quarter"
+    assert decode.dots == 1
+    assert decode.duration_name == "dotted quarter"
+
+
+def test_a_double_dotted_half_names_itself_double_dotted() -> None:
+    """3584 EDU = 2048 (half) + 1024 + 512, i.e. a half with two augmentation dots."""
+    decode = decode_entry(_entry_record(dura="3584"), key_raw=None, transposition=None)
+
+    assert decode is not None
+    assert decode.duration_edu == 3584
+    assert decode.duration_base == "half"
+    assert decode.dots == 2
+    assert decode.duration_name == "double dotted half"
 
 
 def test_a_missing_key_produces_no_spelling_and_says_why() -> None:
@@ -351,7 +387,7 @@ def test_the_index_answers_both_questions_for_one_entry() -> None:
     facts = index["9"]
     assert facts.placements[0].staff == 1 and facts.placements[0].measure == 3
     assert facts.named_by[0].tag == "articAssign"
-    assert facts.decode is not None and facts.decode.duration_name == "QUARTER"
+    assert facts.decode is not None and facts.decode.duration_name == "quarter"
     assert facts.decode.notes[0].spelled == "F#4"
     assert facts.unresolved == ()
 

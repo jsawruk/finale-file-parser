@@ -72,7 +72,15 @@ class NoteFacts:
 @dataclass(frozen=True)
 class EntryDecode:
     duration_edu: int
+    duration_base: str
+    """The base note value alone, e.g. "quarter" -- no dots folded in."""
+
+    dots: int
     duration_name: str
+    """The readable, dotted name, e.g. "dotted quarter" -- composed from
+    `duration_base` and `dots` here in Python, not in the page's JavaScript
+    (see the module docstring on why this feature never decodes client-side)."""
+
     is_rest: bool
     notes: tuple[NoteFacts, ...] = ()
 
@@ -307,12 +315,32 @@ def decode_entry(
                 harm_lev=note.harm_lev, harm_alt=note.harm_alt, spelled=spelled, why_not=why_not
             )
         )
+    base_name = entry.duration.base.name.lower().replace("_", " ")
     return EntryDecode(
         duration_edu=entry.duration.edu,
-        duration_name=entry.duration.base.name,
+        duration_base=base_name,
+        dots=entry.duration.dots,
+        duration_name=_dotted_name(base_name, entry.duration.dots),
         is_rest=entry.is_rest,
         notes=tuple(notes),
     )
+
+
+def _dotted_name(base_name: str, dots: int) -> str:
+    """The readable name for a base note value plus its augmentation dots.
+
+    One dot is "dotted", two is "double dotted" -- the only two words actual
+    notation uses. Beyond that there is no established word (and inventing one
+    would be a guess this project does not make elsewhere), so the count is
+    spelled out instead: "3-dot quarter".
+    """
+    if dots <= 0:
+        return base_name
+    if dots == 1:
+        return f"dotted {base_name}"
+    if dots == 2:
+        return f"double dotted {base_name}"
+    return f"{dots}-dot {base_name}"
 
 
 def _spell(

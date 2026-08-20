@@ -506,8 +506,9 @@ function renderEntryFacts(right, entnum) {
     const d = facts.decode;
     const dur = document.createElement('div');
     dur.className = 'leaf';
-    dur.textContent = 'dura ' + d.duration_edu + '  ->  ' +
-                      d.duration_name.toLowerCase() + (d.is_rest ? '  (rest)' : '');
+    dur.textContent = 'dura ' + d.duration_edu + '  ->  ' + d.duration_name +
+                      '  (base ' + d.duration_base + ', dots ' + d.dots + ')' +
+                      (d.is_rest ? '  (rest)' : '');
     box.appendChild(dur);
     (d.notes || []).forEach((n, i) => {
       const line = document.createElement('div');
