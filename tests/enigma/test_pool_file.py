@@ -104,6 +104,7 @@ def test_an_unlabelled_pool_is_refused() -> None:
         pytest.param(lambda b: b[:4] + bytes([VERSION + 9]) + b[5:], id="future-version"),
         pytest.param(lambda b: b[: HEADER_SIZE + 4], id="truncated-chain"),
         pytest.param(lambda b: b[:6] + b"\x09" + b[7:], id="unknown-era"),
+        pytest.param(lambda b: b[:5] + b"\x02" + b[6:], id="unknown-byte-order"),
     ],
 )
 def test_a_malformed_file_raises_rather_than_guessing(
@@ -114,6 +115,18 @@ def test_a_malformed_file_raises_rather_than_guessing(
         read_pool_file(mangle(write_pool_file(_pools(), era=ERA_DCL)))
 
 
+def test_an_unknown_byte_order_names_the_bad_value() -> None:
+    """`"big" if data[5] else "little"` maps every non-zero byte to big-endian,
+    so garbage in that field would silently pick a byte order instead of being
+    refused. Misinterpreting the chain as the wrong endianness happens to raise
+    `CorruptScoreError` too, but for an unrelated reason (a corrupted length),
+    so the message is what tells the two apart."""
+    written = write_pool_file(_pools(), era=ERA_DCL)
+    mangled = written[:5] + b"\x02" + written[6:]
+    with pytest.raises(CorruptScoreError, match="unknown byte order 2"):
+        read_pool_file(mangled)
+
+
 def test_a_declared_length_beyond_the_data_is_refused() -> None:
     """The length field is the one number a hostile file controls. Believing it
     is how a reader is made to allocate or read past its buffer."""
@@ -121,3 +134,35 @@ def test_a_declared_length_beyond_the_data_is_refused() -> None:
     written[HEADER_SIZE + 2 : HEADER_SIZE + 6] = (1 << 30).to_bytes(4, "little")
     with pytest.raises(CorruptScoreError):
         read_pool_file(bytes(written))
+
+
+def test_a_length_within_the_cap_but_past_the_file_is_refused() -> None:
+    """`1 << 30` trips the 64 MiB inflation cap before the buffer-bounds check
+    ever runs. This length stays under that cap but still runs past the actual
+    file, so it is the `at + length > len(data)` check itself that must fire --
+    asserted by message, because a truncating slice plus the next entry's own
+    header check would otherwise raise `CorruptScoreError` anyway, for the
+    wrong reason, and mask the bounds check going missing."""
+    written = bytearray(write_pool_file(_pools(), era=ERA_DCL))
+    written[HEADER_SIZE + 2 : HEADER_SIZE + 6] = (len(written) + 1_000).to_bytes(4, "little")
+    with pytest.raises(CorruptScoreError, match="runs past the end of the file"):
+        read_pool_file(bytes(written))
+
+
+def test_an_unidentifiable_pool_set_is_refused() -> None:
+    """Better no file than a file whose labels are guesses: the kind in the
+    header is what sends a reader to a record shape."""
+    from finale_file_parser.enigma.pool_file import identify_pools
+
+    unlabelled = tuple(MusPool(data=b"\x00" * 64, byte_order="little", kind=None) for _ in range(4))
+    with pytest.raises(CorruptScoreError):
+        identify_pools(unlabelled)
+
+
+def test_labelled_pools_are_left_alone() -> None:
+    """A DCL container states its pool kinds. Sniffing over the top of that
+    could only ever disagree with the file about its own contents."""
+    from finale_file_parser.enigma.pool_file import identify_pools
+
+    given = _pools()
+    assert [p.kind for p in identify_pools(given)] == [p.kind for p in given]

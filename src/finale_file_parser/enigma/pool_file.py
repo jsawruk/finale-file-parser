@@ -28,7 +28,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from finale_file_parser.enigma.models import CorruptScoreError
-from finale_file_parser.enigma.mus_payload import MAX_MUS_PAYLOAD, ByteOrder, MusPool
+from finale_file_parser.enigma.mus_payload import (
+    MAX_MUS_PAYLOAD,
+    POOL_DETAILS,
+    POOL_ENTRIES,
+    POOL_OTHERS,
+    POOL_TEXT,
+    ByteOrder,
+    MusPool,
+)
 
 __all__ = [
     "EMPTY_ENTRY_LENGTH",
@@ -40,6 +48,7 @@ __all__ = [
     "VERSION",
     "PoolFile",
     "era_of",
+    "identify_pools",
     "read_pool_file",
     "write_pool_file",
 ]
@@ -156,6 +165,8 @@ def read_pool_file(data: bytes) -> PoolFile:
     version = data[4]
     if version != VERSION:
         raise CorruptScoreError(f"pool file version {version} is not version {VERSION}")
+    if data[5] not in (0, 1):
+        raise CorruptScoreError(f"pool file names an unknown byte order {data[5]}")
     order: ByteOrder = "big" if data[5] else "little"
     era = data[6]
     if era not in (ERA_ZLIB, ERA_DCL):
@@ -186,3 +197,70 @@ def read_pool_file(data: bytes) -> PoolFile:
     if at != len(data):
         raise CorruptScoreError(f"pool file has {len(data) - at} bytes after its last pool")
     return PoolFile(version=version, byte_order=order, era=era, pools=tuple(pools))
+
+
+def identify_pools(pools: tuple[MusPool, ...]) -> tuple[MusPool, ...]:
+    """Fill in the `kind` of pools whose container did not label them.
+
+    A DCL container names all four pools; a 2011-era one names none. The kinds
+    are recoverable anyway, because each reader already carries a test for
+    "is this my pool?" and uses it to pick a stream:
+
+    - `mus_others._walk` returns None unless the stream is an others pool.
+    - `mus_details._walk` returns None unless it is a details pool.
+    - `mus_entries._looks_like_entry_pool` is the same test for entries.
+
+    Measured over all 99 zlib-era corpus documents: others, details and entries
+    identify positively in 99 of 99, with no stream matching two tests. The
+    fourth pool is the text pool **by elimination** -- there is no positive test
+    for it -- which agrees with the order the DCL container states outright
+    (15, 16, 17, 18).
+
+    That is why the elimination is only allowed once. If two pools were left
+    unidentified the fourth would be a coin toss, and a wrong kind here is not a
+    missing label: it points a reader at the wrong record shape and every field
+    after it reads as confident nonsense.
+
+    Raises:
+        CorruptScoreError: more than one pool could not be identified, or two
+            tests claimed the same pool.
+    """
+    from finale_file_parser.enigma import mus_details, mus_others
+    from finale_file_parser.enigma.mus_entries import _looks_like_entry_pool
+
+    if all(pool.kind is not None for pool in pools):
+        return pools
+
+    out: list[MusPool] = []
+    unknown: list[int] = []
+    for index, pool in enumerate(pools):
+        if pool.kind is not None:
+            out.append(pool)
+            continue
+        others = mus_others._walk(pool.data)
+        details = mus_details._walk(pool.data)
+        claims = []
+        if others is not None and len(others) >= mus_others._MIN_RECORDS:
+            claims.append(POOL_OTHERS)
+        if details is not None and len(details) >= mus_details._MIN_RECORDS:
+            claims.append(POOL_DETAILS)
+        if _looks_like_entry_pool(pool.data, pool.byte_order):
+            claims.append(POOL_ENTRIES)
+        if len(claims) > 1:
+            raise CorruptScoreError(
+                f"pool {index} matches {len(claims)} pool tests, so neither can be trusted"
+            )
+        if claims:
+            out.append(MusPool(data=pool.data, byte_order=pool.byte_order, kind=claims[0]))
+            continue
+        unknown.append(len(out))
+        out.append(pool)
+
+    if len(unknown) > 1:
+        raise CorruptScoreError(
+            f"{len(unknown)} pools could not be identified; only one may be inferred"
+        )
+    for index in unknown:
+        pool = out[index]
+        out[index] = MusPool(data=pool.data, byte_order=pool.byte_order, kind=POOL_TEXT)
+    return tuple(out)
