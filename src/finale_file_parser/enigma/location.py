@@ -53,6 +53,29 @@ from finale_file_parser.errors import FinaleFileError
 _FRAME_FIELDS = ("frame1", "frame2", "frame3", "frame4")
 _CHAIN_GUARD = 1_000_000
 
+_MAX_MEASURE_SPAN = 100_000
+"""Measures one document's key resolution may span, at most.
+
+`effective_keys` walks a dense range from the lowest `measSpec` cmper to the
+highest, and both are integers read straight out of the file: a document
+declaring measure 1 and measure two billion asks for a two-billion-entry dict.
+That is an allocation sized by file-supplied data -- the shape this project's
+guardrail names, and the one that has already cost it 28.8 GB of memory once.
+
+The dense walk is not rewritten, only bounded. It is deliberate: a measure with
+no `measSpec` at all carries the previous key across the gap, which is a
+*different* rule from a `measSpec` with no `keySig` (that one is C major, and
+reading it as inheritance once mis-spelled 18 passages here -- see
+`effective_keys`). A sparse walk would have to restate both rules and could get
+them wrong again.
+
+Sized on the corpus rather than picked: across its 633 documents the largest
+`measSpec` cmper anywhere is **1,028**, so this leaves a factor of about a
+hundred in hand. That headroom is deliberate -- this is a hostile-input guard,
+not a tuning parameter -- and a document past it is refused with
+`MalformedScoreError`, the same answer a bad cmper already gets.
+"""
+
 _MAX_PLACEMENTS_PER_ENTRY = 64
 """Places **one entry** may be placed in.
 
@@ -90,8 +113,9 @@ class MalformedScoreError(FinaleFileError):
     `endEntry` present (an incidence with neither is a legitimate empty
     layer, not an error), an entry placed twice at the same staff, measure
     and layer (an entry in several *different* places is a mirror, and is
-    legal), a `next`-chain that exceeds the guard (a cycle), or an entry
-    placed in more than `_MAX_PLACEMENTS_PER_ENTRY` places.
+    legal), a `next`-chain that exceeds the guard (a cycle), an entry
+    placed in more than `_MAX_PLACEMENTS_PER_ENTRY` places, or `measSpec`
+    cmpers spanning more than `_MAX_MEASURE_SPAN` measures.
     """
 
 
@@ -221,15 +245,30 @@ def effective_keys(doc: EnigmaDocument) -> dict[int, int]:
 
     A measure with no `measSpec` at all is a different case: nothing is stated
     about it, so the running key carries across the gap.
+
+    Raises:
+        MalformedScoreError: a `measSpec` cmper or a `keySig.key` that is not
+            an integer, a `keySig` whose `key` is missing or not scalar, or a
+            span of stated measures wider than `_MAX_MEASURE_SPAN`.
     """
     meas_specs = [r for r in doc.others.of_tag("measSpec") if "part" not in r.attrs]
     by_measure = {_int(r.attrs.get("cmper"), "measSpec cmper"): r for r in meas_specs}
     if not by_measure:
         return {}
 
+    lowest, highest = min(by_measure), max(by_measure)
+    span = highest - lowest + 1
+    if span > _MAX_MEASURE_SPAN:
+        # Both ends come out of the file, so the range below is an allocation a
+        # document gets to size. Refuse rather than iterate; see the constant.
+        raise MalformedScoreError(
+            f"measSpec cmpers span {span} measures ({lowest} to {highest}), more than the "
+            f"{_MAX_MEASURE_SPAN} this resolves: no score is this long"
+        )
+
     result: dict[int, int] = {}
     last = 0
-    for measure in range(min(by_measure), max(by_measure) + 1):
+    for measure in range(lowest, highest + 1):
         record = by_measure.get(measure)
         if record is None:
             result[measure] = last  # no measure stated; carry across the gap

@@ -2,8 +2,10 @@ import pytest
 
 from finale_file_parser.enigma.document import parse_enigma
 from finale_file_parser.enigma.location import (
+    _MAX_MEASURE_SPAN,
     EntryLocation,
     MalformedScoreError,
+    effective_keys,
     locate_entries,
 )
 
@@ -244,6 +246,55 @@ def test_raw_key_is_not_decoded() -> None:
         """
     )
     assert locate_entries(parse_enigma(doc))[1][0].key_signature == 253  # verbatim, not -3
+
+
+def test_a_measure_span_wider_than_the_cap_is_refused_not_iterated() -> None:
+    """`effective_keys` walks a dense range from the lowest stated measure to
+    the highest, and both ends are `measSpec` cmpers read straight out of the
+    file. A document declaring measure 1 and measure two billion asked for a
+    two-billion-entry dict -- an allocation sized by file-supplied data, which
+    is the defect that once consumed 28.8 GB here.
+
+    The dense walk itself is deliberate and is left alone: a gap carries the
+    previous key across it, which is not the same rule as an absent `keySig`
+    (that means C major). So the span is bounded rather than rewritten, and a
+    document past the bound is refused the way a bad cmper already is.
+
+    The span used here is one measure past the cap rather than the hostile
+    two-billion, so that deleting the bound makes this test *fail* rather than
+    make the machine allocate -- the test's own cost stays a constant written
+    here.
+    """
+    doc = _doc(
+        _entries("1:0")
+        + f"""
+        <others>
+          <measSpec cmper="1"><keySig><key>0</key></keySig></measSpec>
+          <measSpec cmper="{_MAX_MEASURE_SPAN + 1}"><keySig><key>0</key></keySig></measSpec>
+        </others>
+        """
+    )
+    with pytest.raises(MalformedScoreError, match="measures"):
+        effective_keys(parse_enigma(doc))
+
+
+def test_a_measure_span_within_the_cap_still_resolves() -> None:
+    """The bound refuses only what is past it: an ordinary score -- the largest
+    `measSpec` cmper anywhere in the 633-document corpus is 1,028 -- is nowhere
+    near it and must be unaffected."""
+    doc = _doc(
+        _entries("1:0")
+        + """
+        <others>
+          <measSpec cmper="1"><keySig><key>2</key></keySig></measSpec>
+          <measSpec cmper="1028"><keySig><key>3</key></keySig></measSpec>
+        </others>
+        """
+    )
+    keys = effective_keys(parse_enigma(doc))
+    assert keys[1] == 2
+    assert keys[1028] == 3
+    assert keys[500] == 2, "a gap carries the previous key across it"
 
 
 def test_layers_frame2_entries_are_located() -> None:

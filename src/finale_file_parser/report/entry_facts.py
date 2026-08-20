@@ -543,7 +543,8 @@ def build_entry_index(doc: EnigmaDocument) -> dict[str, EntryFacts]:
     `effective_keys` is not tolerant -- unlike `placements_by_entry` and
     `_transpositions`, it raises `MalformedScoreError` on a `measSpec` this
     document gets wrong (a non-integer `cmper`, a missing or non-scalar
-    `keySig.key`, ...), and deliberately: it carries the rule that an absent
+    `keySig.key`, or cmpers spanning more measures than `_MAX_MEASURE_SPAN`
+    resolves), and deliberately: it carries the rule that an absent
     `keySig` means C major, not a continuation of the previous key, and a
     second, degrade-per-measure copy of that rule here would risk getting it
     wrong the way the original getting it wrong once already mis-spelled 18
