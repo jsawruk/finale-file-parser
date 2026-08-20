@@ -27,6 +27,25 @@ def _script(html: str) -> str:
     return match.group(1)
 
 
+def _function_body(script: str, name: str) -> str:
+    """One function's own source, by brace matching.
+
+    So an assertion about what a function does can be made against that
+    function rather than against the whole script, where a literal from
+    somewhere else can satisfy it.
+    """
+    start = script.index(f"function {name}(")
+    depth = 0
+    for index in range(script.index("{", start), len(script)):
+        if script[index] == "{":
+            depth += 1
+        elif script[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return script[start : index + 1]
+    raise AssertionError(f"{name} is never closed")
+
+
 def _inspection(**kwargs: object) -> Inspection:
     base = Inspection(file={"name": "score.mus", "size": "10", "sha256": "ab"})
     base.stages = [Stage("detect version", OK, {"family": "mus"})]
@@ -594,16 +613,25 @@ def test_a_hostile_source_cannot_break_out_of_the_xml_pane() -> None:
 def test_the_record_pane_shows_entry_facts_when_one_is_selected() -> None:
     """The page renders `entryIndex[entnum]` and does nothing else -- no
     decoding, no joining. That line is what keeps a second decoder out of the
-    page, which is why the index is built in Python."""
-    html = render_html(
-        _inspection(
-            entry_index={"9": {"placements": [], "named_by": [], "decode": None, "unresolved": []}}
-        )
+    page, which is why the index is built in Python.
+
+    Every assertion here depends on the index this test supplies. The version
+    before it built one and then asserted only that four literals appeared in
+    the page, all four of which are in the script whatever the inspection
+    holds -- so it passed with a bare `_inspection()` and could not fail for
+    the reason its docstring gave.
+    """
+    facts = {"placements": [], "named_by": [], "decode": None, "unresolved": ["nothing reaches it"]}
+    html = render_html(_inspection(entry_index={"9": facts}))
+
+    payload = json.loads(
+        re.search(r'<script id="inspection" type="application/json">(.*?)</script>', html, re.S)
+        .group(1)  # type: ignore[union-attr]
+        .replace("<\\/", "</")
     )
-    assert '"entryIndex"' in html
-    assert "function renderEntryFacts(" in html
-    assert "Decodes as" in html
-    assert "Pointed to by" in html
+    assert payload["entryIndex"]["9"] == facts, "the index reaches the page, under its own key"
+    # And the renderer reads it from there, by the number the record carries.
+    assert "const facts = (data.entryIndex || {})[entnum];" in _script(html)
 
 
 def test_entry_facts_render_the_dotted_duration_name_not_the_base_alone() -> None:
@@ -709,22 +737,40 @@ def test_a_named_by_reference_selects_the_row_python_targeted() -> None:
 
 def test_a_reference_with_no_row_is_rendered_without_a_click_affordance() -> None:
     """Python decides whether a reference has a row; the page must not work one
-    out for itself, and must not offer a click that does nothing."""
+    out for itself, and must not offer a click that does nothing.
+
+    Both the class that says "clickable" and the listener behind it have to sit
+    *inside* the guard, which is what this pins. The assertion it replaces --
+    `"'leaf rec'" not in script` -- was the next line's `'leaf ref'` with one
+    letter changed, a literal no implementation would ever contain.
+    """
     script = _script(render_html(_inspection()))
 
-    assert "if (r.tree_tag && r.tree_key)" in script
-    # The class that says "clickable" is applied inside that guard, so a
-    # reference without a target looks like the plain text it is.
-    assert "'leaf rec'" not in script
+    guarded = re.search(
+        r"if \(r\.tree_tag && r\.tree_key\) \{\s*"
+        r"line\.className = 'leaf ref';\s*"
+        r"line\.addEventListener\(",
+        script,
+    )
+    assert guarded is not None, "the affordance is applied outside the has-a-row guard"
 
 
 def test_named_by_lines_are_not_records_tree_rows() -> None:
-    """`selectRecord` scans `.rec`, so a "named by" line carrying that class put
-    it in the set of rows being searched. One class, one meaning."""
-    script = _script(render_html(_inspection()))
+    """`selectRecord` scans `.rec`, so a "named by" line carrying that class
+    would join the set of rows it searches. One class, one meaning.
 
-    assert ".rec" in script
-    assert "'leaf ref'" in script
+    Checked against every class the facts block assigns, not against one
+    literal: `.rec` appears in this script's own `querySelectorAll('.rec')`
+    whatever the "named by" lines are classed, so the assertion this replaces
+    could not fail for the reason it gave.
+    """
+    script = _script(render_html(_inspection()))
+    body = _function_body(script, "renderEntryFacts")
+
+    assert "querySelectorAll('.rec')" in script, "the row scan this must stay out of"
+    assigned = re.findall(r"className = '([^']*)'", body)
+    assert assigned, "the block classes its lines, or this is measuring nothing"
+    assert all("rec" not in classes.split() for classes in assigned), assigned
 
 
 def test_selecting_a_row_opens_the_section_it_is_folded_inside() -> None:
