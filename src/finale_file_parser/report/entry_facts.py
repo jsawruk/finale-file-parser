@@ -352,9 +352,29 @@ def build_entry_index(doc: EnigmaDocument) -> dict[str, EntryFacts]:
     always the *first* placement's. The pane in Task 6 shows every placement,
     so a reader can see there was more than one and that the spelling shown is
     only one of them.
+
+    `effective_keys` is not tolerant -- unlike `placements_by_entry` and
+    `_transpositions`, it raises `MalformedScoreError` on a `measSpec` this
+    document gets wrong (a non-integer `cmper`, a missing or non-scalar
+    `keySig.key`, ...), and deliberately: it carries the rule that an absent
+    `keySig` means C major, not a continuation of the previous key, and a
+    second, degrade-per-measure copy of that rule here would risk getting it
+    wrong the way the original getting it wrong once already mis-spelled 18
+    passages across this project. So on failure this loses every spelling
+    for the whole document, rather than guessing measure by measure: every
+    note reports `spelled=None` with the existing "no key in force" reason,
+    and the one message below says why, filed under entnum 0 the same way
+    `placements_by_entry` files failures that belong to no single entry.
     """
     placements, unresolved = placements_by_entry(doc)
-    keys = effective_keys(doc)
+    try:
+        keys = effective_keys(doc)
+    except FinaleFileError as error:
+        keys = {}
+        unresolved.setdefault(0, []).append(
+            f"no key could be resolved for this document, so no note can be spelled: "
+            f"{type(error).__name__}: {error}"
+        )
     transpositions = _transpositions(doc)
 
     index: dict[str, EntryFacts] = {}
@@ -378,6 +398,9 @@ def build_entry_index(doc: EnigmaDocument) -> dict[str, EntryFacts]:
             decode=decode,
             unresolved=tuple(messages),
         )
+
+    if unresolved.get(0) and "0" not in index:
+        index["0"] = EntryFacts(unresolved=tuple(unresolved[0]))
     return index
 
 

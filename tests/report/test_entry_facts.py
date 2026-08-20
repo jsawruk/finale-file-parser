@@ -375,3 +375,51 @@ def test_the_index_never_raises_on_a_broken_document() -> None:
     assert index["9"].named_by[0].tag == "articAssign"  # survives independently
     assert index["9"].decode is not None  # needs only the entry
     assert index["9"].unresolved == ("no frame reaches this entry",)
+
+
+def test_the_index_never_raises_on_a_malformed_measspec() -> None:
+    """`effective_keys` is not tolerant -- unlike `placements_by_entry` and
+    `_transpositions` it raises `MalformedScoreError` straight through on a
+    `measSpec` it cannot read, and that used to reach `build_entry_index`'s
+    caller unguarded. A non-integer `cmper` is the simplest way to trip it.
+
+    Placements and references come from `gfhold`/`articAssign`, not from
+    `measSpec`, so they still resolve; only spelling is lost, and the reason
+    is filed under entnum 0, the same "belongs to no single entry" bucket
+    `placements_by_entry` already uses."""
+    gfhold = Record(
+        tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )
+    frame = Record(
+        tag="frameSpec",
+        attrs={"cmper": "12"},
+        text="",
+        fields={"startEntry": "9", "endEntry": "9"},
+    )
+    bad_meas = Record(
+        tag="measSpec",
+        attrs={"cmper": "not-a-number"},
+        text="",
+        fields={"keySig": Record(tag="keySig", attrs={}, text="", fields={"key": "2"})},
+    )
+    artic = Record(tag="articAssign", attrs={"entnum": "9", "inci": "0"}, text="", fields={})
+    entry = Record(
+        tag="entry",
+        attrs={"entnum": "9"},
+        text="",
+        fields={"dura": "1024", "numNotes": "1", "note": (_note("2"),)},
+    )
+
+    index = build_entry_index(
+        _doc(details=(gfhold, artic), others=(frame, bad_meas), entries=(entry,))
+    )
+
+    facts = index["9"]
+    assert facts.placements[0].staff == 1 and facts.placements[0].measure == 3
+    assert facts.named_by[0].tag == "articAssign"
+    assert facts.decode is not None
+    assert facts.decode.notes[0].spelled is None
+    assert facts.decode.notes[0].why_not == "no key in force (placement unresolved)"
+    assert "0" in index
+    assert len(index["0"].unresolved) == 1
+    assert "no key could be resolved for this document" in index["0"].unresolved[0]
