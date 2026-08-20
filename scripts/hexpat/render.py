@@ -179,14 +179,54 @@ def _payload_structs() -> str:
     values that are confidently wrong. `report/model.py` skips them for exactly
     this reason.
     """
+    names = _struct_names()
     parts = ["\n// ---- record payloads, generated from formats/layouts.py ----\n"]
     for layout in LAYOUTS:
-        parts.append(_one_struct(layout))
-    parts.append(_tag_comment())
+        parts.append(_one_struct(layout, names.get(layout, layout.name)))
+    parts.append(_tag_comment(names))
     return "\n".join(parts)
 
 
-def _one_struct(layout: Layout) -> str:
+def _base_struct_name(layout: Layout) -> str:
+    """The struct name a layout would get, before collisions are resolved."""
+    return f"{layout.name}Slot" if layout.stride else layout.name
+
+
+def _struct_names() -> dict[Layout, str]:
+    """Every non-`computed` layout's struct name, with collisions disambiguated.
+
+    Two eras of one record can legitimately share a catalog `name` --
+    `TEXT_EXPR_DEF` and `TEXT_EXPR_DEF_DCL` both describe `textExprDef`, one per
+    era -- so the base name collides on purpose, and ImHex would reject the
+    resulting redefinition outright. The collision is *detected* here, not
+    hardcoded to this pair, so the next one is caught the same way. `Layout.tag`
+    is documented as 0 for "a layout that describes only the DCL spelling", so
+    that is the member a colliding group suffixes with `Dcl`; a group this rule
+    cannot make unique raises, rather than silently emitting a second collision.
+    """
+    groups: dict[str, list[Layout]] = {}
+    for layout in LAYOUTS:
+        if layout.computed:
+            continue
+        groups.setdefault(_base_struct_name(layout), []).append(layout)
+
+    names: dict[Layout, str] = {}
+    for base, group in groups.items():
+        if len(group) == 1:
+            names[group[0]] = base
+            continue
+        for layout in group:
+            names[layout] = f"{base}Dcl" if layout.tag == 0 else base
+        resolved = {names[layout] for layout in group}
+        if len(resolved) != len(group):
+            raise ValueError(
+                f"struct name collision on {base!r} that tag==0 disambiguation cannot "
+                f"resolve: {[layout.record for layout in group]}"
+            )
+    return names
+
+
+def _one_struct(layout: Layout, name: str) -> str:
     tags = _tag_names(layout)
     if layout.computed:
         return (
@@ -196,7 +236,6 @@ def _one_struct(layout: Layout) -> str:
             f"// show confident, wrong values, so the payload stays raw.\n"
         )
 
-    name = f"{layout.name}Slot" if layout.stride else layout.name
     lines = [f"// {layout.record} -- {tags}", f"struct {name} {{"]
     for field in layout.fields:
         lines.append(_one_field(field))
@@ -228,18 +267,20 @@ def _tag_names(layout: Layout) -> str:
     return ", ".join(both) if both else "no tag"
 
 
-def _tag_comment() -> str:
+def _tag_comment(names: dict[Layout, str]) -> str:
     """Which struct reads which tag, in both spellings.
 
     A dispatch cannot be generated as pattern code without inventing a record
     shape for the tags this project has not decoded, so the mapping is stated
-    for a reader to apply and the undecoded payloads stay raw bytes.
+    for a reader to apply and the undecoded payloads stay raw bytes. Uses the
+    same disambiguated names `_one_struct` actually emitted, so a reader
+    following this mapping never lands on a struct name that does not exist.
     """
     lines = ["\n// ---- which struct reads which tag ----"]
     for layout in sorted(LAYOUTS, key=lambda item: (item.pool, item.tag or 0)):
         if layout.computed:
             continue
-        lines.append(f"//   {layout.pool:8} {_tag_names(layout):22} -> {layout.name}")
+        lines.append(f"//   {layout.pool:8} {_tag_names(layout):22} -> {names[layout]}")
     lines.append(
         "// A tag not listed above has no catalogued layout: its payload stays raw bytes\n"
         "// rather than being given an invented structure."

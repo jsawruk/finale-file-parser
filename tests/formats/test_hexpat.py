@@ -9,6 +9,8 @@ check, recorded in the plan.
 
 from __future__ import annotations
 
+import re
+
 from hexpat.render import HEXPAT_TYPES, render_pattern
 
 from finale_file_parser.enigma.pool_file import HEADER_SIZE, MAGIC
@@ -89,3 +91,15 @@ def test_a_slot_array_layout_says_it_repeats() -> None:
     assert striped, "the catalog has slot arrays; this test is meaningless without them"
     for layout in striped:
         assert f"{layout.name}Slot" in pattern, f"{layout.name} does not emit a slot type"
+
+
+def test_no_duplicate_struct_names() -> None:
+    """ImHex Pattern Language rejects a redefinition, so a pattern that declares
+    the same struct name twice fails to *load* -- a class of bug nothing else
+    here can catch. Two eras of one record legitimately share a catalog `name`
+    (`TEXT_EXPR_DEF` / `TEXT_EXPR_DEF_DCL`), so the generator must disambiguate
+    collisions rather than emit them."""
+    pattern = render_pattern()
+    names = re.findall(r"struct (\w+) \{", pattern)
+    duplicates = sorted({n for n in names if names.count(n) > 1})
+    assert not duplicates, f"duplicate struct names: {duplicates}"
