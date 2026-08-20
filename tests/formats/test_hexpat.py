@@ -11,10 +11,11 @@ from __future__ import annotations
 
 import re
 
-from hexpat.render import HEXPAT_TYPES, _struct_names, render_pattern
+import pytest
+from hexpat.render import HEXPAT_TYPES, _one_struct, _struct_names, render_pattern
 
 from finale_file_parser.enigma.pool_file import HEADER_SIZE, MAGIC
-from finale_file_parser.formats.layouts import LAYOUTS
+from finale_file_parser.formats.layouts import LAYOUTS, Field, Layout
 
 _HEXPAT_WIDTH = {"u8": 1, "u16": 2, "u32": 4, "s16": 2}
 """Bytes each fixed-size hexpat type occupies -- the arithmetic the offset
@@ -42,6 +43,56 @@ def test_the_pattern_reads_the_file_the_extractor_writes() -> None:
     assert MAGIC.decode() in pattern, "does not check the magic"
     assert "Header header @ 0x00;" in pattern, "does not place the header at the start"
     assert f"@ {HEADER_SIZE}" in pattern, "does not place the pool array at the header size"
+
+
+_PLACEMENTS = {
+    ("zlib_2011", "others"): "OthersRecord",
+    ("zlib_2011", "details"): "DetailsRecord",
+    ("dcl_2005", "others"): "DclOthersRow",
+    ("dcl_2005", "details"): "DclDetailsRow",
+}
+"""Which record shape each era and pool kind puts over its payload."""
+
+
+def test_each_era_and_kind_places_its_own_record_shape() -> None:
+    """A declared struct that is never instantiated is never evaluated: ImHex
+    shows the pool as one opaque blob, and the hand-check that is this pattern's
+    only execution proves nothing about the shape. Each arm has to *place* its
+    struct, not merely declare it above."""
+    lines = render_pattern().splitlines()
+    for (era, kind), struct in _PLACEMENTS.items():
+        head = f"header.era == Era::{era} && kind == PoolKind::{kind}"
+        index = next((i for i, line in enumerate(lines) if head in line), None)
+        assert index is not None, f"nothing dispatches on the {era} {kind} pool"
+        placed = lines[index + 1].strip()
+        assert placed.startswith(f"{struct} ") and "[while(" in placed, (
+            f"the {era} {kind} pool does not place {struct}: {placed!r}"
+        )
+
+
+def test_a_pool_with_no_catalogued_record_shape_stays_raw_bytes() -> None:
+    """`entries` and `text` have no catalogued record shape, so the dispatch's
+    last arm hands back bytes. Inventing one there is the failure this pattern
+    exists to avoid, and it would be invisible in a hex dump."""
+    pattern = render_pattern()
+    assert re.search(r"\} else \{\n\s*u8 payload\[length - \d+\];", pattern), (
+        "the dispatch has no raw-bytes arm"
+    )
+    for kind in ("entries", "text"):
+        assert f"PoolKind::{kind}" not in pattern, f"{kind} is given a record shape it has none of"
+
+
+def test_a_2011_record_reads_its_extra_block_rather_than_a_fixed_trailer() -> None:
+    """The fixed four-byte trailer is a retracted reading (docs/ARCHITECTURE.md):
+    those bytes are the *length* of an extra block, and `mus_others._walk` reads
+    that many bytes after them. A pattern that stops at four desynchronizes at
+    the first record carrying one."""
+    pattern = render_pattern()
+    for name in ("OthersRecord", "DetailsRecord"):
+        body = "\n".join(_struct_body(pattern, name))
+        assert "trailer" not in body, f"{name} brings back the retracted fixed trailer"
+        assert "u32 extra_length;" in body, f"{name} does not read the extra block's length"
+        assert "u8 extra[extra_length];" in body, f"{name} does not read the extra block"
 
 
 def test_every_field_type_in_the_catalog_maps_to_a_hexpat_type() -> None:
@@ -127,19 +178,23 @@ def test_every_field_note_travels_with_its_field() -> None:
 
 
 def test_a_slot_array_layout_says_it_repeats() -> None:
-    """Four layouts have a non-zero `stride`: their payload is an array of
-    fixed-size slots, each laid out by the same fields. Emitting one slot and
-    stopping would describe a fraction of the record. Checked by the actual
-    "array of N-byte slots" comment text, not by the presence of a `Slot` name
-    suffix -- the struct name alone says nothing about repetition, and a name
-    ending in `Slot` proves nothing if the sentence explaining why was deleted."""
+    """Four layouts carry a non-zero `stride`, and the three that are not
+    `computed` are checked here (`FrameSpec` is excluded on the next line):
+    their payload is an array of fixed-size slots, each laid out by the same
+    fields, and emitting one slot and stopping would describe a fraction of the
+    record. Checked by each layout's *own* comment line, naming its own struct
+    -- a bare "array of 24-byte" search passes on another layout's comment,
+    since `MeasExprAssign` and `InstUsed` share a stride of 24."""
     pattern = render_pattern()
+    names = _struct_names()
     striped = [layout for layout in LAYOUTS if layout.stride and not layout.computed]
     assert striped, "the catalog has slot arrays; this test is meaningless without them"
     for layout in striped:
-        assert f"array of {layout.stride}-byte" in pattern, (
-            f"{layout.name} does not say its payload repeats"
+        expected = (
+            f"// {layout.name}: the payload is an array of {layout.stride}-byte "
+            f"{names[layout]} slots"
         )
+        assert expected in pattern, f"{layout.name} does not say its own payload repeats"
 
 
 def test_every_emitted_field_lands_at_its_catalog_offset() -> None:
@@ -186,6 +241,26 @@ def test_every_emitted_field_lands_at_its_catalog_offset() -> None:
             assert cursor == layout.stride, (
                 f"{name}: rendered body totals {cursor} bytes, stride says {layout.stride}"
             )
+
+
+def test_a_slot_layout_that_grew_a_tail_refuses_to_render() -> None:
+    """A tail has no fixed width, so a struct carrying one cannot also be a
+    fixed-size slot: the "array of N-byte slots" comment would be a lie and
+    every slot after the first would be read at the wrong offset. No catalog
+    layout does this today -- the point is that the day one does, the generator
+    stops instead of emitting it. Its two sibling impossibilities (a field
+    overlapping the previous one, fields running past the stride) already do."""
+    impossible = Layout(
+        name="Impossible",
+        record="impossible",
+        tag=1,
+        dcl="",
+        pool="others",
+        fields=(Field(offset=0, size=0, name="descStr", type_="string", note="runs to the end"),),
+        stride=24,
+    )
+    with pytest.raises(ValueError, match="both a tail field and a 24-byte stride"):
+        _one_struct(impossible, "ImpossibleSlot")
 
 
 def test_no_duplicate_struct_names() -> None:

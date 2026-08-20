@@ -79,9 +79,11 @@ finale-parser extract score.mus     # writes score.pools.bin beside it
 A `.mus` keeps its four pools compressed — the 2001–2005 era with PKWARE implode, which no hex
 editor can decompress — so `extract` writes them out in one file, framed with the container's own
 `kind`/`length`/`checksum` chain. Open that in [ImHex](https://imhex.org/) with
-`docs/formats/finale-mus.hexpat` and every record this project knows how to read is laid out at the
-offsets the parser uses. The pattern is generated from `formats/layouts.py`, so it cannot state an
-offset the code does not.
+`docs/formats/finale-mus.hexpat` and the pattern walks the chain and lays out the records in each
+pool — the 2011 era's variable-length records, the 2001–2005 era's 16-byte rows — at the offsets the
+parser uses. A record's *payload* stays raw bytes, with the pattern listing which struct reads which
+tag for you to place over it by hand. The pattern is generated from `formats/layouts.py`, so it
+cannot state an offset the code does not.
 
 ## How well does it read a file?
 

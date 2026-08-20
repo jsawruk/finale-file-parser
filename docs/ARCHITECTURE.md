@@ -655,6 +655,21 @@ elimination, agreeing with the order the DCL container states outright. Only one
 inferred that way — two would make the fourth a coin toss, and a wrong kind sends a reader to the
 wrong record shape.
 
+**The header's `era` byte is the container's own answer, not a guess.** A DCL container labels its
+pools and a 2011-era one labels none, so `era_of` reads the era off the pools *as read* — asking
+after `identify_pools`, which labels every pool, can only ever answer DCL. The byte decides which
+record shape the pattern applies to a whole pool, so getting it wrong reads a 2011 pool of
+variable-length records as a table of 16-byte rows.
+
+**The pattern dispatches on era and kind, and stops there.** A 2011 `others` pool is placed as
+`OthersRecord`s and its `details` pool as `DetailsRecord`s; a DCL pool of either kind is placed as
+16-byte rows. `entries` and `text` have no catalogued record shape and stay raw bytes. So does a
+record's payload: which struct applies depends on the record's tag, and the tags this project has
+not decoded have no shape to give them, so the pattern lists the tag-to-struct mapping for a reader
+to place by hand rather than inventing one. In the DCL era those structs must be laid over a
+record's *gathered* rows — 12 data bytes from each `others` row, 10 from each `details` row — never
+over a single row.
+
 `docs/formats/finale-mus.hexpat` is generated from `formats/layouts.py` by `make hexpat`, and
 `tests/formats/test_hexpat.py` fails if the committed copy is stale. Layouts marked `computed` —
 `frameSpec` and `gfhold` — are named but never laid over bytes, because their readers work the

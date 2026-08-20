@@ -91,26 +91,44 @@ def _record_shapes() -> str:
     """
     return (
         """
-// A 2011 pool is a run of self-identifying, variable-length records. One
-// occupies 14 + length bytes for `others` and 16 + length for `details`.
+// A 2011 pool is a run of self-identifying, variable-length records, with two
+// bytes of 0x0000 / 0xFFFF filler between some of them. A record occupies
+// 14 + length + extra_length bytes for `others` and 16 + length + extra_length
+// for `details`.
+//
+// The four bytes after the payload are the LENGTH OF AN EXTRA BLOCK, not a
+// fixed four-byte trailer: the trailer reading is retracted in
+// docs/ARCHITECTURE.md, and enigma.mus_others._walk / mus_details._walk read
+// `extra` bytes after it. The block is empty on 99.4% of records, which is why
+// the trailer reading survived so long; where it is not, it is 24, 48 or 96
+// bytes, and treating it as fixed desynchronizes every record after that one.
 struct OthersRecord {
     u16 tag;
-    u16 cmper;
-    u16 part;
-    u32 length;
-    u8 payload[length];
-    u8 trailer[4];
+    if (tag != 0x0000 && tag != 0xFFFF) {
+        u16 cmper;
+        u16 part;
+        u32 length;
+        u8 payload[length];
+        u32 extra_length;
+        u8 extra[extra_length];
+    }
+    // Otherwise `tag` was two bytes of filler rather than a record header, and
+    // the next record starts straight after it -- which is what the readers do,
+    // and what keeps the walk in step.
 };
 
 struct DetailsRecord {
     u16 tag;
-    u16 cmper1;
-    u16 cmper2;
-    u16 inci;
-    u32 length;
-    u8 payload[length];
-    u32 extra_length;
-    u8 extra[extra_length];
+    if (tag != 0x0000 && tag != 0xFFFF) {
+        u16 cmper1;
+        u16 cmper2;
+        u16 inci;
+        u32 length;
+        u8 payload[length];
+        u32 extra_length;
+        u8 extra[extra_length];
+    }
+    // Filler is skipped two bytes at a time here too.
 };
 
 // A 2001-2005 pool is a table of fixed 16-byte rows carrying ETF's
@@ -147,7 +165,31 @@ struct PoolEntry {{
     if (length != {EMPTY_ENTRY_LENGTH}) {{
         u32 checksum;   // always 0: the container's checksum covers the
                         // COMPRESSED stream, which this file does not hold
-        u8 payload[length - {ENTRY_HEADER_SIZE}];
+        u64 payload_end = $ + length - {ENTRY_HEADER_SIZE};
+
+        // Which shape a payload has is the header's era and this entry's kind
+        // -- the same two things the parser dispatches on. `entries` and `text`
+        // have no catalogued record shape, so they stay raw bytes rather than
+        // being given an invented one.
+        if (header.era == Era::zlib_2011 && kind == PoolKind::others) {{
+            OthersRecord records[while($ < payload_end)];
+        }} else if (header.era == Era::zlib_2011 && kind == PoolKind::details) {{
+            DetailsRecord records[while($ < payload_end)];
+        }} else if (header.era == Era::dcl_2005 && kind == PoolKind::others) {{
+            DclOthersRow rows[while($ < payload_end)];
+        }} else if (header.era == Era::dcl_2005 && kind == PoolKind::details) {{
+            DclDetailsRow rows[while($ < payload_end)];
+        }} else {{
+            u8 payload[length - {ENTRY_HEADER_SIZE}];
+        }}
+
+        if ($ != payload_end) {{
+            // The records did not tile the payload exactly. Skipping to the
+            // entry's stated end keeps every later entry at its real offset; if
+            // the walk overran instead, this length underflows and ImHex stops
+            // here -- loudly, which a quietly shifted chain would not be.
+            padding[payload_end - $];
+        }}
     }}
 }};
 """
@@ -276,6 +318,16 @@ def _one_struct(layout: Layout, name: str) -> str:
             tail = True
             break
         cursor = field.end
+    if layout.stride and tail:
+        # The slot comment below would announce fixed-size slots over a struct
+        # whose length depends on its data, so every slot after the first would
+        # be read at the wrong offset. Unreachable with today's catalog, and the
+        # two sibling impossibilities above raise rather than emit -- so does
+        # this one.
+        raise ValueError(
+            f"{layout.name} has both a tail field and a {layout.stride}-byte stride, "
+            f"so its slots cannot be a fixed size"
+        )
     if layout.stride and not tail:
         if cursor > layout.stride:
             raise ValueError(
@@ -315,11 +367,14 @@ def _tag_names(layout: Layout) -> str:
 def _tag_comment(names: dict[Layout, str]) -> str:
     """Which struct reads which tag, in both spellings.
 
-    A dispatch cannot be generated as pattern code without inventing a record
-    shape for the tags this project has not decoded, so the mapping is stated
-    for a reader to apply and the undecoded payloads stay raw bytes. Uses the
-    same disambiguated names `_one_struct` actually emitted, so a reader
-    following this mapping never lands on a struct name that does not exist.
+    `PoolEntry` dispatches on era and kind, because a record's *framing* needs
+    no invention. Its *payload* does: a tag this project has not decoded has no
+    catalogued shape, so a generated per-tag dispatch would have to invent one
+    for every unknown tag to keep the arms exhaustive. The mapping is therefore
+    stated for a reader to apply by hand over a record's payload, and undecoded
+    payloads stay raw bytes. Uses the same disambiguated names `_one_struct`
+    actually emitted, so a reader following this mapping never lands on a struct
+    name that does not exist.
     """
     lines = ["\n// ---- which struct reads which tag ----"]
     for layout in sorted(LAYOUTS, key=lambda item: (item.pool, item.tag or 0)):
@@ -328,6 +383,14 @@ def _tag_comment(names: dict[Layout, str]) -> str:
         lines.append(f"//   {layout.pool:8} {_tag_names(layout):22} -> {names[layout]}")
     lines.append(
         "// A tag not listed above has no catalogued layout: its payload stays raw bytes\n"
-        "// rather than being given an invented structure."
+        "// rather than being given an invented structure.\n"
+        "//\n"
+        "// THE DCL ARROWS DO NOT POINT AT A ROW. In that era a record's payload is the\n"
+        "// concatenation of its rows' data -- 12 bytes from each `others` row at +4, 10\n"
+        "// from each `details` row at +6 -- so a struct above must be laid over that\n"
+        "// gathered payload, never over a row. StaffSpec's field at +20 lives in the\n"
+        "// second row's data and TextExprDefDcl's at +36 in the fourth; placed at a row\n"
+        "// start, either one reads the next row's cmper and tag as a field value and\n"
+        "// shows a confident, wrong number."
     )
     return "\n".join(lines) + "\n"
