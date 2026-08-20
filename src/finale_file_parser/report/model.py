@@ -37,6 +37,7 @@ from finale_file_parser.errors import FinaleFileError
 from finale_file_parser.export.musicxml import to_musicxml
 from finale_file_parser.formats.layouts import Layout, layout_for
 from finale_file_parser.formats.tags import name_for
+from finale_file_parser.report.entry_facts import build_entry_index
 from finale_file_parser.report.ladder import NOT_REQUESTED, Ladder, Stage
 from finale_file_parser.report.notation import Engraving, engrave
 from finale_file_parser.report.summary import (
@@ -151,6 +152,16 @@ class Inspection:
 
     notes: list[str] = field(default_factory=list)
     """Anything the report had to leave out, and why."""
+
+    entry_index: dict[str, object] = field(default_factory=dict)
+    """What points at each entry, and what it decodes to. See `report.entry_facts`.
+
+    Keyed by entry number as a string, because this is embedded as JSON.
+    Measured at 55 KB for a median `.musx` and 169 KB for the largest sampled,
+    against reports of 617 KB to 7.6 MB -- small enough to build for every
+    entry, which it must be: the report is a static file, so nothing can be
+    computed after it is written.
+    """
 
 
 def _identity(path: Path) -> dict[str, str]:
@@ -656,6 +667,11 @@ def _pool_record_entry(record: Record, index: int, source: str = "") -> dict[str
         # that gained the XML would have lost everything. A .mus keeps its
         # fields, because there they decode bytes that are otherwise opaque.
         entry.pop("fields", None)
+    # The page looks facts up by entry number, so state it rather than making
+    # the page parse it back out of the key text.
+    entnum = record.attrs.get("entnum")
+    if entnum is not None:
+        entry["entnum"] = entnum
     return entry
 
 
@@ -788,6 +804,7 @@ def _weight(inspection: Inspection) -> int:
                 "layouts": inspection.layouts,
                 "byteOrder": inspection.byte_order,
                 "notes": inspection.notes,
+                "entryIndex": inspection.entry_index,
             }
         )
     )
@@ -801,6 +818,11 @@ def apply_budget(inspection: Inspection, limit: int = MAX_JSON_BYTES) -> None:
     first: it is the primary evidence, but it is also far the largest, and the
     music tree is the view a reader is most likely to have opened the report
     for.
+
+    `entry_index` is not dropped. It is small next to `records` and the music
+    tree, and it is the only depth that answers "what points at this entry" --
+    dropping it would leave the pane that gained the feature empty while the
+    two large depths it competes with stayed.
     """
     if _weight(inspection) <= limit:
         return
@@ -833,6 +855,15 @@ def _finish(
         ladder.run("engrave notation", _unreachable)
         return
     inspection.document = summarise_document(document)
+    # Never fatal. `build_entry_index` does not raise by construction, but this
+    # is a diagnostic depth on a report whose whole purpose is documents that
+    # do not work -- it must not be what stops one being written.
+    try:
+        inspection.entry_index = {
+            entnum: asdict(facts) for entnum, facts in build_entry_index(document).items()
+        }
+    except Exception:  # noqa: BLE001 -- a report is written or nothing is
+        inspection.notes.append("entry facts unavailable: the index could not be built")
     score = ladder.run("build score", lambda: build_score(document))
     if score is None:
         ladder.run("export MusicXML", _unreachable)

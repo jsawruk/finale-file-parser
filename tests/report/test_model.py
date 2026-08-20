@@ -438,10 +438,14 @@ def test_a_real_mus_file_gets_records() -> None:
                 # both its source and its decoding; a `.mus` text section
                 # carries `text`.
                 # `options` is optional and marks the 0xFFFE sentinel, so it is
-                # dropped before the shape is checked. The shape stays pinned
-                # exactly: this test exists to catch a field added to every
-                # record without anyone deciding to add it.
-                shape = entry.keys() - {"options"}
+                # dropped before the shape is checked. `entnum` is optional too,
+                # and only ever present on an `entry` record -- checked below
+                # rather than folded into the allowed shapes, so this still
+                # catches a field added to every record without anyone
+                # deciding to add it.
+                if "entnum" in entry:
+                    assert tag == "entry"
+                shape = entry.keys() - {"options", "entnum"}
                 assert shape in (
                     {"key", "fields", "length"},
                     {"key", "xml", "length"},
@@ -668,3 +672,45 @@ def test_an_unreadable_entry_pool_does_not_cost_the_other_pools() -> None:
 
     assert "entries" not in records
     assert "others" in records and "details" in records
+
+
+def test_an_inspection_carries_facts_for_each_entry() -> None:
+    """Both containers reach this through `_finish`, so one test covers both."""
+    from finale_file_parser.enigma.document import (
+        DetailsPool,
+        EnigmaDocument,
+        EntriesPool,
+        OptionsPool,
+        OthersPool,
+        Pool,
+        Record,
+        TextsPool,
+    )
+    from finale_file_parser.report.ladder import Ladder
+
+    gfhold = Record(
+        tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )
+    frame = Record(
+        tag="frameSpec",
+        attrs={"cmper": "12"},
+        text="",
+        fields={"startEntry": "9", "endEntry": "9"},
+    )
+    entry = Record(
+        tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024", "numNotes": "0"}
+    )
+    doc = EnigmaDocument(
+        version="test",
+        header=Pool(records=()),
+        mappings=Pool(records=()),
+        options=OptionsPool(records=()),
+        others=OthersPool(records=(frame,)),
+        details=DetailsPool(records=(gfhold,)),
+        entries=EntriesPool(records=(entry,)),
+        texts=TextsPool(records=()),
+    )
+    inspection = model.Inspection(file={"name": "x.mus"})
+    model._finish(Ladder(), doc, inspection, engrave_notation=False)
+
+    assert "9" in inspection.entry_index

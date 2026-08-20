@@ -907,6 +907,7 @@ def render_html(inspection: Inspection) -> str:
             "layouts": inspection.layouts,
             "byteOrder": inspection.byte_order,
             "notes": inspection.notes,
+            "entryIndex": inspection.entry_index,
         }
     )
     return (
