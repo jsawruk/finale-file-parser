@@ -34,6 +34,25 @@ dependencies = [
     "verovio>=5",
 ]
 
+[project.optional-dependencies]
+# `finale-parser convert --format pdf`. Optional because most users want
+# MusicXML and should not pay for a PDF stack they never call: without this
+# extra the command exits with a message naming it, not an ImportError.
+#
+# Verovio cannot write PDF -- its toolkit renders SVG, MIDI, PAE and timemap
+# and nothing else -- so a page has to go SVG -> PDF through a renderer.
+# **svglib is LGPL-3.0**, the same obligation this project already carries for
+# verovio and documents the same way; reportlab is BSD. Neither is vendored.
+# The alternatives were measured rather than assumed: CairoSVG and WeasyPrint
+# both need system libraries (cairo, and pango/harfbuzz/fontconfig
+# respectively) that a wheel cannot supply, so `pip install` would stop being
+# self-contained. See THIRD-PARTY-NOTICES.md and the 2026-08-20 entry in
+# docs/DECISIONS.md.
+pdf = [
+    "svglib>=1.5",
+    "reportlab>=4",
+]
+
 [project.urls]
 Homepage = "https://github.com/jsawruk/finale-file-parser"
 Repository = "https://github.com/jsawruk/finale-file-parser"
@@ -52,7 +71,14 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.8",
     "types-defusedxml>=0.7",
+    # reportlab ships no py.typed, unlike svglib and verovio, and this codebase
+    # is `mypy --strict`.
+    "types-reportlab>=4",
     # verovio is an install dependency now, not a dev one -- see [project].
+    # The `pdf` extra is installed for development so the gate exercises the
+    # real renderer. The absent-extra path is covered by a test that hides the
+    # import, which is the only way to check it while it is present here.
+    "finale-file-parser[pdf]",
 ]
 
 [tool.setuptools.packages.find]
