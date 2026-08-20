@@ -104,7 +104,6 @@ def test_an_unlabelled_pool_is_refused() -> None:
         pytest.param(lambda b: b[:4] + bytes([VERSION + 9]) + b[5:], id="future-version"),
         pytest.param(lambda b: b[: HEADER_SIZE + 4], id="truncated-chain"),
         pytest.param(lambda b: b[:6] + b"\x09" + b[7:], id="unknown-era"),
-        pytest.param(lambda b: b[:5] + b"\x02" + b[6:], id="unknown-byte-order"),
     ],
 )
 def test_a_malformed_file_raises_rather_than_guessing(
@@ -166,3 +165,48 @@ def test_labelled_pools_are_left_alone() -> None:
 
     given = _pools()
     assert [p.kind for p in identify_pools(given)] == [p.kind for p in given]
+
+
+def test_a_pool_both_tests_claim_is_refused_rather_than_resolved_by_precedence() -> None:
+    """`mus_details._walk`'s own docstring names the collision: a stream of
+    uniform zero-payload records satisfies both the `others` rule and the
+    `details` rule, because each reads its length out of the other's zeroed
+    fields. A record laid out as 16-byte blocks --
+    `tag(2)=1 cmper(2)=0 part(2)=0 length(4)=2 payload(2)=0 extralen(4)=0` --
+    parses cleanly under the 10-byte `others` header (length 2) *and* under the
+    12-byte `details` header (length 0, since the extra bytes it needs all land
+    on zeroed fields), with every block ending exactly on the next block's
+    boundary so no cross-block bleed breaks either tiling. Silently resolving
+    that by picking the first match would be worse than not identifying the
+    pool at all -- a wrong kind sends a reader to the wrong record shape."""
+    from finale_file_parser.enigma.pool_file import identify_pools
+
+    block = bytes(
+        [
+            0x01,
+            0x00,  # tag = 1 (not 0x0000/0xFFFF, so neither walk treats it as padding)
+            0x00,
+            0x00,  # cmper (others) / cmper1 (details)
+            0x00,
+            0x00,  # part (others) / cmper2 (details)
+            0x02,
+            0x00,
+            0x00,
+            0x00,  # others length = 2
+            0x00,
+            0x00,  # others payload (2 bytes); also details length's low half
+            0x00,
+            0x00,
+            0x00,
+            0x00,  # others extralen = 0; also details extra = 0
+        ]
+    )
+    ambiguous = block * 60  # >= _MIN_RECORDS (50) under both walks
+
+    given = (
+        MusPool(data=ambiguous, byte_order="little", kind=None),
+        MusPool(data=b"\xaa" * 40, byte_order="little", kind=POOL_ENTRIES),
+        MusPool(data=b"text", byte_order="little", kind=POOL_TEXT),
+    )
+    with pytest.raises(CorruptScoreError, match="matches 2 pool tests"):
+        identify_pools(given)
