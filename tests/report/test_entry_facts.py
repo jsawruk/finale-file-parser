@@ -297,3 +297,19 @@ def test_an_entry_that_will_not_read_yields_no_decode() -> None:
         )
         is None
     )
+
+
+def test_an_unnotatable_alteration_yields_no_spelling_and_says_why() -> None:
+    """A triple sharp is outside ordinary notation (double sharp/flat is the
+    limit). Rendering the bare letter and dropping the accidental would be a
+    confident wrong pitch, worse than no pitch at all -- so this must come back
+    as `why_not`, not a silently-stripped spelling."""
+    decode = decode_entry(
+        _entry_record(notes=(_note("0", "3"),)),
+        key_raw=0,
+        transposition=StaffTransposition(interval=0, adjust=0),
+    )
+
+    assert decode is not None
+    assert decode.notes[0].spelled is None
+    assert decode.notes[0].why_not == "alteration 3 has no notation"

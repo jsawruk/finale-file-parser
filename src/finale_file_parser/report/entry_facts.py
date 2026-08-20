@@ -326,12 +326,20 @@ def _spell(
     except FinaleFileError as error:
         return None, f"{type(error).__name__}: {error}"
     written = spelled.written
-    return f"{written.letter}{_ACCIDENTAL.get(written.alteration, '')}{written.octave}", None
+    if written.alteration not in _ACCIDENTAL:
+        return None, f"alteration {written.alteration} has no notation"
+    return f"{written.letter}{_ACCIDENTAL[written.alteration]}{written.octave}", None
 
 
 _ACCIDENTAL = {-2: "bb", -1: "b", 0: "", 1: "#", 2: "x"}
 """How an alteration is written beside a step. Report text, not a decode: the
-alteration itself comes from `spell_note` and is not reinterpreted here."""
+alteration itself comes from `spell_note` and is not reinterpreted here.
+
+Stops at +-2 (double sharp/flat) because that is the limit of ordinary
+notation -- anything further out is either microtonal or a decode error, and
+either way this module has no business inventing a glyph for it. An
+alteration outside this range is reported via `why_not` instead of silently
+rendering the bare letter, which would read as a confident (and wrong) pitch."""
 
 
 def _as_int(value: object) -> int | None:
