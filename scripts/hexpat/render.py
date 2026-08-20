@@ -9,9 +9,17 @@ rather than payload.
 
 from __future__ import annotations
 
+from finale_file_parser.enigma.mus_payload import (
+    POOL_DETAILS,
+    POOL_ENTRIES,
+    POOL_OTHERS,
+    POOL_TEXT,
+)
 from finale_file_parser.enigma.pool_file import (
     EMPTY_ENTRY_LENGTH,
     ENTRY_HEADER_SIZE,
+    ERA_DCL,
+    ERA_ZLIB,
     HEADER_SIZE,
     MAGIC,
 )
@@ -47,15 +55,15 @@ import std.core;
 import std.mem;
 
 enum PoolKind : u16 {{
-    others  = 15,
-    details = 16,
-    entries = 17,
-    text    = 18,
+    others  = {POOL_OTHERS},
+    details = {POOL_DETAILS},
+    entries = {POOL_ENTRIES},
+    text    = {POOL_TEXT},
 }};
 
 enum Era : u8 {{
-    zlib_2011 = 0,
-    dcl_2005  = 1,
+    zlib_2011 = {ERA_ZLIB},
+    dcl_2005  = {ERA_DCL},
 }};
 
 struct Header {{
@@ -112,6 +120,12 @@ struct DetailsRecord {
 // A record too big for one row runs on into further rows under the same tag and
 // key -- ETF calls each row an incidence -- so a row is a fragment of a record,
 // not a record.
+//
+// Row size is enigma.mus_rows._ROW (16 bytes). The two `data` sizes below are
+// that row size minus each row's prefix: 16 - 4 (cmper + tag) = 12 for
+// `others`, 16 - 6 (cmper1 + cmper2 + tag) = 10 for `details` -- see
+// enigma.mus_rows._OTHERS_DATA and _DETAILS_DATA, which are private to that
+// module so are not imported here.
 struct DclOthersRow {
     u16 cmper;
     u16 tag;
