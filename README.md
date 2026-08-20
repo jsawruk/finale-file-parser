@@ -70,6 +70,19 @@ had — part names come out positional, for instance. Later-era `.mus` title, co
 metadata is preserved; the older DCL cohort carries no tagged bibliographic records. What is and is
 not carried is recorded in `UNTRANSLATED` in `src/finale_file_parser/enigma/mus_document.py`.
 
+### Looking at the raw pools
+
+```bash
+finale-parser extract score.mus     # writes score.pools.bin beside it
+```
+
+A `.mus` keeps its four pools compressed — the 2001–2005 era with PKWARE implode, which no hex
+editor can decompress — so `extract` writes them out in one file, framed with the container's own
+`kind`/`length`/`checksum` chain. Open that in [ImHex](https://imhex.org/) with
+`docs/formats/finale-mus.hexpat` and every record this project knows how to read is laid out at the
+offsets the parser uses. The pattern is generated from `formats/layouts.py`, so it cannot state an
+offset the code does not.
+
 ## How well does it read a file?
 
 Of the 639 documents in the maintainer's test corpus, 632 build a score: 401 of 401 `.musx`, 99 of

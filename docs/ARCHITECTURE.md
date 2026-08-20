@@ -630,6 +630,36 @@ counter assigned while one raw record is expanded into several verse records, so
 matched against a raw incidence. The join therefore matches on the full triple only where one
 genuinely exists, and otherwise falls back to the first record of that tag on that entry.
 
+### The pattern that reads a `.mus`'s pools in a hex editor
+
+**`finale-parser extract` writes the pools out because ImHex cannot decompress them.** Its
+`hex::dec::` namespace covers zlib, bzip, lzma, zstd and lz4 — there is no PKWARE implode, which is
+what the 2001–2005 era uses in 139 of the corpus's 238 documents. Implementing implode in the
+pattern language does not work either, for reasons that are not about the format: `std::mem` can
+copy bytes between sections but cannot emit a *computed* one, overlapping LZ77 copies force
+byte-at-a-time loops, and the evaluator caps loop iterations at 4096. Decompressing in Python first
+sidesteps all of it.
+
+**The extracted file keeps the container's own framing** — `kind`, `length`, `checksum`, laid end to
+end, `length` counting its own header — so walking it teaches a reader the real chain. Only two
+things differ: payloads are decompressed, so `length` is the decompressed size, and an 8-byte header
+(`FMUS`, version, byte order, era, pool count) is prepended so the file announces itself rather than
+impersonating a score. The checksum is written as zero: the container's covers the compressed
+stream, which the file does not hold.
+
+**A 2011-era container labels no pool**, so `extract` identifies them with the same walks the
+readers already use to pick their own stream — `mus_others._walk`, `mus_details._walk` and
+`mus_entries._looks_like_entry_pool`. Across all 99 zlib-era corpus documents those three identify
+positively in 99 of 99, with no stream matching two tests; the fourth is the text pool by
+elimination, agreeing with the order the DCL container states outright. Only one pool may be
+inferred that way — two would make the fourth a coin toss, and a wrong kind sends a reader to the
+wrong record shape.
+
+`docs/formats/finale-mus.hexpat` is generated from `formats/layouts.py` by `make hexpat`, and
+`tests/formats/test_hexpat.py` fails if the committed copy is stale. Layouts marked `computed` —
+`frameSpec` and `gfhold` — are named but never laid over bytes, because their readers work the
+offsets out per record or era.
+
 ### Known format facts — the reserved staff 32767
 
 Every corpus document declares a staff numbered **32767** (0x7FFF, the sentinel the format also uses
