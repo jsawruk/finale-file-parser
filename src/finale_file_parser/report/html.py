@@ -507,9 +507,20 @@ function selectRecord(pool, tag, key) {
 // Entry facts: what points at this entry, and what it decodes to. Rendered
 // from `data.entryIndex` and nothing else -- this function does no decoding
 // and no joining, which is why the index is built in Python.
-function renderEntryFacts(right, entnum) {
+function renderEntryFacts(right, entnum, attribution) {
   const facts = (data.entryIndex || {})[entnum];
   if (!facts) { return; }
+
+  // Whose facts these are, when the selected record is not itself the entry --
+  // an articulation names an entry and is not one. The sentence is composed in
+  // Python (`report.model._entry_facts_note`); this only places it, above
+  // everything it qualifies.
+  if (attribution) {
+    const said = document.createElement('p');
+    said.className = 'txt';
+    said.textContent = attribution;
+    right.appendChild(said);
+  }
 
   if (facts.decode) {
     const head = document.createElement('h4');
@@ -700,7 +711,7 @@ function showRecord(right, pool, tag, rec) {
   if (Object.keys(rest).length !== 0) {
     right.appendChild(fields(rest));
   }
-  if (rec.entnum) { renderEntryFacts(right, rec.entnum); }
+  if (rec.entnum) { renderEntryFacts(right, rec.entnum, rec.entry_facts_note); }
 }
 // Both trees are built from DOM nodes rather than an innerHTML string: every
 // key, tag and value goes in as text, so there is no second escaper to get

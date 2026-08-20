@@ -546,7 +546,8 @@ def _add_entries(records: dict[str, object], target: Path) -> None:
         return
     if entries:
         records["entries"] = _group_by_tag(
-            (record.tag, _pool_record_entry(record, index)) for index, record in enumerate(entries)
+            (record.tag, _pool_record_entry(record, index, pool="entries"))
+            for index, record in enumerate(entries)
         )
 
 
@@ -861,7 +862,21 @@ def _clear_reference_targets(inspection: Inspection) -> None:
         reference["tree_key"] = None
 
 
-def _pool_record_entry(record: Record, index: int, source: str = "") -> dict[str, object]:
+def _entry_facts_note(entnum: str) -> str:
+    """Who the entry facts under a record belong to, when they are not its own.
+
+    Composed here rather than in the page, like every other sentence the report
+    states: JavaScript formats and lays out, it does not decide what is true.
+    """
+    return (
+        f"The facts below are entry {entnum}'s, which this record names. "
+        "They describe that entry, not this record."
+    )
+
+
+def _pool_record_entry(
+    record: Record, index: int, source: str = "", *, pool: str = ""
+) -> dict[str, object]:
     entry = _record_entry(
         key=_musx_key(record, index),
         fields=walk_fields(record.fields, depth=0),
@@ -883,6 +898,12 @@ def _pool_record_entry(record: Record, index: int, source: str = "") -> dict[str
     entnum = record.attrs.get("entnum")
     if entnum is not None:
         entry["entnum"] = entnum
+        # An `entnum` is not proof the record *is* the entry: it is the field
+        # every entry-keyed details record joins on, so in a `.musx` -- where
+        # this function renders every pool -- an `articAssign` carries one too.
+        # Say whose facts they are wherever they are not the record's own.
+        if pool != "entries":
+            entry["entry_facts_note"] = _entry_facts_note(str(entnum))
     return entry
 
 
@@ -905,7 +926,10 @@ def _musx_records(document: EnigmaDocument, xml: bytes = b"") -> dict[str, objec
             (
                 record.tag,
                 _pool_record_entry(
-                    record, index, fragments[index] if index < len(fragments) else ""
+                    record,
+                    index,
+                    fragments[index] if index < len(fragments) else "",
+                    pool=name,
                 ),
             )
             for index, record in enumerate(pool_records)

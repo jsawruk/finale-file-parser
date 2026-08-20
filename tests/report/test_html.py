@@ -679,6 +679,23 @@ def test_an_entry_facts_payload_carries_the_name_python_composed() -> None:
     assert '"duration_base": "quarter"' in html or '"duration_base":"quarter"' in html
 
 
+def test_the_facts_under_a_record_that_is_not_the_entry_are_attributed() -> None:
+    """Every entry-keyed details record carries an `entnum` -- it is the field
+    the join runs on -- so on a `.musx` an articulation's row has one and the
+    pane rendered an entry's pitch and duration under it with nothing saying
+    the two were different records.
+
+    The sentence that attributes them is composed in Python
+    (`report.model._entry_facts_note`); the page only carries it through, and
+    puts it in as text like every other value.
+    """
+    script = _script(render_html(_inspection()))
+
+    assert "renderEntryFacts(right, rec.entnum, rec.entry_facts_note)" in script
+    assert "function renderEntryFacts(right, entnum, attribution)" in script
+    assert "said.textContent = attribution" in script
+
+
 def test_a_named_by_reference_selects_the_row_python_targeted() -> None:
     """`tag`/`key` name the record as the document calls it; `tree_tag`/
     `tree_key` name the row the Records tree actually rendered. On a `.mus`

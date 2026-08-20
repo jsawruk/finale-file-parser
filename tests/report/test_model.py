@@ -454,14 +454,17 @@ def test_a_real_mus_file_gets_records() -> None:
                 # both its source and its decoding; a `.mus` text section
                 # carries `text`.
                 # `options` is optional and marks the 0xFFFE sentinel, so it is
-                # dropped before the shape is checked. `entnum` is optional too,
-                # and only ever present on an `entry` record -- checked below
-                # rather than folded into the allowed shapes, so this still
-                # catches a field added to every record without anyone
-                # deciding to add it.
-                if "entnum" in entry:
-                    assert tag == "entry"
-                shape = entry.keys() - {"options", "entnum"}
+                # dropped before the shape is checked. `entnum` is optional
+                # too, and is present on any record the entry join runs on --
+                # which is every entry-keyed details record, not only an
+                # `entry`. What must hold is that a record which is not itself
+                # the entry says so, so the facts the page shows underneath it
+                # are not read as its own. Checked below rather than folded
+                # into the allowed shapes, so this still catches a field added
+                # to every record without anyone deciding to add it.
+                if "entnum" in entry and tag != "entry":
+                    assert entry["entry_facts_note"]
+                shape = entry.keys() - {"options", "entnum", "entry_facts_note"}
                 assert shape in (
                     {"key", "fields", "length"},
                     {"key", "xml", "length"},
@@ -971,6 +974,38 @@ def test_a_details_reader_bug_is_a_crashed_stage_and_not_a_lost_report(
     # everything it could about it.
     assert by_name["build document"].status == OK
     assert inspection.entry_index
+
+
+def test_a_musx_details_record_says_whose_entry_facts_it_is_showing() -> None:
+    """`entnum` is the field the "named by" join runs on, so every entry-keyed
+    details record carries one -- `articAssign`, `lyrDataVerse`, `tupletDef`.
+    In a `.musx` those records are rendered by the same function the entries
+    pool is, and the page shows entry facts for any record carrying an
+    `entnum`. Selecting an articulation therefore rendered an *entry's* pitch
+    and duration underneath it, unattributed, as though they were the
+    articulation's own.
+
+    The facts are worth showing there -- an articulation on a note whose pitch
+    you cannot see is half an answer -- so the block is attributed rather than
+    suppressed, and the wording is composed here rather than in the page.
+    """
+    document = _mus_document((_named("articAssign", entnum="501", inci="0"),), (_an_entry("501"),))
+
+    records = model._musx_records(document)
+
+    details = records["details"]
+    assert isinstance(details, dict)
+    (artic,) = details["articAssign"]
+    assert artic["entnum"] == "501", "the join still needs the number"
+    note = artic["entry_facts_note"]
+    assert isinstance(note, str)
+    assert "501" in note, "it names the entry the facts belong to"
+
+    entries = records["entries"]
+    assert isinstance(entries, dict)
+    (entry,) = entries["entry"]
+    assert entry["entnum"] == "501"
+    assert "entry_facts_note" not in entry, "an entry's own facts need no attribution"
 
 
 def test_a_bug_building_the_entry_index_is_a_crashed_stage_with_its_error(
