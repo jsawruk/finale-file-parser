@@ -299,17 +299,16 @@ def test_an_entry_that_will_not_read_yields_no_decode() -> None:
     )
 
 
-def test_an_unnotatable_alteration_yields_no_spelling_and_says_why() -> None:
-    """A triple sharp is outside ordinary notation (double sharp/flat is the
-    limit). Rendering the bare letter and dropping the accidental would be a
-    confident wrong pitch, worse than no pitch at all -- so this must come back
-    as `why_not`, not a silently-stripped spelling."""
+def test_a_double_sharp_reuses_spelledpitchs_own_convention() -> None:
+    """`_spell` must format via `SpelledPitch.name`, not a second accidental
+    table: this pins that a double sharp renders "##", matching every other
+    module and test in this codebase (not "x", a convention nothing else uses)."""
     decode = decode_entry(
-        _entry_record(notes=(_note("0", "3"),)),
+        _entry_record(notes=(_note("0", "2"),)),
         key_raw=0,
         transposition=StaffTransposition(interval=0, adjust=0),
     )
 
     assert decode is not None
-    assert decode.notes[0].spelled is None
-    assert decode.notes[0].why_not == "alteration 3 has no notation"
+    assert decode.notes[0].spelled == "C##4"
+    assert decode.notes[0].why_not is None
