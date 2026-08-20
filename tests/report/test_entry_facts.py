@@ -13,6 +13,7 @@ from finale_file_parser.enigma.document import (
     Record,
     TextsPool,
 )
+from finale_file_parser.enigma.location import _MAX_PLACEMENTS_PER_ENTRY
 from finale_file_parser.report.entry_facts import (
     Placement,
     Reference,
@@ -170,9 +171,11 @@ def test_an_enormous_end_entry_does_not_hang() -> None:
 
 
 def test_a_looping_chain_terminates_via_the_guard() -> None:
-    """An entry whose `next` points back at itself is a cycle. `locate_entries`
-    bounds this with `_CHAIN_GUARD`; here the walk must stop the same way and
-    record it rather than hang or raise."""
+    """An entry whose `next` points back at itself is a cycle: every step
+    re-claims the same entnum, so the per-entry cap stops it -- deterministically,
+    at `_MAX_PLACEMENTS_PER_ENTRY` placements -- long before `_CHAIN_GUARD`'s
+    1,000,000-step ceiling would. Pin the placement count so the bound is
+    asserted, not incidental to how long the test happens to take."""
     gfhold = Record(
         tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
     )
@@ -189,5 +192,35 @@ def test_a_looping_chain_terminates_via_the_guard() -> None:
         _doc(details=(gfhold,), others=(frame,), entries=(entry,))
     )
 
-    assert places[9]
-    assert any("exceeded" in message and "cycle" in message for message in unresolved[0])
+    assert len(places[9]) == _MAX_PLACEMENTS_PER_ENTRY
+    assert any("cap" in message for message in unresolved[9])
+
+
+def test_many_claims_on_one_entry_are_capped_across_chains() -> None:
+    """`_CHAIN_GUARD` bounds one chain walk; nothing else bounds how many
+    separate gfhold/frame chains a hostile file can point at one entry.
+    `locate_entries` guards this with `_MAX_PLACEMENTS_PER_ENTRY`, and this
+    walk must hold the same line across many distinct, non-cyclic chains, not
+    just within one looping chain."""
+    entry = Record(tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024"})
+    frame = Record(
+        tag="frameSpec",
+        attrs={"cmper": "12"},
+        text="",
+        fields={"startEntry": "9", "endEntry": "9"},
+    )
+    gfholds = tuple(
+        Record(
+            tag="gfhold",
+            attrs={"cmper1": str(staff), "cmper2": "3"},
+            text="",
+            fields={"frame1": "12"},
+        )
+        for staff in range(1, _MAX_PLACEMENTS_PER_ENTRY + 10)
+    )
+    places, unresolved = placements_by_entry(
+        _doc(details=gfholds, others=(frame,), entries=(entry,))
+    )
+
+    assert len(places[9]) == _MAX_PLACEMENTS_PER_ENTRY
+    assert any("cap" in message for message in unresolved[9])

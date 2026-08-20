@@ -126,11 +126,24 @@ def placements_by_entry(
     chain that breaks before reaching its declared end, or a chain that loops
     -- is filed under entnum `0`, which is not a valid entry number and so
     cannot collide with a real one.
+
+    Placements per entry are capped at `_MAX_PLACEMENTS_PER_ENTRY`, the same
+    bound `locate_entries` enforces and for the same reason: `_CHAIN_GUARD`
+    only bounds one chain walk, and nothing else bounds how many separate
+    gfhold/frame chains a hostile file can point at one entry. A real Finale
+    mirror places one entry on a handful of staves at most -- the cap is a
+    hostile-input bound, not a statement that more than a couple of
+    placements is wrong.
     """
-    from finale_file_parser.enigma.location import _CHAIN_GUARD, _FRAME_FIELDS
+    from finale_file_parser.enigma.location import (
+        _CHAIN_GUARD,
+        _FRAME_FIELDS,
+        _MAX_PLACEMENTS_PER_ENTRY,
+    )
 
     placements: dict[int, list[Placement]] = {}
     unresolved: dict[int, list[str]] = {}
+    capped: set[int] = set()
     entries_by_num: dict[int, Record] = {}
     for record in doc.entries.of_tag("entry"):
         n = _as_int(record.attrs.get("entnum"))
@@ -178,6 +191,8 @@ def placements_by_entry(
                     placements=placements,
                     unresolved=unresolved,
                     guard=_CHAIN_GUARD,
+                    cap=_MAX_PLACEMENTS_PER_ENTRY,
+                    capped=capped,
                 )
 
     for entnum in sorted(entries_by_num):
@@ -199,12 +214,22 @@ def _walk_chain(
     placements: dict[int, list[Placement]],
     unresolved: dict[int, list[str]],
     guard: int,
+    cap: int,
+    capped: set[int],
 ) -> None:
     """Follow one entry chain from `start` to `end` via each entry's `next`.
 
     Mirrors `locate_entries._walk_entry_chain`, but every place that function
     raises, this records a message under entnum `0` and stops -- the entries
     already placed on this walk stay placed.
+
+    `cap` bounds placements for a single entry, shared across every call this
+    document's walk makes (via the shared `placements` dict) -- it is what
+    stops both a hostile file naming the same entry from many separate
+    gfhold/frame chains, and a chain that cycles back onto one entry inside a
+    single walk. `capped` records which entnums have already had their
+    one-time cap message written, so a document that keeps re-claiming an
+    over-capped entry reports it once, not once per claim.
     """
     entnum = start
     steps = 0
@@ -220,6 +245,15 @@ def _walk_chain(
             unresolved.setdefault(0, []).append(
                 f"gfhold {key} frame {frame} chain references missing entry {entnum}"
             )
+            return
+        if len(placements.get(entnum, ())) >= cap:
+            if entnum not in capped:
+                capped.add(entnum)
+                unresolved.setdefault(entnum, []).append(
+                    f"entry {entnum} reached the {cap}-placement cap; further claims on it "
+                    "are not recorded (a real mirror places one entry on a few staves, not "
+                    "this many)"
+                )
             return
         placements.setdefault(entnum, []).append(
             Placement(staff=staff, measure=measure, layer=layer, gfhold_key=key, frame=frame)
