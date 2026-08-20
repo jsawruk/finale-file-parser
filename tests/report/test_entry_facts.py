@@ -932,7 +932,7 @@ def test_a_frame_carrying_more_incidences_than_the_cap_walks_the_first_of_them()
 _CROWDED_FRAME_COUNT = 3_000
 """gfholds, and incidences of the one frame they all name, in the test below.
 
-Two thousand records of each kind is a fraction of a megabyte and a bounded,
+Three thousand records of each kind is a fraction of a megabyte and a bounded,
 constant allocation -- see the note on `_STRESS_ENTRY_COUNT`. Measured against
 this walk before the fix: 250 of each took 0.02 s, 500 took 0.10 s and 1,000
 took 0.39 s, so 3,000 is about 3.5 s unfixed against 0.02 s fixed.

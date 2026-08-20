@@ -1139,9 +1139,10 @@ def test_the_entry_index_survives_a_budget_the_other_two_depths_satisfy() -> Non
 
 
 def test_a_document_level_entry_failure_is_named_in_the_notes() -> None:
-    """Failures belonging to no single entry are filed under entnum 0, and no
-    record row has entnum 0 -- so without this the most useful diagnostic the
-    index produces had no surface anywhere in the report."""
+    """Failures belonging to no single entry are filed under a reserved key that
+    is not an entry number, and no record row carries it -- so without this the
+    most useful diagnostic the index produces had no surface anywhere in the
+    report."""
     gfhold = Record(
         tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
     )
@@ -1155,7 +1156,7 @@ def test_a_document_level_entry_failure_is_named_in_the_notes() -> None:
 def test_document_level_failures_stop_after_the_note_cap() -> None:
     """A hostile file can carry thousands of broken frames, and every one of
     them would otherwise be copied into the notes the page renders. The full
-    list stays under entry 0 in the index."""
+    list stays under the reserved document key in the index."""
     broken = tuple(
         Record(
             tag="gfhold",
