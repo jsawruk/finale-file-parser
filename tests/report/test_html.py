@@ -4,12 +4,46 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import asdict
 
 from defusedxml import ElementTree as DET
 
+from finale_file_parser.enigma.document import Record
+from finale_file_parser.report.entry_facts import EntryFacts, decode_entry
 from finale_file_parser.report.html import render_html
 from finale_file_parser.report.ladder import OK, Stage
 from finale_file_parser.report.model import Inspection
+
+
+def _script(html: str) -> str:
+    """The page's own JavaScript, without the JSON island it renders.
+
+    The island carries values Python composed and the script must not, so a
+    test that searched the whole page for a composed word could never tell the
+    two apart.
+    """
+    match = re.search(r"//<!\[CDATA\[\n(.*?)\n//\]\]>", html, re.S)
+    assert match is not None
+    return match.group(1)
+
+
+def _function_body(script: str, name: str) -> str:
+    """One function's own source, by brace matching.
+
+    So an assertion about what a function does can be made against that
+    function rather than against the whole script, where a literal from
+    somewhere else can satisfy it.
+    """
+    start = script.index(f"function {name}(")
+    depth = 0
+    for index in range(script.index("{", start), len(script)):
+        if script[index] == "{":
+            depth += 1
+        elif script[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return script[start : index + 1]
+    raise AssertionError(f"{name} is never closed")
 
 
 def _inspection(**kwargs: object) -> Inspection:
@@ -574,3 +608,177 @@ def test_a_hostile_source_cannot_break_out_of_the_xml_pane() -> None:
     html = render_html(_inspection(xml='</pre></section><script>alert("x")</script>'))
     assert "</pre></section><script>" not in html
     assert "&lt;/pre&gt;&lt;/section&gt;" in html
+
+
+def test_the_record_pane_shows_entry_facts_when_one_is_selected() -> None:
+    """The page renders `entryIndex[entnum]` and does nothing else -- no
+    decoding, no joining. That line is what keeps a second decoder out of the
+    page, which is why the index is built in Python.
+
+    Every assertion here depends on the index this test supplies. The version
+    before it built one and then asserted only that four literals appeared in
+    the page, all four of which are in the script whatever the inspection
+    holds -- so it passed with a bare `_inspection()` and could not fail for
+    the reason its docstring gave.
+    """
+    facts = {"placements": [], "named_by": [], "decode": None, "unresolved": ["nothing reaches it"]}
+    html = render_html(_inspection(entry_index={"9": facts}))
+
+    payload = json.loads(
+        re.search(r'<script id="inspection" type="application/json">(.*?)</script>', html, re.S)
+        .group(1)  # type: ignore[union-attr]
+        .replace("<\\/", "</")
+    )
+    assert payload["entryIndex"]["9"] == facts, "the index reaches the page, under its own key"
+    # And the renderer reads it from there, by the number the record carries.
+    assert "const facts = (data.entryIndex || {})[entnum];" in _script(html)
+
+
+def test_entry_facts_render_the_dotted_duration_name_not_the_base_alone() -> None:
+    """Regression test for the report showing "dura 1536 -> quarter": 1536 EDU
+    is a dotted quarter (1024 + 512), and the pane must say so, not drop the
+    dot. `duration_name` arrives from Python already composed as "dotted
+    quarter" -- this pins that the embedded page carries that composed string,
+    and that the renderer references the base and dot count too rather than
+    folding everything into one opaque phrase."""
+    html = render_html(
+        _inspection(
+            entry_index={
+                "9": {
+                    "placements": [],
+                    "named_by": [],
+                    "decode": {
+                        "duration_edu": 1536,
+                        "duration_base": "quarter",
+                        "dots": 1,
+                        "duration_name": "dotted quarter",
+                        "is_rest": False,
+                        "notes": [],
+                    },
+                    "unresolved": [],
+                }
+            }
+        )
+    )
+    assert '"dotted quarter"' in html
+    assert "d.duration_name" in html
+    assert "d.duration_base" in html
+    assert "d.dots" in html
+
+
+def test_the_page_never_composes_a_duration_name_of_its_own() -> None:
+    """A guard that can actually fail.
+
+    What it replaced forbade three strings (`"harmLev +"`, `"decodeKey("`,
+    `"spellNote("`) that no plausible implementation would have contained, so
+    it passed by construction. The rule it was meant to defend is that the page
+    renders and does not compute -- and the nearest that rule has come to being
+    broken is the duration name, whose one-line JavaScript version ("dotted " +
+    base) is the obvious way to write it. Every word only the composition
+    produces is forbidden here, so moving it back into the browser fails this.
+    """
+    script = _script(render_html(_inspection()))
+    for forbidden in ("dotted", "-dot", "double dot", "thirty-second", "128th"):
+        assert forbidden not in script
+
+
+def test_an_entry_facts_payload_carries_the_name_python_composed() -> None:
+    """The seam end to end: a real `decode_entry` result, serialised the way
+    `report.model` serialises it, reaching the page.
+
+    The test that came before this one asserted `"dotted quarter"` was in the
+    HTML while supplying that string itself from a hand-written dict, so the
+    only thing it proved was that `json.dumps` works. Here 1536 EDU goes in and
+    the phrase comes out, through the code that composes it.
+    """
+    entry = Record(
+        tag="entry",
+        attrs={"entnum": "9"},
+        text="",
+        fields={"dura": "1536", "numNotes": "0"},
+    )
+    decode = decode_entry(entry, key_raw=None, transposition=None)
+    assert decode is not None
+    facts = EntryFacts(decode=decode)
+
+    html = render_html(_inspection(entry_index={"9": asdict(facts)}))
+
+    assert '"dotted quarter"' in html
+    assert '"duration_base": "quarter"' in html or '"duration_base":"quarter"' in html
+
+
+def test_the_facts_under_a_record_that_is_not_the_entry_are_attributed() -> None:
+    """Every entry-keyed details record carries an `entnum` -- it is the field
+    the join runs on -- so on a `.musx` an articulation's row has one and the
+    pane rendered an entry's pitch and duration under it with nothing saying
+    the two were different records.
+
+    The sentence that attributes them is composed in Python
+    (`report.model._entry_facts_note`); the page only carries it through, and
+    puts it in as text like every other value.
+    """
+    script = _script(render_html(_inspection()))
+
+    assert "renderEntryFacts(right, rec.entnum, rec.entry_facts_note)" in script
+    assert "function renderEntryFacts(right, entnum, attribution)" in script
+    assert "said.textContent = attribution" in script
+
+
+def test_a_named_by_reference_selects_the_row_python_targeted() -> None:
+    """`tag`/`key` name the record as the document calls it; `tree_tag`/
+    `tree_key` name the row the Records tree actually rendered. On a `.mus`
+    those differ -- the tree is built from the raw numeric pool -- so selecting
+    on the first pair matched nothing on the corpus's primary format."""
+    script = _script(render_html(_inspection()))
+
+    assert "selectRecord(r.pool, r.tree_tag, r.tree_key)" in script
+    assert "selectRecord(r.pool, r.tag, r.key)" not in script
+
+
+def test_a_reference_with_no_row_is_rendered_without_a_click_affordance() -> None:
+    """Python decides whether a reference has a row; the page must not work one
+    out for itself, and must not offer a click that does nothing.
+
+    Both the class that says "clickable" and the listener behind it have to sit
+    *inside* the guard, which is what this pins. The assertion it replaces --
+    `"'leaf rec'" not in script` -- was the next line's `'leaf ref'` with one
+    letter changed, a literal no implementation would ever contain.
+    """
+    script = _script(render_html(_inspection()))
+
+    guarded = re.search(
+        r"if \(r\.tree_tag && r\.tree_key\) \{\s*"
+        r"line\.className = 'leaf ref';\s*"
+        r"line\.addEventListener\(",
+        script,
+    )
+    assert guarded is not None, "the affordance is applied outside the has-a-row guard"
+
+
+def test_named_by_lines_are_not_records_tree_rows() -> None:
+    """`selectRecord` scans `.rec`, so a "named by" line carrying that class
+    would join the set of rows it searches. One class, one meaning.
+
+    Checked against every class the facts block assigns, not against one
+    literal: `.rec` appears in this script's own `querySelectorAll('.rec')`
+    whatever the "named by" lines are classed, so the assertion this replaces
+    could not fail for the reason it gave.
+    """
+    script = _script(render_html(_inspection()))
+    body = _function_body(script, "renderEntryFacts")
+
+    assert "querySelectorAll('.rec')" in script, "the row scan this must stay out of"
+    assigned = re.findall(r"className = '([^']*)'", body)
+    assert assigned, "the block classes its lines, or this is measuring nothing"
+    assert all("rec" not in classes.split() for classes in assigned), assigned
+
+
+def test_selecting_a_row_opens_the_section_it_is_folded_inside() -> None:
+    """A row inside a collapsed `<details>` is selected and never seen, which is
+    why a manual check of this feature looked like it did nothing. Opening the
+    ancestors and scrolling to the row is rendering, not deciding."""
+    script = _script(render_html(_inspection()))
+
+    assert "DETAILS" in script
+    assert "node.open = true" in script
+    assert "scrollIntoView" in script

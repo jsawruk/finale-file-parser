@@ -7,8 +7,11 @@ translation rather than writing a zero.
 
 from __future__ import annotations
 
+import ast
+import inspect
 from collections.abc import Callable
 from fractions import Fraction
+from pathlib import Path
 
 import pytest
 
@@ -1014,3 +1017,41 @@ def test_a_staff_list_assignment_keeps_its_negative_staff(pools: Callable[..., N
     )
     (record,) = [r for r in read_mus_document(PATH).others.records if r.tag == "measExprAssign"]
     assert record.fields["staffAssign"] == "-1"
+
+
+def test_every_entry_keyed_detail_this_adapter_emits_is_in_the_tag_map() -> None:
+    """`ENTRY_DETAIL_TAGS` is what lets the report join a detail record back to
+    the raw row it was read from (`report.model`). The join is silent when it
+    misses -- a reference simply stops being clickable -- so a fourth
+    entry-keyed detail added here without a map entry would break the feature
+    with nothing to show for it.
+
+    Read off this module's own source rather than off a corpus document: a tag
+    the adapter emits only for a document this machine does not have would
+    otherwise slip through. Every `Record(...)` built with an `entnum`
+    attribute must have a name the map knows.
+    """
+    source = Path(inspect.getsourcefile(adapter) or "").read_text(encoding="utf-8")
+    emitted = set()
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call) or getattr(node.func, "id", None) != "Record":
+            continue
+        keywords = {kw.arg: kw.value for kw in node.keywords}
+        attrs = keywords.get("attrs")
+        if not isinstance(attrs, ast.Dict):
+            continue
+        names = {k.value for k in attrs.keys if isinstance(k, ast.Constant)}
+        tag = keywords.get("tag")
+        if "entnum" in names and isinstance(tag, ast.Constant):
+            emitted.add(tag.value)
+
+    assert emitted == set(mus_details.ENTRY_DETAIL_TAGS)
+
+
+def test_the_tag_map_names_the_raw_tags_the_adapter_reads() -> None:
+    """The other half: each name maps to the numeric tag whose branch emits it."""
+    assert mus_details.ENTRY_DETAIL_TAGS == {
+        "articAssign": TAG_ARTIC_ASSIGN,
+        "tupletDef": TAG_TUPLET_DEF,
+        "lyrDataVerse": TAG_LYRIC_VERSE,
+    }

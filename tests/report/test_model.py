@@ -15,9 +15,25 @@ from unittest import mock
 
 import pytest
 
+from finale_file_parser.enigma.document import (
+    DetailsPool,
+    EnigmaDocument,
+    EntriesPool,
+    OptionsPool,
+    OthersPool,
+    Pool,
+    Record,
+    TextsPool,
+)
+from finale_file_parser.enigma.mus_details import (
+    TAG_ARTIC_ASSIGN,
+    TAG_LYRIC_VERSE,
+    TAG_TUPLET_DEF,
+    MusDetailRecord,
+)
 from finale_file_parser.errors import FinaleFileError
 from finale_file_parser.report import model
-from finale_file_parser.report.ladder import CRASHED, OK, REFUSED, SKIPPED
+from finale_file_parser.report.ladder import CRASHED, OK, REFUSED, SKIPPED, Ladder
 
 CORPUS = Path(__file__).parent.parent.parent / "corpus"
 
@@ -109,7 +125,7 @@ def test_a_crash_in_the_records_depth_does_not_stop_the_ladder(
     monkeypatch.setattr(model, "detect_version", lambda p: _FakeVersion())
     monkeypatch.setattr(model, "read_mus_pools", lambda p: (MusPool(data=b"abc"),))
 
-    def crash(target: Path) -> dict[str, object]:
+    def crash(target: Path, details: object = None) -> dict[str, object]:
         raise RuntimeError("boom")
 
     monkeypatch.setattr(model, "_mus_records", crash)
@@ -438,10 +454,17 @@ def test_a_real_mus_file_gets_records() -> None:
                 # both its source and its decoding; a `.mus` text section
                 # carries `text`.
                 # `options` is optional and marks the 0xFFFE sentinel, so it is
-                # dropped before the shape is checked. The shape stays pinned
-                # exactly: this test exists to catch a field added to every
-                # record without anyone deciding to add it.
-                shape = entry.keys() - {"options"}
+                # dropped before the shape is checked. `entnum` is optional
+                # too, and is present on any record the entry join runs on --
+                # which is every entry-keyed details record, not only an
+                # `entry`. What must hold is that a record which is not itself
+                # the entry says so, so the facts the page shows underneath it
+                # are not read as its own. Checked below rather than folded
+                # into the allowed shapes, so this still catches a field added
+                # to every record without anyone deciding to add it.
+                if "entnum" in entry and tag != "entry":
+                    assert entry["entry_facts_note"]
+                shape = entry.keys() - {"options", "entnum", "entry_facts_note"}
                 assert shape in (
                     {"key", "fields", "length"},
                     {"key", "xml", "length"},
@@ -668,3 +691,484 @@ def test_an_unreadable_entry_pool_does_not_cost_the_other_pools() -> None:
 
     assert "entries" not in records
     assert "others" in records and "details" in records
+
+
+def test_an_inspection_carries_facts_for_each_entry() -> None:
+    """Both containers reach this through `_finish`, so one test covers both."""
+    from finale_file_parser.enigma.document import (
+        DetailsPool,
+        EnigmaDocument,
+        EntriesPool,
+        OptionsPool,
+        OthersPool,
+        Pool,
+        Record,
+        TextsPool,
+    )
+    from finale_file_parser.report.ladder import Ladder
+
+    gfhold = Record(
+        tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )
+    frame = Record(
+        tag="frameSpec",
+        attrs={"cmper": "12"},
+        text="",
+        fields={"startEntry": "9", "endEntry": "9"},
+    )
+    entry = Record(
+        tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024", "numNotes": "0"}
+    )
+    doc = EnigmaDocument(
+        version="test",
+        header=Pool(records=()),
+        mappings=Pool(records=()),
+        options=OptionsPool(records=()),
+        others=OthersPool(records=(frame,)),
+        details=DetailsPool(records=(gfhold,)),
+        entries=EntriesPool(records=(entry,)),
+        texts=TextsPool(records=()),
+    )
+    inspection = model.Inspection(file={"name": "x.mus"})
+    model._finish(Ladder(), doc, inspection, engrave_notation=False)
+
+    assert "9" in inspection.entry_index
+
+
+def _mus_document(details: tuple[Record, ...], entries: tuple[Record, ...]) -> EnigmaDocument:
+    """An `EnigmaDocument` holding only the two pools these tests need.
+
+    A `.mus` reaches `EnigmaDocument` through `mus_document`, which synthesises
+    exactly these records -- so a document built by hand here stands in for one
+    a real `.mus` produces, without a corpus.
+    """
+    return EnigmaDocument(
+        version="test",
+        header=Pool(records=()),
+        mappings=Pool(records=()),
+        options=OptionsPool(records=()),
+        others=OthersPool(records=()),
+        details=DetailsPool(records=details),
+        entries=EntriesPool(records=entries),
+        texts=TextsPool(records=()),
+    )
+
+
+def _an_entry(entnum: str) -> Record:
+    return Record(
+        tag="entry", attrs={"entnum": entnum}, text="", fields={"dura": "1024", "numNotes": "0"}
+    )
+
+
+def _named(tag: str, **attrs: str) -> Record:
+    """One details record as `mus_document` synthesises it: named, and keyed by
+    the entry it hangs off rather than by a cmper pair."""
+    return Record(tag=tag, attrs=attrs, text="", fields={})
+
+
+def _raw(tag: int, entnum: int, inci: int = 0) -> MusDetailRecord:
+    """One raw details row for `entnum`, keyed the way `entry_key` reads it:
+    cmper1 is the high word, cmper2 the low one."""
+    return MusDetailRecord(
+        tag=tag, cmper1=entnum >> 16, cmper2=entnum & 0xFFFF, inci=inci, payload=b"\x07\x00"
+    )
+
+
+def _retargeted(
+    details: tuple[MusDetailRecord, ...] | None, *named: Record
+) -> tuple[dict[str, object], ...]:
+    """The `named_by` references for entry 501, after the `.mus` retargeting."""
+    document = _mus_document(named, (_an_entry("501"),))
+    inspection = model.Inspection(file={"name": "x.mus"})
+    model._finish(Ladder(), document, inspection, engrave_notation=False)
+    model._retarget_mus_references(inspection, document, details)
+    facts = inspection.entry_index["501"]
+    assert isinstance(facts, dict)
+    references = facts["named_by"]
+    assert isinstance(references, tuple)
+    return references
+
+
+def test_a_mus_reference_points_at_the_numeric_row_the_tree_rendered() -> None:
+    """The join this whole fix exists for. A `.mus` Records tree is built from
+    the raw pool, so its rows are numeric (`1009`) and keyed by cmper pair --
+    while the reference comes from the document, where the same record is
+    `articAssign` keyed by entnum. Untargeted, clicking the reference is a
+    silent no-op on every `.mus` that has one.
+    """
+    references = _retargeted(
+        (_raw(TAG_ARTIC_ASSIGN, 501),), _named("articAssign", entnum="501", inci="0")
+    )
+
+    assert references[0]["tag"] == "articAssign"
+    assert references[0]["tree_tag"] == str(TAG_ARTIC_ASSIGN)
+    assert references[0]["tree_key"] == "(cmper1 0, cmper2 501, inci 0)"
+
+
+def test_a_tuplet_reference_carries_no_inci_and_still_finds_its_row() -> None:
+    """`tupletDef` is emitted with no `inci` attribute at all, so it can only
+    ever match on the entry."""
+    references = _retargeted((_raw(TAG_TUPLET_DEF, 501),), _named("tupletDef", entnum="501"))
+
+    assert references[0]["tree_tag"] == str(TAG_TUPLET_DEF)
+    assert references[0]["tree_key"] == "(cmper1 0, cmper2 501, inci 0)"
+
+
+def test_every_verse_of_a_lyric_reference_points_at_the_one_row_that_holds_them() -> None:
+    """The trap. A `lyrDataVerse` record's `inci` is a per-entry assignment
+    counter that `mus_document` invents, not the raw row's incidence: one raw
+    row expands into a verse record per verse, numbered 0, 1, 2. Matching those
+    against a raw `inci` would name a different record for every verse but the
+    first, so they all fall back to the row for their entry.
+    """
+    references = _retargeted(
+        (_raw(TAG_LYRIC_VERSE, 501),),
+        _named("lyrDataVerse", entnum="501", inci="0"),
+        _named("lyrDataVerse", entnum="501", inci="1"),
+        _named("lyrDataVerse", entnum="501", inci="2"),
+    )
+
+    assert len(references) == 3
+    for reference in references:
+        assert reference["tree_tag"] == str(TAG_LYRIC_VERSE)
+        assert reference["tree_key"] == "(cmper1 0, cmper2 501, inci 0)"
+
+
+def test_a_reference_with_no_row_of_its_own_is_marked_unselectable() -> None:
+    """No row means no target -- never the nearest row. Pointing at the wrong
+    record is worse than pointing at nothing."""
+    references = _retargeted((), _named("articAssign", entnum="501", inci="0"))
+
+    assert references[0]["tree_tag"] is None
+    assert references[0]["tree_key"] is None
+
+
+def test_a_document_whose_details_pool_would_not_read_has_no_selectable_reference() -> None:
+    """The 2001-2005 era: the tree is built from ETF rows instead, and no row
+    in it corresponds to a detail record. Every reference is unselectable, and
+    that is the correct answer rather than a gap."""
+    references = _retargeted(None, _named("articAssign", entnum="501", inci="0"))
+
+    assert references[0]["tree_tag"] is None
+    assert references[0]["tree_key"] is None
+
+
+def _synthetic_mus(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    details: tuple[MusDetailRecord, ...],
+    document: EnigmaDocument,
+) -> Path:
+    """A path whose whole `.mus` pipeline is stubbed with records built here.
+
+    The tests above call `_retarget_mus_references` directly, which pins the
+    join but not the call site: with the call removed from the pipeline the
+    entire non-corpus suite stayed green, and the only thing that noticed was a
+    corpus sweep skipped wherever `corpus/` is absent -- CI included. These
+    drive `inspect_document` instead, so the wiring is what is under test.
+    """
+    from finale_file_parser.enigma.mus_payload import MusPool
+
+    path = _file(tmp_path)
+    monkeypatch.setattr(model, "detect_version", lambda p: _FakeVersion())
+    monkeypatch.setattr(model, "read_mus_pools", lambda p: (MusPool(data=b"abc"),))
+    monkeypatch.setattr(model, "read_mus_details", lambda p: details)
+    monkeypatch.setattr(model, "read_mus_others", lambda p: ())
+    monkeypatch.setattr(model, "read_mus_entry_records", lambda p: ())
+    monkeypatch.setattr(model, "_mus_texts", lambda p: {})
+    monkeypatch.setattr(model, "read_mus_document", lambda p: document)
+    return path
+
+
+def _one_reference(inspection: model.Inspection) -> dict[str, object]:
+    """The single `named_by` reference of entry 501, as the page would get it."""
+    facts = inspection.entry_index["501"]
+    assert isinstance(facts, dict)
+    references = facts["named_by"]
+    assert isinstance(references, tuple) and len(references) == 1
+    reference = references[0]
+    assert isinstance(reference, dict)
+    return reference
+
+
+def _entry_501() -> tuple[tuple[MusDetailRecord, ...], EnigmaDocument]:
+    """One raw row and the document record read from it, naming entry 501."""
+    return (
+        (_raw(TAG_ARTIC_ASSIGN, 501),),
+        _mus_document((_named("articAssign", entnum="501", inci="0"),), (_an_entry("501"),)),
+    )
+
+
+def test_the_mus_pipeline_retargets_the_references_it_indexes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """End to end, because the join being right is worth nothing if nothing
+    calls it: this fails if the retarget is dropped from `_mus_stages`.
+
+    It also checks the target names a row the Records tree actually rendered,
+    rather than only that the two fields changed -- a reference pointing at a
+    row that is not there is the state the whole feature exists to remove.
+    """
+    details, document = _entry_501()
+    path = _synthetic_mus(monkeypatch, tmp_path, details, document)
+
+    inspection = model.inspect_document(path, engrave_notation=False)
+
+    reference = _one_reference(inspection)
+    assert reference["tree_tag"] == str(TAG_ARTIC_ASSIGN)
+    assert reference["tree_key"] == "(cmper1 0, cmper2 501, inci 0)"
+
+    rendered = inspection.records["details"]
+    assert isinstance(rendered, dict)
+    rows = rendered[str(TAG_ARTIC_ASSIGN)]
+    assert isinstance(rows, list)
+    assert [row["key"] for row in rows] == [reference["tree_key"]]
+
+
+def test_a_pipeline_that_stops_at_the_score_has_still_retargeted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`build score` halts the ladder, and it fails on exactly the documents
+    this report is for. The retarget runs before it for that reason: recorded
+    as SKIPPED instead, it would leave every reference carrying the `.musx`
+    identity, clickable and selecting nothing.
+    """
+    details, document = _entry_501()
+    path = _synthetic_mus(monkeypatch, tmp_path, details, document)
+    monkeypatch.setattr(
+        model, "build_score", lambda d: (_ for _ in ()).throw(FinaleFileError("no staves"))
+    )
+
+    inspection = model.inspect_document(path, engrave_notation=False)
+
+    by_name = {s.name: s for s in inspection.stages}
+    assert by_name["build score"].status == REFUSED
+    assert by_name["retarget references"].status == OK
+    assert _one_reference(inspection)["tree_tag"] == str(TAG_ARTIC_ASSIGN)
+
+
+def test_a_details_reader_bug_is_a_crashed_stage_and_not_a_lost_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A `RuntimeError` out of `read_mus_details` is a bug in this reader, and
+    a bug in this reader is what this tool is for finding. Read outside the
+    ladder it escaped `inspect_document` and no report was written at all --
+    which inverts the module's one promise.
+    """
+    details, document = _entry_501()
+    path = _synthetic_mus(monkeypatch, tmp_path, details, document)
+    monkeypatch.setattr(
+        model, "read_mus_details", lambda p: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
+
+    inspection = model.inspect_document(path, engrave_notation=False)
+
+    by_name = {s.name: s for s in inspection.stages}
+    assert by_name["read details pool"].status == CRASHED
+    assert "RuntimeError" in (by_name["read details pool"].error or "")
+    assert "boom" in (by_name["read details pool"].error or "")
+    # The records depth reads the pool for itself when the caller has none, so
+    # it meets the same bug and reports it on its own account. Both are true.
+    assert by_name["read records"].status == CRASHED
+    # Non-halting, so the document was still built and the report still says
+    # everything it could about it.
+    assert by_name["build document"].status == OK
+    assert inspection.entry_index
+
+
+def test_a_musx_details_record_says_whose_entry_facts_it_is_showing() -> None:
+    """`entnum` is the field the "named by" join runs on, so every entry-keyed
+    details record carries one -- `articAssign`, `lyrDataVerse`, `tupletDef`.
+    In a `.musx` those records are rendered by the same function the entries
+    pool is, and the page shows entry facts for any record carrying an
+    `entnum`. Selecting an articulation therefore rendered an *entry's* pitch
+    and duration underneath it, unattributed, as though they were the
+    articulation's own.
+
+    The facts are worth showing there -- an articulation on a note whose pitch
+    you cannot see is half an answer -- so the block is attributed rather than
+    suppressed, and the wording is composed here rather than in the page.
+    """
+    document = _mus_document((_named("articAssign", entnum="501", inci="0"),), (_an_entry("501"),))
+
+    records = model._musx_records(document)
+
+    details = records["details"]
+    assert isinstance(details, dict)
+    (artic,) = details["articAssign"]
+    assert artic["entnum"] == "501", "the join still needs the number"
+    note = artic["entry_facts_note"]
+    assert isinstance(note, str)
+    assert "501" in note, "it names the entry the facts belong to"
+
+    entries = records["entries"]
+    assert isinstance(entries, dict)
+    (entry,) = entries["entry"]
+    assert entry["entnum"] == "501"
+    assert "entry_facts_note" not in entry, "an entry's own facts need no attribution"
+
+
+def test_a_bug_building_the_entry_index_is_a_crashed_stage_with_its_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`build_entry_index` does not raise by construction, so if it ever does,
+    that is a bug in this reader -- which is the thing this tool exists to
+    find. Caught by a bare `except` it became one fixed sentence in `notes`,
+    with the exception's type and message thrown away and no stage to see: a
+    reader would take it for a limitation rather than a crash, and a sweep
+    scanning `stages` for CRASHED could not count it at all.
+
+    `halt=False`, because the index is a depth beside the pipeline rather than
+    a value the score stages consume: the report is still written and the
+    stages after it still run.
+    """
+    details, document = _entry_501()
+    path = _synthetic_mus(monkeypatch, tmp_path, details, document)
+    monkeypatch.setattr(
+        model, "build_entry_index", lambda d: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
+
+    inspection = model.inspect_document(path, engrave_notation=False)
+
+    by_name = {s.name: s for s in inspection.stages}
+    assert by_name["build entry facts"].status == CRASHED
+    assert "RuntimeError" in (by_name["build entry facts"].error or "")
+    assert "boom" in (by_name["build entry facts"].error or "")
+    assert by_name["build score"].status in (OK, REFUSED), "the ladder was not halted"
+    assert inspection.entry_index == {}
+
+
+def test_a_crash_building_a_details_row_costs_the_targets_and_not_the_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`_mus_detail_entry` walks a payload the file supplied, and the retarget
+    runs it a second time over the same payloads. A `ValueError` there was
+    recorded correctly by the records rung and then escaped from the retarget,
+    which ran outside the ladder.
+
+    The references it never reached are left unselectable rather than half
+    targeted: the page must not offer a click that finds nothing.
+    """
+    details, document = _entry_501()
+    path = _synthetic_mus(monkeypatch, tmp_path, details, document)
+    monkeypatch.setattr(
+        model, "_mus_detail_entry", lambda r: (_ for _ in ()).throw(ValueError("hostile payload"))
+    )
+
+    inspection = model.inspect_document(path, engrave_notation=False)
+
+    by_name = {s.name: s for s in inspection.stages}
+    assert by_name["read records"].status == CRASHED
+    assert by_name["retarget references"].status == CRASHED
+    assert "ValueError" in (by_name["retarget references"].error or "")
+    reference = _one_reference(inspection)
+    assert reference["tree_tag"] is None
+    assert reference["tree_key"] is None
+
+
+def test_the_budget_takes_the_reference_targets_with_the_records() -> None:
+    """Dropping the Records tree does not drop the entry index -- but the rows
+    its references name are gone, so the references stop naming them. Left
+    alone, every reference on an over-budget report renders as a click that
+    finds nothing.
+    """
+    from finale_file_parser.report.model import Inspection, apply_budget
+
+    inspection = Inspection(file={"name": "x", "size": "0"})
+    inspection.records = {"details": {"1009": [{"key": "A" * 2000}]}}
+    inspection.entry_index = {
+        "501": {
+            "named_by": (
+                {
+                    "pool": "details",
+                    "tag": "articAssign",
+                    "key": "(entnum 501, inci 0)",
+                    "tree_tag": "1009",
+                    "tree_key": "(cmper1 0, cmper2 501, inci 0)",
+                },
+            )
+        }
+    }
+
+    apply_budget(inspection, limit=500)
+
+    assert inspection.records == {}
+    assert inspection.entry_index, "the index is small, and it is not what went"
+    reference = _one_reference(inspection)
+    assert reference["tree_tag"] is None
+    assert reference["tree_key"] is None
+    assert any("shown as text" in note for note in inspection.notes)
+
+
+def test_the_entry_index_is_dropped_last_rather_than_never() -> None:
+    """The budget is a guarantee, and it can only be one if everything large is
+    droppable. The index is not small by construction: its size is
+    `64 placements x entries + details + unresolved messages`, and every one of
+    those counts comes out of the file, so a document can make it exceed the
+    budget on its own. Kept ahead of `records` and `music`, which is still
+    right -- it is small next to them in the ordinary case -- but not exempt.
+    """
+    from finale_file_parser.report.model import Inspection, apply_budget
+
+    inspection = Inspection(file={"name": "x", "size": "0"})
+    inspection.records = {"others": {"measSpec": [{"key": "A" * 2000}]}}
+    inspection.music = {"parts": []}
+    inspection.entry_index = {"9": {"unresolved": ["C" * 2000]}}
+
+    apply_budget(inspection, limit=500)
+
+    assert inspection.records == {}
+    assert inspection.music is None
+    assert inspection.entry_index == {}, "nothing left to drop is not an answer"
+    assert any("entry index" in note for note in inspection.notes)
+
+
+def test_the_entry_index_survives_a_budget_the_other_two_depths_satisfy() -> None:
+    """Dropping it first would empty the pane this feature exists for while the
+    two depths that are far larger stayed."""
+    from finale_file_parser.report.model import Inspection, apply_budget
+
+    inspection = Inspection(file={"name": "x", "size": "0"})
+    inspection.records = {"others": {"measSpec": [{"key": "A" * 2000}]}}
+    inspection.entry_index = {"9": {"unresolved": ["short"]}}
+
+    apply_budget(inspection, limit=500)
+
+    assert inspection.records == {}
+    assert inspection.entry_index, "the index is small here, and it is not what went"
+
+
+def test_a_document_level_entry_failure_is_named_in_the_notes() -> None:
+    """Failures belonging to no single entry are filed under a reserved key that
+    is not an entry number, and no record row carries it -- so without this the
+    most useful diagnostic the index produces had no surface anywhere in the
+    report."""
+    gfhold = Record(
+        tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )
+    document = _mus_document((gfhold,), (_an_entry("9"),))
+    inspection = model.Inspection(file={"name": "x.mus"})
+    model._finish(Ladder(), document, inspection, engrave_notation=False)
+
+    assert any("frameSpec 12, which is absent" in note for note in inspection.notes)
+
+
+def test_document_level_failures_stop_after_the_note_cap() -> None:
+    """A hostile file can carry thousands of broken frames, and every one of
+    them would otherwise be copied into the notes the page renders. The full
+    list stays under the reserved document key in the index."""
+    broken = tuple(
+        Record(
+            tag="gfhold",
+            attrs={"cmper1": "1", "cmper2": str(measure)},
+            text="",
+            fields={"frame1": "12"},
+        )
+        for measure in range(model._MAX_ENTRY_FACT_NOTES + 5)
+    )
+    document = _mus_document(broken, (_an_entry("9"),))
+    inspection = model.Inspection(file={"name": "x.mus"})
+    model._finish(Ladder(), document, inspection, engrave_notation=False)
+
+    assert len(inspection.notes) == model._MAX_ENTRY_FACT_NOTES + 1
+    assert inspection.notes[-1].startswith("... and 5 further")

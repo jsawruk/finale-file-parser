@@ -80,6 +80,10 @@ details.node > summary::marker { color: #999; }
 .rec { cursor: pointer; margin-left: 2rem; padding: 0.05rem 0.3rem; }
 .rec:hover { background: #f2f2f2; }
 .rec.on { background: #e8eef6; font-weight: bold; }
+/* A reference that has a row to select. Its own class rather than `.rec`,
+   which means one thing: a row of the Records tree. */
+.ref { cursor: pointer; text-decoration: underline; }
+.ref:hover { background: #f2f2f2; }
 .hex { white-space: pre; font-size: 13px; line-height: 1.35; overflow-x: auto; }
 .hex .off { color: #999; }
 .hex .txt { color: #666; }
@@ -218,6 +222,12 @@ function renderRecords() {
     const row = document.createElement('div');
     row.className = 'rec';
     row.textContent = label;
+    // Read back by selectRecord, so a "named by" reference in the entry-facts
+    // panel can find and click the row that already exists here rather than
+    // reimplementing selection.
+    row.dataset.pool = pool;
+    row.dataset.tag = tag;
+    row.dataset.key = rec.key;
     row.addEventListener('click', () => {
       for (const other of left.querySelectorAll('.rec.on')) { other.classList.remove('on'); }
       row.classList.add('on');
@@ -472,6 +482,106 @@ function layoutTable(layout, bin, order) {
   });
   return table;
 }
+// Selection lives in one place -- the click handler `recordRow` already
+// attaches in `renderRecords` -- so a reference elsewhere on the page finds
+// the row that handler built and clicks it, rather than repeating what
+// clicking a record means. The caller passes the tag and key Python targeted
+// at a rendered row, so a miss here means the tree did not render that pool at
+// all. `.rec` is a Records tree row and nothing else, which is what makes this
+// scan a search over rows rather than over everything shaped like one.
+function selectRecord(pool, tag, key) {
+  for (const row of document.querySelectorAll('.rec')) {
+    if (row.dataset.pool === pool && row.dataset.tag === tag && row.dataset.key === key) {
+      // A row folded inside a collapsed section is selected and never seen,
+      // which is exactly what made this look like it did nothing. Open every
+      // <details> above it, then bring it into view.
+      for (let node = row.parentElement; node; node = node.parentElement) {
+        if (node.tagName === 'DETAILS') { node.open = true; }
+      }
+      row.click();
+      row.scrollIntoView({block: 'center'});
+      return;
+    }
+  }
+}
+// Entry facts: what points at this entry, and what it decodes to. Rendered
+// from `data.entryIndex` and nothing else -- this function does no decoding
+// and no joining, which is why the index is built in Python.
+function renderEntryFacts(right, entnum, attribution) {
+  const facts = (data.entryIndex || {})[entnum];
+  if (!facts) { return; }
+
+  // Whose facts these are, when the selected record is not itself the entry --
+  // an articulation names an entry and is not one. The sentence is composed in
+  // Python (`report.model._entry_facts_note`); this only places it, above
+  // everything it qualifies.
+  if (attribution) {
+    const said = document.createElement('p');
+    said.className = 'txt';
+    said.textContent = attribution;
+    right.appendChild(said);
+  }
+
+  if (facts.decode) {
+    const head = document.createElement('h4');
+    head.textContent = 'Decodes as';
+    right.appendChild(head);
+    const box = document.createElement('div');
+    const d = facts.decode;
+    const dur = document.createElement('div');
+    dur.className = 'leaf';
+    dur.textContent = 'dura ' + d.duration_edu + '  ->  ' + d.duration_name +
+                      '  (base ' + d.duration_base + ', dots ' + d.dots + ')' +
+                      (d.is_rest ? '  (rest)' : '');
+    box.appendChild(dur);
+    (d.notes || []).forEach((n, i) => {
+      const line = document.createElement('div');
+      line.className = 'leaf';
+      const raw = 'note ' + (i + 1) + '   harmLev ' + n.harm_lev + '  harmAlt ' + n.harm_alt;
+      line.textContent = raw + '  ->  ' + (n.spelled || ('— ' + (n.why_not || 'unknown')));
+      box.appendChild(line);
+    });
+    right.appendChild(box);
+  }
+
+  const refs = (facts.placements || []).length + (facts.named_by || []).length;
+  if (refs || (facts.unresolved || []).length) {
+    const head = document.createElement('h4');
+    head.textContent = 'Pointed to by';
+    right.appendChild(head);
+    const box = document.createElement('div');
+    for (const p of facts.placements || []) {
+      const line = document.createElement('div');
+      line.className = 'leaf';
+      line.textContent = 'placed by   gfhold ' + (p.gfhold_key || '?') +
+                         '  staff ' + p.staff + ', measure ' + p.measure +
+                         ', layer ' + p.layer + '   frameSpec ' + p.frame;
+      box.appendChild(line);
+    }
+    for (const r of facts.named_by || []) {
+      const line = document.createElement('div');
+      line.className = 'leaf';
+      line.textContent = 'named by    ' + r.pool + ' / ' + r.tag + ' ' + r.key;
+      // Which row this selects is Python's answer, not one worked out here:
+      // a .mus tree renders the raw numeric records, so `tag`/`key` name the
+      // record and `tree_tag`/`tree_key` name the row. Neither present means
+      // there is no row to point at, and the line stays plain text -- an
+      // affordance that does nothing is worse than none.
+      if (r.tree_tag && r.tree_key) {
+        line.className = 'leaf ref';
+        line.addEventListener('click', () => selectRecord(r.pool, r.tree_tag, r.tree_key));
+      }
+      box.appendChild(line);
+    }
+    for (const why of facts.unresolved || []) {
+      const line = document.createElement('div');
+      line.className = 'leaf stopped';
+      line.textContent = 'unresolved  ' + why;
+      box.appendChild(line);
+    }
+    right.appendChild(box);
+  }
+}
 // `payload` and `extra` ARE the bytes shown above, so listing them again as
 // decoded values would just repeat the hex in base64.
 const BYTE_FIELDS = ['payload', 'extra'];
@@ -601,6 +711,7 @@ function showRecord(right, pool, tag, rec) {
   if (Object.keys(rest).length !== 0) {
     right.appendChild(fields(rest));
   }
+  if (rec.entnum) { renderEntryFacts(right, rec.entnum, rec.entry_facts_note); }
 }
 // Both trees are built from DOM nodes rather than an innerHTML string: every
 // key, tag and value goes in as text, so there is no second escaper to get
@@ -907,6 +1018,7 @@ def render_html(inspection: Inspection) -> str:
             "layouts": inspection.layouts,
             "byteOrder": inspection.byte_order,
             "notes": inspection.notes,
+            "entryIndex": inspection.entry_index,
         }
     )
     return (

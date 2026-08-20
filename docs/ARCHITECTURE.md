@@ -569,6 +569,67 @@ frame's entry span, a measure's key and beats, a group-fill hold — appears in 
 under `FR`/`MS`/`GF`, or under `frameSpec`/`measSpec`/`gfhold`, depending only on which family and
 era produced the file being inspected.
 
+### The diagnostic report walks the entry join twice, on purpose
+
+**`locate_entries` raises on exactly the documents the report exists for, so the report has its own
+walk.** `enigma.location.locate_entries` is the single walk from a `gfhold` through its `frameSpec`
+records to the entries filling a measure, and it raises on a document that gets any of that wrong —
+right for a converter, where a broken join means there is no score to build. A diagnostic exists for
+those documents, so `report.entry_facts.placements_by_entry` walks the same join tolerantly: each
+break becomes a string a reader can see, and nothing stops the rest of the report being written. The
+two must not disagree about a document they can both read — with one bounded, deliberate exception:
+the tolerant walk stops at `_MAX_FRAME_INCIDENCES` incidences of a single frame (16; the corpus
+maximum is 2) where `locate_entries` keeps going, because tolerance is what makes an unbounded
+accumulation possible in the first place. It says so in `unresolved` rather than diverging quietly.
+Two tests keep the rest from drifting. `tests/report/test_entry_facts_corpus_sweep.py` compares
+placements entry by entry across both containers, and separately asserts the tolerant walk raises on
+nothing in the corpus, including the document `locate_entries` refuses — wide, but `corpus/` is
+gitignored, so it is skipped in CI. `test_the_two_walks_agree_on_a_document_locate_entries_accepts`
+therefore runs both walks over synthetic documents (a clean chain, a linked-part gfhold, a mirror,
+and one with several gfholds, two layers and a real `next` chain) and compares the placements **in
+order**, which the sweep sorts away — so the drifts that matter are caught everywhere the suite
+runs. Both walks import `_CHAIN_GUARD` and `_MAX_PLACEMENTS_PER_ENTRY` from `location.py` rather
+than restating them, so a bound tightened in one cannot be forgotten in the other.
+
+**Tolerance is what has to be bounded.** `locate_entries` raises at the first failure, so it never
+accumulates; a walk that records and continues can be asked for as much work and as much text as the
+file likes. Three bounds keep it linear, each with its measurement in its docstring:
+`_MAX_DOCUMENT_FAILURES` caps the messages that belong to no single entry (the count is `gfholds × 4
+slots × frameSpec incidences`) and ends the list with what it dropped; `_MAX_FRAME_INCIDENCES` caps
+the incidences one frame contributes, and the filtered list is built once per frame number rather
+than once per gfhold slot naming it — without both, 1,000 gfholds naming one 1,000-incidence frame
+took 0.39 s and quadrupled per doubling; and `effective_keys` now refuses a `measSpec` span wider
+than `_MAX_MEASURE_SPAN`, since it walks a dense range between two cmpers read straight out of the
+file (the largest cmper in 633 corpus documents is 1,028). Failures belonging to no entry are filed
+under `DOCUMENT_KEY`, a key no `str(entnum)` can equal, so a document declaring an entry numbered 0
+cannot absorb them.
+
+A mirrored entry has more than one placement (see `_mirrored_cells`), and mirrored staves may
+transpose differently, so the index spells from the **first** placement and the pane shows every
+placement rather than hiding that a choice was made. Exactly one corpus document in 632 places an
+entry twice, so that rule is pinned by a synthetic test rather than by the sweep — the corpus is
+absent in CI, where the rule still has to hold.
+
+**A reference into the Records tree needs translating, because the report deliberately shows raw
+tags.** The pane lists the `details` records that name an entry — its articulations, its lyrics, its
+tuplet — and a reader can click one to select that record in the tree. On a `.musx` both sides speak
+the same language. On a `.mus` they do not, and the paragraph above is why: the reference is
+computed from the `EnigmaDocument`, where `read_mus_document` has already normalised the record to
+`articAssign` keyed `(entnum 501, inci 0)`, while the tree shows it as the raw pool holds it — tag
+`1009`, keyed `(cmper1 0, cmper2 501, inci 0)`. `report.model` joins them through
+`mus_details.entry_key`, which reads a detail's 32-bit entry number out of the two key fields it
+reuses, **high word first** (`cmper1 << 16 | cmper2`); `mus_details.ENTRY_DETAIL_TAGS` names the
+three detail types keyed that way (`articAssign`, `tupletDef`, `lyrDataVerse`) and no others are.
+Where the join does not resolve — a 2001-2005 file, whose tree is built from ETF rows instead — the
+reference renders as plain text rather than pointing at a record that merely looks right.
+
+One trap is worth stating outright, because two of the three tags would join wrongly without it:
+`inci` does not mean the same thing on both sides. `articAssign` carries the raw record's incidence
+verbatim; `tupletDef` carries no `inci` at all; and `lyrDataVerse`'s is a synthetic per-entry
+counter assigned while one raw record is expanded into several verse records, so it must never be
+matched against a raw incidence. The join therefore matches on the full triple only where one
+genuinely exists, and otherwise falls back to the first record of that tag on that entry.
+
 ### Known format facts — the reserved staff 32767
 
 Every corpus document declares a staff numbered **32767** (0x7FFF, the sentinel the format also uses
