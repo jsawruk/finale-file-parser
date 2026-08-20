@@ -9,8 +9,13 @@ deliberate: `locate_entries` raises `MalformedScoreError` on exactly the
 documents a diagnostic report exists for. Nothing here raises. A broken link
 becomes a sentence in `unresolved`, and the rest of the answer still arrives.
 
-The duplication is contained by `tests/report/test_entry_facts_corpus_sweep.py`,
-which asserts the two agree on every corpus document `locate_entries` accepts.
+The duplication is contained in two places, and it needs both.
+`tests/report/test_entry_facts_corpus_sweep.py` asserts the two agree on every
+corpus document `locate_entries` accepts -- wide, but `corpus/` is gitignored,
+so it is skipped in CI and the bet would be undefended exactly where nobody is
+watching. `test_the_two_walks_agree_on_a_document_locate_entries_accepts` in
+`tests/report/test_entry_facts.py` runs both walks over synthetic documents
+that need no corpus, so the realistic drifts are caught everywhere.
 """
 
 from __future__ import annotations

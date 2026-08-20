@@ -15,7 +15,7 @@ from finale_file_parser.enigma.document import (
     Record,
     TextsPool,
 )
-from finale_file_parser.enigma.location import _MAX_PLACEMENTS_PER_ENTRY
+from finale_file_parser.enigma.location import _MAX_PLACEMENTS_PER_ENTRY, locate_entries
 from finale_file_parser.enigma.music import NoteValue
 from finale_file_parser.enigma.pitch import StaffTransposition
 from finale_file_parser.report.entry_facts import (
@@ -69,7 +69,25 @@ def test_references_name_only_records_holding_this_entnum() -> None:
     )
 
 
-def test_a_clean_chain_places_an_entry() -> None:
+def _measure(cmper: str, key: str = "0") -> Record:
+    """A `measSpec` stating a key.
+
+    Present in the documents below because `locate_entries` refuses a document
+    whose gfhold places entries in a measure that states no key -- and these
+    documents are the ones the two walks are compared on (see
+    `test_the_two_walks_agree_on_a_document_locate_entries_accepts`). It makes
+    no difference to `placements_by_entry`, which reads no `measSpec` at all.
+    """
+    return Record(
+        tag="measSpec",
+        attrs={"cmper": cmper},
+        text="",
+        fields={"keySig": Record(tag="keySig", attrs={}, text="", fields={"key": key})},
+    )
+
+
+def _clean_chain_document() -> EnigmaDocument:
+    """One gfhold, one frame, one entry -- the shape everything else varies."""
     gfhold = Record(
         tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
     )
@@ -82,9 +100,11 @@ def test_a_clean_chain_places_an_entry() -> None:
     entry = Record(
         tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024", "numNotes": "0"}
     )
-    places, unresolved = placements_by_entry(
-        _doc(details=(gfhold,), others=(frame,), entries=(entry,))
-    )
+    return _doc(details=(gfhold,), others=(frame, _measure("3", "2")), entries=(entry,))
+
+
+def test_a_clean_chain_places_an_entry() -> None:
+    places, unresolved = placements_by_entry(_clean_chain_document())
 
     assert places[9] == [
         Placement(staff=1, measure=3, layer=1, gfhold_key="(cmper1 1, cmper2 3)", frame=12)
@@ -118,9 +138,8 @@ def test_an_entry_no_frame_reaches_is_named_as_such() -> None:
     assert unresolved[9] == ["no frame reaches this entry"]
 
 
-def test_a_part_variant_gfhold_does_not_place_a_second_time() -> None:
-    """Score records only, exactly as `locate_entries` does: a linked-part
-    gfhold would place the same entry twice and read as a mirror."""
+def _part_variant_document() -> EnigmaDocument:
+    """A score gfhold and its linked-part twin, both naming one frame."""
     score = Record(
         tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
     )
@@ -136,15 +155,22 @@ def test_a_part_variant_gfhold_does_not_place_a_second_time() -> None:
         text="",
         fields={"startEntry": "9", "endEntry": "9"},
     )
-    entry = Record(tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024"})
-    places, _ = placements_by_entry(_doc(details=(score, part), others=(frame,), entries=(entry,)))
+    entry = Record(
+        tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024", "numNotes": "0"}
+    )
+    return _doc(details=(score, part), others=(frame, _measure("3")), entries=(entry,))
+
+
+def test_a_part_variant_gfhold_does_not_place_a_second_time() -> None:
+    """Score records only, exactly as `locate_entries` does: a linked-part
+    gfhold would place the same entry twice and read as a mirror."""
+    places, _ = placements_by_entry(_part_variant_document())
 
     assert len(places[9]) == 1
 
 
-def test_a_mirror_places_one_entry_twice() -> None:
-    """Two gfholds naming one frame is a Finale mirror, and both placements are
-    real -- this is the shape `locate_entries` was changed to allow."""
+def _mirror_document() -> EnigmaDocument:
+    """Two staves displaying one entry span -- Finale's mirror."""
     a = Record(tag="gfhold", attrs={"cmper1": "4", "cmper2": "3"}, text="", fields={"frame1": "12"})
     b = Record(
         tag="gfhold", attrs={"cmper1": "14", "cmper2": "3"}, text="", fields={"frame1": "12"}
@@ -155,8 +181,16 @@ def test_a_mirror_places_one_entry_twice() -> None:
         text="",
         fields={"startEntry": "9", "endEntry": "9"},
     )
-    entry = Record(tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024"})
-    places, _ = placements_by_entry(_doc(details=(a, b), others=(frame,), entries=(entry,)))
+    entry = Record(
+        tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024", "numNotes": "0"}
+    )
+    return _doc(details=(a, b), others=(frame, _measure("3")), entries=(entry,))
+
+
+def test_a_mirror_places_one_entry_twice() -> None:
+    """Two gfholds naming one frame is a Finale mirror, and both placements are
+    real -- this is the shape `locate_entries` was changed to allow."""
+    places, _ = placements_by_entry(_mirror_document())
 
     assert sorted(s for p in places[9] if (s := p.staff) is not None) == [4, 14]
 
@@ -405,7 +439,8 @@ def test_a_double_sharp_reuses_spelledpitchs_own_convention() -> None:
     assert decode.notes[0].why_not is None
 
 
-def test_the_index_answers_both_questions_for_one_entry() -> None:
+def _indexed_document() -> EnigmaDocument:
+    """One placed, spelled, articulated entry: the whole feature in one file."""
     gfhold = Record(
         tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
     )
@@ -414,12 +449,6 @@ def test_the_index_answers_both_questions_for_one_entry() -> None:
         attrs={"cmper": "12"},
         text="",
         fields={"startEntry": "9", "endEntry": "9"},
-    )
-    meas = Record(
-        tag="measSpec",
-        attrs={"cmper": "3"},
-        text="",
-        fields={"keySig": Record(tag="keySig", attrs={}, text="", fields={"key": "2"})},
     )
     staff = Record(tag="staffSpec", attrs={"cmper": "1"}, text="", fields={})
     artic = Record(tag="articAssign", attrs={"entnum": "9", "inci": "0"}, text="", fields={})
@@ -433,10 +462,13 @@ def test_the_index_answers_both_questions_for_one_entry() -> None:
             "note": (_note("2"),),
         },
     )
-
-    index = build_entry_index(
-        _doc(details=(gfhold, artic), others=(frame, meas, staff), entries=(entry,))
+    return _doc(
+        details=(gfhold, artic), others=(frame, _measure("3", "2"), staff), entries=(entry,)
     )
+
+
+def test_the_index_answers_both_questions_for_one_entry() -> None:
+    index = build_entry_index(_indexed_document())
 
     facts = index["9"]
     assert facts.placements[0].staff == 1 and facts.placements[0].measure == 3
@@ -708,3 +740,90 @@ def test_build_entry_index_is_linear_not_quadratic_in_entries_and_details() -> N
     assert len(index) == _STRESS_ENTRY_COUNT
     assert len(index["1"].named_by) >= 1
     assert index["1"].named_by[0].tag == "articAssign"
+
+
+def _layered_document() -> EnigmaDocument:
+    """A document with something for the walk to do: three gfholds across two
+    staves and two measures, one of them holding two layers, and a frame whose
+    entry range is a real `next` chain rather than a single entry.
+
+    The four documents above each isolate one rule. This one runs them
+    together, which is where a drift between the two walks would actually show:
+    the frame-slot enumeration (`frame2` is layer 2), the chain walk, and the
+    order placements come back in.
+    """
+    entries = tuple(
+        Record(
+            tag="entry",
+            attrs={"entnum": str(n), "next": str(nxt)},
+            text="",
+            fields={"dura": "1024", "numNotes": "0"},
+        )
+        for n, nxt in ((1, 2), (2, 0), (3, 0), (4, 0), (5, 6), (6, 0))
+    )
+    frames = tuple(
+        Record(
+            tag="frameSpec",
+            attrs={"cmper": str(cmper)},
+            text="",
+            fields={"startEntry": str(start), "endEntry": str(end)},
+        )
+        for cmper, start, end in ((10, 1, 2), (20, 3, 3), (30, 4, 4), (40, 5, 6))
+    )
+    gfholds = (
+        Record(
+            tag="gfhold",
+            attrs={"cmper1": "1", "cmper2": "1"},
+            text="",
+            fields={"frame1": "10", "frame2": "20"},
+        ),
+        Record(
+            tag="gfhold", attrs={"cmper1": "2", "cmper2": "1"}, text="", fields={"frame1": "30"}
+        ),
+        Record(
+            tag="gfhold", attrs={"cmper1": "1", "cmper2": "2"}, text="", fields={"frame1": "40"}
+        ),
+    )
+    return _doc(
+        details=gfholds,
+        others=(*frames, _measure("1", "2"), _measure("2")),
+        entries=entries,
+    )
+
+
+def test_the_two_walks_agree_on_a_document_locate_entries_accepts() -> None:
+    """The containment for the duplication, in CI.
+
+    `placements_by_entry` deliberately re-walks the join `locate_entries`
+    walks, because `locate_entries` raises on exactly the documents a
+    diagnostic report exists for. The only thing that stopped the two drifting
+    was `test_entry_facts_corpus_sweep.py`, and `corpus/` is gitignored and
+    absent in CI -- so the branch's central bet was undefended there. These
+    documents are built in process, so this runs everywhere, in milliseconds.
+
+    Placements are compared **in order**, not as a set: the order is what picks
+    the key and transposition an entry is spelled with, and the corpus sweep
+    sorts before comparing.
+    """
+    for name, build in (
+        ("clean chain", _clean_chain_document),
+        ("part variant", _part_variant_document),
+        ("mirror", _mirror_document),
+        ("indexed", _indexed_document),
+        ("layered", _layered_document),
+    ):
+        document = build()
+        # Not in a `try`: a document this refuses would silently compare
+        # nothing, which is how a containment test stops containing anything.
+        located = locate_entries(document)
+        placements, _ = placements_by_entry(document)
+
+        theirs = {
+            entnum: [(p.staff, p.measure, p.layer) for p in places]
+            for entnum, places in located.items()
+        }
+        ours = {
+            entnum: [(p.staff, p.measure, p.layer) for p in places]
+            for entnum, places in placements.items()
+        }
+        assert ours == theirs, f"the two walks disagree on the {name} document"
