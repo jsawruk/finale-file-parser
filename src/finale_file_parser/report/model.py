@@ -1030,13 +1030,20 @@ def apply_budget(inspection: Inspection, limit: int = MAX_JSON_BYTES) -> None:
     music tree is the view a reader is most likely to have opened the report
     for.
 
-    `entry_index` is not dropped. It is small next to `records` and the music
-    tree, and it is the only depth that answers "what points at this entry" --
-    dropping it would leave the pane that gained the feature empty while the
-    two large depths it competes with stayed. Its references stop being
-    *selectable* with the records, though: the rows they name are gone, and a
-    click affordance that finds nothing is the state this branch exists to
-    remove.
+    `entry_index` goes last of the three, and only if dropping both of those
+    was not enough. It is small next to `records` and the music tree in any
+    ordinary document, and it is the only depth that answers "what points at
+    this entry" -- dropping it first would leave the pane that gained the
+    feature empty while the two large depths it competes with stayed. But it is
+    not *guaranteed* small: its size is `64 placements x entries + details +
+    unresolved messages`, every count of that read out of the file. Exempting
+    it entirely would have meant a document could put the report over its
+    budget with nothing left for the budget to do -- so the guarantee is that
+    everything large is droppable, in the order a reader would choose.
+
+    Its references stop being *selectable* as soon as the records go, though:
+    the rows they name are gone, and a click affordance that finds nothing is
+    the state this branch exists to remove.
     """
     if _weight(inspection) <= limit:
         return
@@ -1058,6 +1065,14 @@ def apply_budget(inspection: Inspection, limit: int = MAX_JSON_BYTES) -> None:
     if inspection.music:
         inspection.music = None
         inspection.notes.append(f"music tree omitted: the report exceeded its {limit} byte budget")
+    if _weight(inspection) <= limit:
+        return
+    if inspection.entry_index:
+        inspection.entry_index = {}
+        inspection.notes.append(
+            f"entry index omitted: the report exceeded its {limit} byte budget even with the "
+            "records and the music tree dropped, so selecting a note shows no entry facts"
+        )
 
 
 _MAX_ENTRY_FACT_NOTES = 20

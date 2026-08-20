@@ -1035,6 +1035,44 @@ def test_the_budget_takes_the_reference_targets_with_the_records() -> None:
     assert any("shown as text" in note for note in inspection.notes)
 
 
+def test_the_entry_index_is_dropped_last_rather_than_never() -> None:
+    """The budget is a guarantee, and it can only be one if everything large is
+    droppable. The index is not small by construction: its size is
+    `64 placements x entries + details + unresolved messages`, and every one of
+    those counts comes out of the file, so a document can make it exceed the
+    budget on its own. Kept ahead of `records` and `music`, which is still
+    right -- it is small next to them in the ordinary case -- but not exempt.
+    """
+    from finale_file_parser.report.model import Inspection, apply_budget
+
+    inspection = Inspection(file={"name": "x", "size": "0"})
+    inspection.records = {"others": {"measSpec": [{"key": "A" * 2000}]}}
+    inspection.music = {"parts": []}
+    inspection.entry_index = {"9": {"unresolved": ["C" * 2000]}}
+
+    apply_budget(inspection, limit=500)
+
+    assert inspection.records == {}
+    assert inspection.music is None
+    assert inspection.entry_index == {}, "nothing left to drop is not an answer"
+    assert any("entry index" in note for note in inspection.notes)
+
+
+def test_the_entry_index_survives_a_budget_the_other_two_depths_satisfy() -> None:
+    """Dropping it first would empty the pane this feature exists for while the
+    two depths that are far larger stayed."""
+    from finale_file_parser.report.model import Inspection, apply_budget
+
+    inspection = Inspection(file={"name": "x", "size": "0"})
+    inspection.records = {"others": {"measSpec": [{"key": "A" * 2000}]}}
+    inspection.entry_index = {"9": {"unresolved": ["short"]}}
+
+    apply_budget(inspection, limit=500)
+
+    assert inspection.records == {}
+    assert inspection.entry_index, "the index is small here, and it is not what went"
+
+
 def test_a_document_level_entry_failure_is_named_in_the_notes() -> None:
     """Failures belonging to no single entry are filed under entnum 0, and no
     record row has entnum 0 -- so without this the most useful diagnostic the
