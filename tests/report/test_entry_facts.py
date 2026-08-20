@@ -18,6 +18,7 @@ from finale_file_parser.enigma.pitch import StaffTransposition
 from finale_file_parser.report.entry_facts import (
     Placement,
     Reference,
+    build_entry_index,
     decode_entry,
     placements_by_entry,
     references_to,
@@ -312,3 +313,65 @@ def test_a_double_sharp_reuses_spelledpitchs_own_convention() -> None:
     assert decode is not None
     assert decode.notes[0].spelled == "C##4"
     assert decode.notes[0].why_not is None
+
+
+def test_the_index_answers_both_questions_for_one_entry() -> None:
+    gfhold = Record(
+        tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )
+    frame = Record(
+        tag="frameSpec",
+        attrs={"cmper": "12"},
+        text="",
+        fields={"startEntry": "9", "endEntry": "9"},
+    )
+    meas = Record(
+        tag="measSpec",
+        attrs={"cmper": "3"},
+        text="",
+        fields={"keySig": Record(tag="keySig", attrs={}, text="", fields={"key": "2"})},
+    )
+    staff = Record(tag="staffSpec", attrs={"cmper": "1"}, text="", fields={})
+    artic = Record(tag="articAssign", attrs={"entnum": "9", "inci": "0"}, text="", fields={})
+    entry = Record(
+        tag="entry",
+        attrs={"entnum": "9"},
+        text="",
+        fields={
+            "dura": "1024",
+            "numNotes": "1",
+            "note": (_note("2"),),
+        },
+    )
+
+    index = build_entry_index(
+        _doc(details=(gfhold, artic), others=(frame, meas, staff), entries=(entry,))
+    )
+
+    facts = index["9"]
+    assert facts.placements[0].staff == 1 and facts.placements[0].measure == 3
+    assert facts.named_by[0].tag == "articAssign"
+    assert facts.decode is not None and facts.decode.duration_name == "QUARTER"
+    assert facts.decode.notes[0].spelled == "F#4"
+    assert facts.unresolved == ()
+
+
+def test_the_index_never_raises_on_a_broken_document() -> None:
+    """The property the whole module exists for. `locate_entries` refuses this
+    document; the index must still answer what it can."""
+    gfhold = Record(
+        tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )  # frameSpec 12 absent
+    # numNotes is required for `read_entry` to accept the record at all (Task 3);
+    # "needs only the entry" means the entry record itself, not a shortened one.
+    entry = Record(
+        tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024", "numNotes": "0"}
+    )
+    artic = Record(tag="articAssign", attrs={"entnum": "9", "inci": "0"}, text="", fields={})
+
+    index = build_entry_index(_doc(details=(gfhold, artic), entries=(entry,)))
+
+    assert index["9"].placements == ()
+    assert index["9"].named_by[0].tag == "articAssign"  # survives independently
+    assert index["9"].decode is not None  # needs only the entry
+    assert index["9"].unresolved == ("no frame reaches this entry",)

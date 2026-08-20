@@ -19,8 +19,9 @@ from dataclasses import dataclass
 
 from finale_file_parser.enigma.document import EnigmaDocument, Record
 from finale_file_parser.enigma.key import decode_key
+from finale_file_parser.enigma.location import effective_keys
 from finale_file_parser.enigma.music import Note, read_entry
-from finale_file_parser.enigma.pitch import StaffTransposition, spell_note
+from finale_file_parser.enigma.pitch import StaffTransposition, read_transposition, spell_note
 from finale_file_parser.errors import FinaleFileError
 
 __all__ = [
@@ -29,6 +30,7 @@ __all__ = [
     "NoteFacts",
     "Placement",
     "Reference",
+    "build_entry_index",
     "decode_entry",
     "placements_by_entry",
     "references_to",
@@ -335,3 +337,73 @@ def _as_int(value: object) -> int | None:
         return int(str(value))
     except (TypeError, ValueError):
         return None
+
+
+def build_entry_index(doc: EnigmaDocument) -> dict[str, EntryFacts]:
+    """One `EntryFacts` per entry in the document.
+
+    Keyed by `str(entnum)` because this is embedded as JSON, where an object
+    key is a string. Every entry gets an entry in the index, including one
+    nothing points at -- "nothing points at this" is an answer, and a reader
+    chasing a missing note needs it more than the ordinary case.
+
+    A mirrored entry carries two placements, on different staves that may
+    transpose differently, so the key and transposition used for spelling are
+    always the *first* placement's. The pane in Task 6 shows every placement,
+    so a reader can see there was more than one and that the spelling shown is
+    only one of them.
+    """
+    placements, unresolved = placements_by_entry(doc)
+    keys = effective_keys(doc)
+    transpositions = _transpositions(doc)
+
+    index: dict[str, EntryFacts] = {}
+    for record in doc.entries.of_tag("entry"):
+        entnum = _as_int(record.attrs.get("entnum"))
+        if entnum is None:
+            continue
+        places = tuple(placements.get(entnum, ()))
+        first = places[0] if places else None
+        key_raw = keys.get(first.measure) if first and first.measure is not None else None
+        transposition = (
+            transpositions.get(first.staff) if first and first.staff is not None else None
+        )
+        decode = decode_entry(record, key_raw, transposition)
+        messages = list(unresolved.get(entnum, ()))
+        if decode is None:
+            messages.append("this record does not read as an entry")
+        index[str(entnum)] = EntryFacts(
+            placements=places,
+            named_by=references_to(doc, entnum),
+            decode=decode,
+            unresolved=tuple(messages),
+        )
+    return index
+
+
+def _transpositions(doc: EnigmaDocument) -> dict[int, StaffTransposition]:
+    """Each staff's written-to-sounding interval, by staff number.
+
+    The same shape `to_ir._transpositions` builds, and for the same reason:
+    score records only, since a linked-part staffSpec describes the part.
+
+    It duplicates rather than importing that function because
+    `read_transposition` raises plain `ValueError` on a malformed
+    `transposition`/`keysig` sub-record, and `to_ir._transpositions` lets that
+    propagate -- correct there, where a bad document should fail the whole
+    conversion. Here it must not: a malformed staffSpec becomes "no
+    transposition for this staff" on the affected notes, and every other
+    staff's transposition stays available.
+    """
+    out: dict[int, StaffTransposition] = {}
+    for record in doc.others.of_tag("staffSpec"):
+        if "part" in record.attrs:
+            continue
+        cmper = _as_int(record.attrs.get("cmper"))
+        if cmper is None:
+            continue
+        try:
+            out[cmper] = read_transposition(record)
+        except (ValueError, FinaleFileError):
+            continue
+    return out
