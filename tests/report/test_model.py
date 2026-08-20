@@ -11,6 +11,7 @@ import os
 import stat
 import sys
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -622,3 +623,48 @@ def test_a_text_section_keeps_its_markup() -> None:
     script = page[page.index("//<![CDATA[") :]
     assert "rec.text !== undefined" in script
     assert "box.textContent = rec.text" in script
+
+
+def test_a_mus_report_collects_the_entry_pool() -> None:
+    """The `.mus` container names four pools -- others (15), details (16),
+    entries (17), text (18) -- and this depth used to collect three.
+
+    Nothing about the format made entries the odd one out: the reader has
+    always read them, and every note the Music tab draws comes from there. They
+    were simply never added, and the Music tab made them look accounted for --
+    which is why this asserts the pool is *present*, not merely that the file
+    parses.
+    """
+    from finale_file_parser.enigma.document import Record
+
+    entry = Record(tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024"})
+    model_path = Path("unused.mus")
+
+    with (
+        mock.patch.object(model, "read_mus_others", return_value=()),
+        mock.patch.object(model, "read_mus_details", return_value=()),
+        mock.patch.object(model, "read_mus_entry_records", return_value=(entry,)),
+        mock.patch.object(model, "_mus_texts", return_value={}),
+    ):
+        records = model._mus_records(model_path)
+
+    assert "entries" in records, "the entry pool is one of the four this container names"
+    entries = records["entries"]
+    assert isinstance(entries, dict) and "entry" in entries
+
+
+def test_an_unreadable_entry_pool_does_not_cost_the_other_pools() -> None:
+    """Same rule as the text stream: a document whose others and details read
+    perfectly must not lose them to an entry pool that does not."""
+    with (
+        mock.patch.object(model, "read_mus_others", return_value=()),
+        mock.patch.object(model, "read_mus_details", return_value=()),
+        mock.patch.object(
+            model, "read_mus_entry_records", side_effect=FinaleFileError("no entry pool")
+        ),
+        mock.patch.object(model, "_mus_texts", return_value={}),
+    ):
+        records = model._mus_records(Path("unused.mus"))
+
+    assert "entries" not in records
+    assert "others" in records and "details" in records

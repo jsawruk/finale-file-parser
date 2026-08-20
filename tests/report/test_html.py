@@ -268,17 +268,19 @@ def test_a_musx_record_carries_xml_instead_of_walked_fields() -> None:
     that gained the XML would have lost everything.
     """
     from finale_file_parser.enigma.document import Record
-    from finale_file_parser.report.model import _musx_entry
+    from finale_file_parser.report.model import _pool_record_entry
 
     record = Record(tag="gfhold", attrs={"cmper1": "1"}, text="", fields={"frame1": "2"})
-    with_source = _musx_entry(record, 0, '<gfhold cmper1="1"><frame1>2</frame1></gfhold>')
+    with_source = _pool_record_entry(record, 0, '<gfhold cmper1="1"><frame1>2</frame1></gfhold>')
     assert "fields" not in with_source
     fragment = with_source["xml"]
     assert isinstance(fragment, str) and fragment.startswith("<gfhold")
 
     # A .mus record keeps its fields: there they decode bytes that are
     # otherwise opaque, which is not a restatement of anything on screen.
-    without_source = _musx_entry(record, 0, "")
+    # This is the path a .mus entry-pool record actually takes -- the
+    # formatter is shared because both containers model an entry as a Record.
+    without_source = _pool_record_entry(record, 0, "")
     assert "fields" in without_source
 
 

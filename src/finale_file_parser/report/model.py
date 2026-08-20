@@ -23,6 +23,7 @@ from finale_file_parser.enigma.document import EnigmaDocument, Record, parse_eni
 from finale_file_parser.enigma.location import locate_entries
 from finale_file_parser.enigma.mus_details import MusDetailRecord, read_mus_details
 from finale_file_parser.enigma.mus_document import read_mus_document
+from finale_file_parser.enigma.mus_entries import read_mus_entry_records
 from finale_file_parser.enigma.mus_others import OPTIONS_CMPER, MusOther, read_mus_others
 from finale_file_parser.enigma.mus_payload import (
     MusPool,
@@ -429,14 +430,46 @@ def _mus_records(target: Path) -> dict[str, object]:
     if details is not None:
         records["details"] = _group_by_tag((str(r.tag), _mus_detail_entry(r)) for r in details)
     if others is not None or details is not None:
+        _add_entries(records, target)
         _add_texts(records, target)
         return records
 
     rows = read_mus_rows(target)  # a FinaleFileError here is left to propagate
     records["others"] = _group_by_tag((r.tag, _mus_row_entry(r)) for r in rows.others.values())
     records["details"] = _group_by_tag((r.tag, _mus_row_entry(r)) for r in rows.details.values())
+    _add_entries(records, target)
     _add_texts(records, target)
     return records
+
+
+def _add_entries(records: dict[str, object], target: Path) -> None:
+    """The entry pool, which the container labels 17 and this report used to
+    leave out entirely.
+
+    The `.mus` container names four pools -- others (15), details (16), entries
+    (17), text (18) -- and this depth collected three of them. Nothing about
+    the format made entries the odd one out: the reader has always read them,
+    and every note the Music tab draws comes from here. They were simply never
+    added, and the Music tab made them look accounted for.
+
+    Formatted with the same function the `.musx` pools use, because
+    `read_mus_entry_records` returns the same `Record` shape `parse_enigma`
+    does -- the entry pool is the one place the two containers already share a
+    model, and this is that sharing paying off rather than a `.mus` borrowing a
+    `.musx` view.
+
+    Never fatal, for the reason `_add_texts` is not: a document whose others
+    and details read perfectly must not lose them to an entry pool that does
+    not.
+    """
+    try:
+        entries = read_mus_entry_records(target)
+    except (FinaleFileError, OSError, ValueError):
+        return
+    if entries:
+        records["entries"] = _group_by_tag(
+            (record.tag, _pool_record_entry(record, index)) for index, record in enumerate(entries)
+        )
 
 
 def _add_texts(records: dict[str, object], target: Path) -> None:
@@ -606,7 +639,7 @@ def _musx_key(record: Record, index: int) -> str:
     return _key(*parts) if parts else _key(("position", index))
 
 
-def _musx_entry(record: Record, index: int, source: str = "") -> dict[str, object]:
+def _pool_record_entry(record: Record, index: int, source: str = "") -> dict[str, object]:
     entry = _record_entry(
         key=_musx_key(record, index),
         fields=walk_fields(record.fields, depth=0),
@@ -644,7 +677,9 @@ def _musx_records(document: EnigmaDocument, xml: bytes = b"") -> dict[str, objec
         records[name] = _group_by_tag(
             (
                 record.tag,
-                _musx_entry(record, index, fragments[index] if index < len(fragments) else ""),
+                _pool_record_entry(
+                    record, index, fragments[index] if index < len(fragments) else ""
+                ),
             )
             for index, record in enumerate(pool_records)
         )
