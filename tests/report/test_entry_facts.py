@@ -25,10 +25,10 @@ from finale_file_parser.report.entry_facts import (
     Placement,
     Reference,
     _references_by_entnum,
+    _references_to,
     build_entry_index,
     decode_entry,
     placements_by_entry,
-    references_to,
 )
 
 EMPTY: tuple[Record, ...] = ()
@@ -59,7 +59,7 @@ def test_references_name_only_records_holding_this_entnum() -> None:
     other = Record(tag="articAssign", attrs={"entnum": "11", "inci": "0"}, text="", fields={})
     doc = _doc(details=(artic, other))
 
-    assert references_to(doc, 9) == (
+    assert _references_to(doc, 9) == (
         Reference(
             pool="details",
             tag="articAssign",
@@ -655,7 +655,7 @@ def test_a_reference_carries_the_tree_row_it_should_select() -> None:
     """
     artic = Record(tag="articAssign", attrs={"entnum": "9", "inci": "0"}, text="", fields={})
 
-    (reference,) = references_to(_doc(details=(artic,)), 9)
+    (reference,) = _references_to(_doc(details=(artic,)), 9)
 
     assert reference.tree_tag == reference.tag
     assert reference.tree_key == reference.key
@@ -714,7 +714,7 @@ def test_grouped_references_agree_with_references_to_for_every_entnum() -> None:
     grouped = _references_by_entnum(doc)
 
     for entnum in (1, 2, 3):  # 3 is an entry nothing points at
-        assert grouped.get(str(entnum), ()) == references_to(doc, entnum)
+        assert grouped.get(str(entnum), ()) == _references_to(doc, entnum)
     assert grouped.get("3", ()) == ()
     assert len(grouped["1"]) == 2
 
@@ -723,7 +723,7 @@ _STRESS_ENTRY_COUNT = 8_000
 """Entries in the quadratic-cost stress test. Kept in the thousands, not the
 million-record pool cap, so the test's own allocation stays small and bounded
 -- see the module docstring's note on a prior test that allocated 28.8 GB.
-Measured directly against this repo's `references_to`: at this size the old
+Measured directly against this repo's `_references_to`: at this size the old
 per-entry rescan takes ~3.4s; the grouped lookup takes ~0.05s. A smaller count
 (e.g. 3,000, giving 9,000,000 comparisons) still passes even unfixed --
 CPython's string-compare loop is fast enough that the quadratic cost only
@@ -735,7 +735,7 @@ _STRESS_DETAIL_COUNT = 8_000
 
 
 def test_build_entry_index_is_linear_not_quadratic_in_entries_and_details() -> None:
-    """Before the grouped lookup, `build_entry_index` called `references_to`
+    """Before the grouped lookup, `build_entry_index` called `_references_to`
     (a full scan of `doc.details.records`) once per entry, costing
     `entries x details`. With `_STRESS_ENTRY_COUNT` entries and
     `_STRESS_DETAIL_COUNT` details that is 64,000,000 string comparisons --

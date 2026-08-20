@@ -762,7 +762,7 @@ def _mus_reference_targets(
 ) -> dict[tuple[str, str], tuple[str, str]]:
     """For each entry-naming details record, the tree row it was read from.
 
-    Keyed by the pair `references_to` puts on a `Reference` -- the record's tag
+    Keyed by the pair `_references_to` puts on a `Reference` -- the record's tag
     and `_musx_key` -- so the join needs no key string parsed back apart.
 
     An `inci` is matched first and only then fallen back on, because it means
@@ -797,7 +797,7 @@ def _retarget_mus_references(
 ) -> None:
     """Point every entry reference at the `.mus` row that names it.
 
-    `references_to` targets the record it read, which is what a `.musx` tree
+    `_references_to` targets the record it read, which is what a `.musx` tree
     renders and what a `.mus` tree does not: there the rows come from the raw
     pool, numerically tagged and keyed by cmper pair. Left alone, not one
     reference on a `.mus` could ever select anything -- and 43 of 80 corpus
@@ -812,7 +812,7 @@ def _retarget_mus_references(
     Cleared first and targeted second, so that the join failing part way --
     this runs `_mus_detail_entry` over payloads a hostile file supplied --
     leaves every reference unselectable rather than half of them still
-    carrying the `.musx` identity `references_to` filled in, which on a `.mus`
+    carrying the `.musx` identity `_references_to` filled in, which on a `.mus`
     names no row at all. The caller runs this as a ladder rung, so the failure
     itself is reported; this is only about what the page shows afterwards.
     """
@@ -1146,7 +1146,7 @@ def _finish(
     retarget is the one caller. Run after `_finish` returned instead, a
     `build score` that failed would leave it recorded as SKIPPED and never
     performed, and every reference would keep the `.musx` identity
-    `references_to` filled in, pointing at rows a `.mus` tree does not have.
+    `_references_to` filled in, pointing at rows a `.mus` tree does not have.
     Not called when the document is None: there is no index to retarget then.
     """
     if document is None:

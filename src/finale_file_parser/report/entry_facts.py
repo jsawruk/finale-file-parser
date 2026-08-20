@@ -39,7 +39,6 @@ __all__ = [
     "build_entry_index",
     "decode_entry",
     "placements_by_entry",
-    "references_to",
 ]
 
 
@@ -203,12 +202,21 @@ def _identity(record: Record) -> str:
     return _musx_key(record, 0)
 
 
-def references_to(doc: EnigmaDocument, entnum: int) -> tuple[Reference, ...]:
+def _references_to(doc: EnigmaDocument, entnum: int) -> tuple[Reference, ...]:
     """Every details record naming this entry.
 
     Needs only the `entnum`, so it resolves whether or not the placement chain
     does -- which is the point: on a document whose frames are broken, this is
     the half that still answers.
+
+    **Private, and no longer called in production**: `_references_by_entnum`
+    answers the same question for every entry in one pass and replaced it at
+    the only call site. It survives as that function's oracle -- the rule
+    stated once, per entry, in the obvious way, so
+    `test_grouped_references_agree_with_references_to_for_every_entnum` has
+    something to compare the grouped rewrite against. Two copies of one rule
+    are worth keeping only while a test holds them equal, which is why this is
+    not public API.
     """
     out: list[Reference] = []
     for record in doc.details.records:
@@ -230,9 +238,9 @@ def references_to(doc: EnigmaDocument, entnum: int) -> tuple[Reference, ...]:
 
 
 def _references_by_entnum(doc: EnigmaDocument) -> dict[str, tuple[Reference, ...]]:
-    """`references_to`, grouped for every entnum in one pass.
+    """`_references_to`, grouped for every entnum in one pass.
 
-    `references_to(doc, entnum)` rescans all of `doc.details.records` on every
+    `_references_to(doc, entnum)` rescans all of `doc.details.records` on every
     call; called once per entry from `build_entry_index`'s loop that makes the
     whole index cost `entries x details`, both counts read straight out of the
     file and uncapped relative to each other. This groups once instead: one
@@ -241,7 +249,7 @@ def _references_by_entnum(doc: EnigmaDocument) -> dict[str, tuple[Reference, ...
 
     Grouped by the record's raw `entnum` attribute string, not by an `int` of
     it, so an entnum this can't parse still groups (and simply never matches
-    any real entry's `str(entnum)` lookup) -- the same fate `references_to`
+    any real entry's `str(entnum)` lookup) -- the same fate `_references_to`
     gives it via its `== str(entnum)` string comparison. Keeping the two
     string-keyed lets them agree by construction rather than by two separate
     int-parsing rules staying in sync.
