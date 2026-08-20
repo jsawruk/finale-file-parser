@@ -13,7 +13,7 @@ import json
 import os
 import re
 import xml.etree.ElementTree as ET
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -257,7 +257,17 @@ def _mus_stages(
         # Read once and used twice: the records tree renders these rows, and
         # the entry references are retargeted at the rows it rendered. Reading
         # the pool a second time for the second use would let the two disagree.
-        details = _mus_details(target)
+        #
+        # Its own rung rather than a bare call. `_mus_details` declines a
+        # `FinaleFileError` on the report's behalf, but nothing else: a reader
+        # bug here used to reach the ladder through `_mus_records` and be
+        # recorded as CRASHED, and hoisting the read out of that call put it
+        # outside the boundary, where it stopped the report being written at
+        # all. `halt=False`, because a document with no readable details pool
+        # still has every stage after this one.
+        details = ladder.run(
+            "read details pool", lambda: _mus_details(target), _details_detail, halt=False
+        )
         records = ladder.run(
             "read records",
             lambda: _mus_records(target, details),
@@ -269,10 +279,20 @@ def _mus_stages(
             inspection.tags = _tag_names(records)
             inspection.layouts = _layouts_present(records)
     document = ladder.run("build document", lambda: read_mus_document(target))
-    _finish(ladder, document, inspection, engrave_notation=engrave_notation)
-    # After `_finish`, because it is what builds the index being retargeted,
-    # and before `inspect_document` applies the budget, which weighs it.
-    _retarget_mus_references(inspection, document, details)
+    _finish(
+        ladder,
+        document,
+        inspection,
+        engrave_notation=engrave_notation,
+        # Inside `_finish` rather than after it: the index it retargets does
+        # not exist until `_finish` has built it, and the rungs `_finish` runs
+        # afterwards can stop the ladder. See `after_index`.
+        after_index=lambda: ladder.run(
+            "retarget references",
+            lambda: _retarget_mus_references(inspection, document, details),
+            halt=False,
+        ),
+    )
 
 
 def _musx_stages(
@@ -431,6 +451,19 @@ def _mus_details(target: Path) -> tuple[MusDetailRecord, ...] | None:
         return None
 
 
+def _details_detail(details: tuple[MusDetailRecord, ...] | None) -> dict[str, str]:
+    """What the details rung reports.
+
+    None is not a failure here and must not read as one: it is a 2001-2005
+    document whose pools are ETF rows, which the records depth then reads with
+    a different reader. Saying so is more useful than a count of zero, which
+    would look like an empty pool that was found.
+    """
+    if details is None:
+        return {"details": "no pool this reader recognises"}
+    return {"records": str(len(details))}
+
+
 def _mus_records(
     target: Path, details: tuple[MusDetailRecord, ...] | None = None
 ) -> dict[str, object]:
@@ -456,7 +489,10 @@ def _mus_records(
     `details` is the already-read pool where the caller holds one (see
     `_mus_stages`, which needs the same records to retarget the entry
     references at the rows built here). Passing None reads it here, which is
-    what a caller holding only a path does.
+    what a caller holding only a path does. It is also what `_mus_stages`
+    passes when its own "read details pool" rung failed, so this depth meets
+    the same failure and reports it under "read records" on its own account,
+    rather than silently building a tree with no details in it.
     """
     others: tuple[MusOther, ...] | None = None
     try:
@@ -771,12 +807,33 @@ def _retarget_mus_references(
     readable details pool (the 2001-2005 era, whose tree is built from ETF
     rows) as much as a single record with no row: in both, there is no row to
     point at, and saying so is the answer.
+
+    Cleared first and targeted second, so that the join failing part way --
+    this runs `_mus_detail_entry` over payloads a hostile file supplied --
+    leaves every reference unselectable rather than half of them still
+    carrying the `.musx` identity `references_to` filled in, which on a `.mus`
+    names no row at all. The caller runs this as a ladder rung, so the failure
+    itself is reported; this is only about what the page shows afterwards.
     """
-    targets = (
-        _mus_reference_targets(document, details)
-        if document is not None and details is not None
-        else {}
-    )
+    _clear_reference_targets(inspection)
+    if document is None or details is None:
+        return
+    targets = _mus_reference_targets(document, details)
+    for reference in _entry_references(inspection):
+        target = targets.get((str(reference.get("tag")), str(reference.get("key"))))
+        if target is not None:
+            reference["tree_tag"] = target[0]
+            reference["tree_key"] = target[1]
+
+
+def _entry_references(inspection: Inspection) -> Iterator[dict[str, object]]:
+    """Every reference the entry index holds, whatever shape the rest is in.
+
+    The index is `asdict`-ed dataclasses, so these shapes are known here -- but
+    a walk over report data on the way to a page must degrade rather than
+    raise, so every level is checked and anything unexpected is skipped. This
+    cannot raise for any index.
+    """
     for facts in inspection.entry_index.values():
         if not isinstance(facts, dict):
             continue
@@ -787,11 +844,21 @@ def _retarget_mus_references(
         if not isinstance(references, (list, tuple)):
             continue
         for reference in references:
-            if not isinstance(reference, dict):
-                continue
-            target = targets.get((str(reference.get("tag")), str(reference.get("key"))))
-            reference["tree_tag"] = target[0] if target is not None else None
-            reference["tree_key"] = target[1] if target is not None else None
+            if isinstance(reference, dict):
+                yield reference
+
+
+def _clear_reference_targets(inspection: Inspection) -> None:
+    """Say of every reference that it has no row to select.
+
+    The page renders such a reference as plain text with no click affordance,
+    which is the honest answer whenever the rows themselves are not there --
+    whether because the join could not be made or because the budget dropped
+    the Records tree they were in.
+    """
+    for reference in _entry_references(inspection):
+        reference["tree_tag"] = None
+        reference["tree_key"] = None
 
 
 def _pool_record_entry(record: Record, index: int, source: str = "") -> dict[str, object]:
@@ -966,7 +1033,10 @@ def apply_budget(inspection: Inspection, limit: int = MAX_JSON_BYTES) -> None:
     `entry_index` is not dropped. It is small next to `records` and the music
     tree, and it is the only depth that answers "what points at this entry" --
     dropping it would leave the pane that gained the feature empty while the
-    two large depths it competes with stayed.
+    two large depths it competes with stayed. Its references stop being
+    *selectable* with the records, though: the rows they name are gone, and a
+    click affordance that finds nothing is the state this branch exists to
+    remove.
     """
     if _weight(inspection) <= limit:
         return
@@ -976,7 +1046,13 @@ def apply_budget(inspection: Inspection, limit: int = MAX_JSON_BYTES) -> None:
         # they go with them rather than being left behind describing nothing.
         inspection.tags = {}
         inspection.layouts = {}
-        inspection.notes.append(f"records omitted: the report exceeded its {limit} byte budget")
+        # The references outlive the rows they point at, so they stop pointing.
+        _clear_reference_targets(inspection)
+        inspection.notes.append(
+            f"records omitted: the report exceeded its {limit} byte budget -- "
+            "the entry index is kept, but its references are shown as text, "
+            "since the rows they name are no longer in the report"
+        )
     if _weight(inspection) <= limit:
         return
     if inspection.music:
@@ -1020,9 +1096,19 @@ def _finish(
     inspection: Inspection,
     *,
     engrave_notation: bool,
+    after_index: Callable[[], None] | None = None,
 ) -> None:
     """Typed rather than ignored: a None document means the ladder already
-    stopped, and `run` records the remaining rungs as skipped."""
+    stopped, and `run` records the remaining rungs as skipped.
+
+    `after_index` is a rung that has to run in the gap between the entry index
+    existing and the score rungs that can stop the ladder -- the `.mus`
+    retarget is the one caller. Run after `_finish` returned instead, a
+    `build score` that failed would leave it recorded as SKIPPED and never
+    performed, and every reference would keep the `.musx` identity
+    `references_to` filled in, pointing at rows a `.mus` tree does not have.
+    Not called when the document is None: there is no index to retarget then.
+    """
     if document is None:
         ladder.run("build score", _unreachable)
         ladder.run("export MusicXML", _unreachable)
@@ -1039,6 +1125,8 @@ def _finish(
     else:
         inspection.entry_index = {entnum: asdict(facts) for entnum, facts in index.items()}
         _note_document_failures(inspection, index.get("0"))
+    if after_index is not None:
+        after_index()
     score = ladder.run("build score", lambda: build_score(document))
     if score is None:
         ladder.run("export MusicXML", _unreachable)
