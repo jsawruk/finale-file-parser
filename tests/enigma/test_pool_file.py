@@ -97,21 +97,47 @@ def test_an_unlabelled_pool_is_refused() -> None:
 
 
 @pytest.mark.parametrize(
-    "mangle",
+    ("mangle", "message"),
     [
-        pytest.param(lambda b: b[:3], id="truncated-magic"),
-        pytest.param(lambda b: b"XXXX" + b[4:], id="wrong-magic"),
-        pytest.param(lambda b: b[:4] + bytes([VERSION + 9]) + b[5:], id="future-version"),
-        pytest.param(lambda b: b[: HEADER_SIZE + 4], id="truncated-chain"),
-        pytest.param(lambda b: b[:6] + b"\x09" + b[7:], id="unknown-era"),
+        pytest.param(lambda b: b[:3], "shorter than its header", id="truncated-magic"),
+        pytest.param(lambda b: b"XXXX" + b[4:], "wrong magic", id="wrong-magic"),
+        pytest.param(
+            lambda b: b[:4] + bytes([VERSION + 9]) + b[5:],
+            "is not version",
+            id="future-version",
+        ),
+        pytest.param(
+            lambda b: b[: HEADER_SIZE + 4],
+            "ends inside a chain entry header",
+            id="truncated-chain",
+        ),
+        pytest.param(lambda b: b[:6] + b"\x09" + b[7:], "unknown era 9", id="unknown-era"),
     ],
 )
 def test_a_malformed_file_raises_rather_than_guessing(
-    mangle: Callable[[bytes], bytes],
+    mangle: Callable[[bytes], bytes], message: str
 ) -> None:
-    """This file is one we wrote, and it is still untrusted input."""
-    with pytest.raises(CorruptScoreError):
+    """This file is one we wrote, and it is still untrusted input.
+
+    Each case binds to its own guard by message. Without that, two of them pass
+    for the wrong reason: a file cut inside the header still fails the magic
+    check, and a chain cut in half still fails "runs past the end of the file"
+    -- so deleting either length guard left this test green.
+    """
+    with pytest.raises(CorruptScoreError, match=message):
         read_pool_file(mangle(write_pool_file(_pools(), era=ERA_DCL)))
+
+
+def test_pools_that_disagree_about_byte_order_are_refused() -> None:
+    """The header states one byte order for the whole file. Taking it from the
+    first pool and writing the rest in it would silently misstate the others,
+    and every length after that reads as a different number."""
+    mixed = (
+        MusPool(data=b"ab", byte_order="little", kind=POOL_OTHERS),
+        MusPool(data=b"cd", byte_order="big", kind=POOL_DETAILS),
+    )
+    with pytest.raises(ValueError, match="disagree about their byte order"):
+        write_pool_file(mixed, era=ERA_DCL)
 
 
 def test_an_unknown_byte_order_names_the_bad_value() -> None:

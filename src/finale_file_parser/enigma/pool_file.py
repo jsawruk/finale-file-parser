@@ -103,6 +103,10 @@ def era_of(pools: tuple[MusPool, ...]) -> int:
 
     A DCL container labels its pools and a zlib-era one does not, so a labelled
     first pool is the era, stated by the container rather than guessed.
+
+    Ask this of the pools **as read**. `identify_pools` fills in every missing
+    `kind`, so calling this on its output can only ever answer `ERA_DCL` -- the
+    question it asks has already been erased by then.
     """
     return ERA_DCL if pools and pools[0].kind is not None else ERA_ZLIB
 
@@ -115,10 +119,11 @@ def write_pool_file(pools: tuple[MusPool, ...], *, era: int) -> bytes:
     """Frame `pools` as one file.
 
     Raises:
-        ValueError: a pool has no `kind`, or there are too many pools. An
-            unidentified pool is refused rather than written with a guessed
-            label -- a wrong kind in this header sends a reader to the wrong
-            record shape and everything after it is confident nonsense.
+        ValueError: a pool has no `kind`, there are too many pools, or the
+            pools disagree about their byte order. An unidentified pool is
+            refused rather than written with a guessed label -- a wrong kind in
+            this header sends a reader to the wrong record shape and everything
+            after it is confident nonsense.
     """
     if not pools:
         raise ValueError("no pools to write")
@@ -128,6 +133,11 @@ def write_pool_file(pools: tuple[MusPool, ...], *, era: int) -> bytes:
         raise ValueError(f"unknown era {era!r}")
 
     order: ByteOrder = pools[0].byte_order
+    if any(pool.byte_order != order for pool in pools):
+        # The header states one order for the whole file, so a disagreement
+        # cannot be written down -- only silently resolved in favour of the
+        # first pool, which is how the rest of the chain would then be misread.
+        raise ValueError("pools disagree about their byte order; the header states only one")
     out = bytearray(MAGIC)
     out.append(VERSION)
     out.append(1 if order == "big" else 0)

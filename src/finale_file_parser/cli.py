@@ -171,8 +171,13 @@ def _extract(args: argparse.Namespace, out: object) -> int:
             failures.append((source, reason))
             continue
         try:
-            pools = identify_pools(read_mus_pools(source))
-            data = write_pool_file(pools, era=era_of(pools))
+            raw = read_mus_pools(source)
+            # `era_of` asks the container whether it labelled its pools, so it
+            # has to see the pools as read. `identify_pools` labels every one of
+            # them, and asking after that can only ever answer "DCL".
+            era = era_of(raw)
+            pools = identify_pools(raw)
+            data = write_pool_file(pools, era=era)
         except (FinaleFileError, ValueError) as error:
             failures.append((source, _reason(error)))
             continue

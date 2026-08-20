@@ -292,6 +292,30 @@ def test_extract_writes_one_file_per_score(tmp_path: Path, monkeypatch: pytest.M
     assert written[:4] == b"FMUS"
 
 
+def test_extract_states_the_era_the_container_stated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The era byte tells a reader which record shape to apply to every pool, so
+    it has to be read off the pools as they came out of the container.
+
+    A DCL container labels its pools and a 2011-era one labels none -- but
+    `identify_pools` labels every pool whatever it was handed, so asking after
+    identification can only ever answer DCL, and every 2011-era file would then
+    claim to hold 16-byte rows.
+    """
+    from finale_file_parser.enigma.mus_payload import POOL_OTHERS, MusPool
+    from finale_file_parser.enigma.pool_file import ERA_DCL, ERA_ZLIB
+
+    source = touch(tmp_path / "a.mus")
+    for kind, era in ((None, ERA_ZLIB), (POOL_OTHERS, ERA_DCL)):
+        monkeypatch.setattr(
+            cli, "read_mus_pools", lambda p, kind=kind: (MusPool(data=b"abc", kind=kind),)
+        )
+        assert cli.main(["extract", str(source), "--force"]) == cli.EXIT_OK
+        written = (tmp_path / "a.pools.bin").read_bytes()
+        assert written[6] == era, f"a container stating {kind} was written as era {written[6]}"
+
+
 def test_extract_refuses_musx_by_name(tmp_path: Path) -> None:
     """A .musx is a ZIP of encrypted XML with no pools of this kind. Saying so
     is more use than a decode error from three layers down."""
