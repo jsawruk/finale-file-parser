@@ -23,6 +23,7 @@ from finale_file_parser.enigma.pool_file import (
     HEADER_SIZE,
     MAGIC,
 )
+from finale_file_parser.formats.layouts import LAYOUTS, Field, Layout
 
 HEXPAT_TYPES = {
     "uint8": "u8",
@@ -170,5 +171,77 @@ PoolEntry pools[header.pools] @ {HEADER_SIZE};
 
 
 def _payload_structs() -> str:
-    """Placeholder until Task 5; returns nothing so Task 4's tests can pass."""
-    return ""
+    """One struct per layout the catalog permits to be laid over real bytes.
+
+    `Layout.computed` layouts are named and explained but never emitted as a
+    struct: a computed layout describes a record whose field positions the
+    reader works out per record or era, so pointing it at arbitrary bytes shows
+    values that are confidently wrong. `report/model.py` skips them for exactly
+    this reason.
+    """
+    parts = ["\n// ---- record payloads, generated from formats/layouts.py ----\n"]
+    for layout in LAYOUTS:
+        parts.append(_one_struct(layout))
+    parts.append(_tag_comment())
+    return "\n".join(parts)
+
+
+def _one_struct(layout: Layout) -> str:
+    tags = _tag_names(layout)
+    if layout.computed:
+        return (
+            f"// {layout.name} ({tags}) is NOT laid out here. Its reader works out where\n"
+            f"// the fields sit per record or era, so these offsets are the shape a reader\n"
+            f"// starts from rather than where the bytes are. Laying it over a record would\n"
+            f"// show confident, wrong values, so the payload stays raw.\n"
+        )
+
+    name = f"{layout.name}Slot" if layout.stride else layout.name
+    lines = [f"// {layout.record} -- {tags}", f"struct {name} {{"]
+    for field in layout.fields:
+        lines.append(_one_field(field))
+    lines.append("};")
+    if layout.stride:
+        lines.append(
+            f"// {layout.name}: the payload is an array of {layout.stride}-byte "
+            f"{name} slots, not one structure."
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _one_field(field: Field) -> str:
+    hexpat = HEXPAT_TYPES[field.type_]
+    note = f"    // {field.note}" if field.note else ""
+    if field.is_tail:
+        return f"    {hexpat} {field.name}[];{note}"
+    if field.type_ == "string":
+        return f"    {hexpat} {field.name}[{field.size}];{note}"
+    return f"    {hexpat} {field.name};{note}"
+
+
+def _tag_names(layout: Layout) -> str:
+    both = []
+    if layout.tag:
+        both.append(f"tag {layout.tag}")
+    if layout.dcl:
+        both.append(f"DCL ^{layout.dcl}")
+    return ", ".join(both) if both else "no tag"
+
+
+def _tag_comment() -> str:
+    """Which struct reads which tag, in both spellings.
+
+    A dispatch cannot be generated as pattern code without inventing a record
+    shape for the tags this project has not decoded, so the mapping is stated
+    for a reader to apply and the undecoded payloads stay raw bytes.
+    """
+    lines = ["\n// ---- which struct reads which tag ----"]
+    for layout in sorted(LAYOUTS, key=lambda item: (item.pool, item.tag or 0)):
+        if layout.computed:
+            continue
+        lines.append(f"//   {layout.pool:8} {_tag_names(layout):22} -> {layout.name}")
+    lines.append(
+        "// A tag not listed above has no catalogued layout: its payload stays raw bytes\n"
+        "// rather than being given an invented structure."
+    )
+    return "\n".join(lines) + "\n"

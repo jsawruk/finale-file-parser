@@ -42,3 +42,50 @@ def test_the_pattern_sets_its_endianness_from_the_file() -> None:
     big-endian, and reading one the wrong way round yields plausible nonsense
     rather than an error."""
     assert "set_endian" in render_pattern()
+
+
+def test_every_layout_that_can_be_laid_over_bytes_is_emitted() -> None:
+    pattern = render_pattern()
+    for layout in LAYOUTS:
+        if layout.computed:
+            continue
+        assert f"struct {layout.name}" in pattern, f"{layout.name} missing"
+
+
+def test_a_computed_layout_is_named_but_never_laid_over_bytes() -> None:
+    """`Layout.computed` means a reader works out where these fields sit, per
+    record or era, so the offsets in the catalog are the shape a reader starts
+    from and not where the bytes are. Laying it over a record would show
+    confident, wrong values -- `report/model.py` skips these for the same
+    reason. FrameSpec and GfHold carry it."""
+    pattern = render_pattern()
+    for layout in LAYOUTS:
+        if not layout.computed:
+            continue
+        assert f"struct {layout.name}" not in pattern, (
+            f"{layout.name} is computed and must not be laid over bytes"
+        )
+        assert layout.name in pattern, f"{layout.name} should still be named, with the reason"
+
+
+def test_every_field_note_travels_with_its_field() -> None:
+    """The evidence is the point. A pattern that gives offsets without saying
+    what they mean is worth less than the docstring it came from."""
+    pattern = render_pattern()
+    noted = [
+        field for layout in LAYOUTS if not layout.computed for field in layout.fields if field.note
+    ]
+    assert noted, "the catalog has notes; this test is meaningless without them"
+    for field in noted[:20]:
+        assert field.note.split(".")[0][:40] in pattern, f"note for {field.name} missing"
+
+
+def test_a_slot_array_layout_says_it_repeats() -> None:
+    """Four layouts have a non-zero `stride`: their payload is an array of
+    fixed-size slots, each laid out by the same fields. Emitting one slot and
+    stopping would describe a fraction of the record."""
+    pattern = render_pattern()
+    striped = [layout for layout in LAYOUTS if layout.stride and not layout.computed]
+    assert striped, "the catalog has slot arrays; this test is meaningless without them"
+    for layout in striped:
+        assert f"{layout.name}Slot" in pattern, f"{layout.name} does not emit a slot type"
