@@ -25,6 +25,7 @@ __all__ = [
     "NoteFacts",
     "Placement",
     "Reference",
+    "placements_by_entry",
     "references_to",
 ]
 
@@ -103,3 +104,72 @@ def references_to(doc: EnigmaDocument, entnum: int) -> tuple[Reference, ...]:
         if record.attrs.get("entnum") == str(entnum):
             out.append(Reference(pool="details", tag=record.tag, key=_identity(record)))
     return tuple(out)
+
+
+def placements_by_entry(
+    doc: EnigmaDocument,
+) -> tuple[dict[int, list[Placement]], dict[int, list[str]]]:
+    """Walk gfhold -> frameSpec -> entry range, recording breaks instead of raising.
+
+    Mirrors `locate_entries`, and deliberately: see the module docstring. The
+    differences are all in what happens when something is wrong.
+
+    A failure that belongs to no single entry -- a frame that is absent, so no
+    entry number is ever learned -- is filed under entnum `0`, which is not a
+    valid entry number and so cannot collide with a real one.
+    """
+    from finale_file_parser.enigma.location import _FRAME_FIELDS
+
+    placements: dict[int, list[Placement]] = {}
+    unresolved: dict[int, list[str]] = {}
+    known = {_as_int(record.attrs.get("entnum")) for record in doc.entries.of_tag("entry")} - {None}
+
+    for gfhold in doc.details.of_tag("gfhold"):
+        if "part" in gfhold.attrs:
+            continue
+        staff = _as_int(gfhold.attrs.get("cmper1"))
+        measure = _as_int(gfhold.attrs.get("cmper2"))
+        key = _identity(gfhold)
+        for layer, field_name in enumerate(_FRAME_FIELDS, start=1):
+            value = gfhold.fields.get(field_name)
+            if not isinstance(value, str) or value in ("", "0"):
+                continue
+            frame = _as_int(value)
+            if frame is None:
+                unresolved.setdefault(0, []).append(
+                    f"gfhold {key} {field_name} is {value!r}, which is not a frame number"
+                )
+                continue
+            specs = tuple(
+                f for f in doc.others.all_with("frameSpec", frame) if "part" not in f.attrs
+            )
+            if not specs:
+                unresolved.setdefault(0, []).append(
+                    f"gfhold {key} {field_name} names frameSpec {frame}, which is absent"
+                )
+                continue
+            for spec in specs:
+                start = _as_int(spec.fields.get("startEntry"))
+                end = _as_int(spec.fields.get("endEntry"))
+                if start is None or end is None:
+                    continue
+                for entnum in range(start, end + 1):
+                    placements.setdefault(entnum, []).append(
+                        Placement(
+                            staff=staff, measure=measure, layer=layer, gfhold_key=key, frame=frame
+                        )
+                    )
+
+    for entnum in sorted(n for n in known if n is not None):
+        if entnum not in placements:
+            unresolved.setdefault(entnum, []).append("no frame reaches this entry")
+    return placements, unresolved
+
+
+def _as_int(value: object) -> int | None:
+    """A field or attribute as an int, or None when it is not one. Absence is
+    ordinary here and never an error."""
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return None

@@ -13,7 +13,12 @@ from finale_file_parser.enigma.document import (
     Record,
     TextsPool,
 )
-from finale_file_parser.report.entry_facts import Reference, references_to
+from finale_file_parser.report.entry_facts import (
+    Placement,
+    Reference,
+    placements_by_entry,
+    references_to,
+)
 
 EMPTY: tuple[Record, ...] = ()
 
@@ -46,3 +51,95 @@ def test_references_name_only_records_holding_this_entnum() -> None:
     assert references_to(doc, 9) == (
         Reference(pool="details", tag="articAssign", key="(entnum 9, inci 0)"),
     )
+
+
+def test_a_clean_chain_places_an_entry() -> None:
+    gfhold = Record(
+        tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )
+    frame = Record(
+        tag="frameSpec",
+        attrs={"cmper": "12"},
+        text="",
+        fields={"startEntry": "9", "endEntry": "9"},
+    )
+    entry = Record(
+        tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024", "numNotes": "0"}
+    )
+    places, unresolved = placements_by_entry(
+        _doc(details=(gfhold,), others=(frame,), entries=(entry,))
+    )
+
+    assert places[9] == [
+        Placement(staff=1, measure=3, layer=1, gfhold_key="(cmper1 1, cmper2 3)", frame=12)
+    ]
+    assert unresolved.get(9, []) == []
+
+
+def test_a_missing_frame_spec_still_places_what_it_knows() -> None:
+    """The failure `locate_entries` raises on. Staff, measure and layer are all
+    known from the gfhold -- only the entry range is lost -- so the report says
+    where the entry was meant to sit and which link broke."""
+    gfhold = Record(
+        tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )
+    entry = Record(tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024"})
+    places, unresolved = placements_by_entry(_doc(details=(gfhold,), entries=(entry,)))
+
+    assert places.get(9, []) == []
+    assert unresolved[0] == [
+        "gfhold (cmper1 1, cmper2 3) frame1 names frameSpec 12, which is absent"
+    ]
+
+
+def test_an_entry_no_frame_reaches_is_named_as_such() -> None:
+    """`locate_entries` raises "orphan entry"; here it is a fact about that
+    entry rather than a verdict on the document."""
+    entry = Record(tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024"})
+    places, unresolved = placements_by_entry(_doc(entries=(entry,)))
+
+    assert places.get(9, []) == []
+    assert unresolved[9] == ["no frame reaches this entry"]
+
+
+def test_a_part_variant_gfhold_does_not_place_a_second_time() -> None:
+    """Score records only, exactly as `locate_entries` does: a linked-part
+    gfhold would place the same entry twice and read as a mirror."""
+    score = Record(
+        tag="gfhold", attrs={"cmper1": "1", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )
+    part = Record(
+        tag="gfhold",
+        attrs={"cmper1": "1", "cmper2": "3", "part": "1"},
+        text="",
+        fields={"frame1": "12"},
+    )
+    frame = Record(
+        tag="frameSpec",
+        attrs={"cmper": "12"},
+        text="",
+        fields={"startEntry": "9", "endEntry": "9"},
+    )
+    entry = Record(tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024"})
+    places, _ = placements_by_entry(_doc(details=(score, part), others=(frame,), entries=(entry,)))
+
+    assert len(places[9]) == 1
+
+
+def test_a_mirror_places_one_entry_twice() -> None:
+    """Two gfholds naming one frame is a Finale mirror, and both placements are
+    real -- this is the shape `locate_entries` was changed to allow."""
+    a = Record(tag="gfhold", attrs={"cmper1": "4", "cmper2": "3"}, text="", fields={"frame1": "12"})
+    b = Record(
+        tag="gfhold", attrs={"cmper1": "14", "cmper2": "3"}, text="", fields={"frame1": "12"}
+    )
+    frame = Record(
+        tag="frameSpec",
+        attrs={"cmper": "12"},
+        text="",
+        fields={"startEntry": "9", "endEntry": "9"},
+    )
+    entry = Record(tag="entry", attrs={"entnum": "9"}, text="", fields={"dura": "1024"})
+    places, _ = placements_by_entry(_doc(details=(a, b), others=(frame,), entries=(entry,)))
+
+    assert sorted(s for p in places[9] if (s := p.staff) is not None) == [4, 14]
