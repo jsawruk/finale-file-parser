@@ -29,6 +29,8 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from finale_file_parser.enigma.mus_payload import read_mus_pools
+from finale_file_parser.enigma.pool_file import era_of, identify_pools, write_pool_file
 from finale_file_parser.errors import FinaleFileError
 from finale_file_parser.export.musicxml import to_musicxml
 from finale_file_parser.ir import Score
@@ -44,6 +46,8 @@ PROGRAM = "finale-parser"
 _MUS = ".mus"
 _MUSX = ".musx"
 _OUTPUT_SUFFIX = ".musicxml"
+_POOLS_SUFFIX = ".pools.bin"
+"""Not `.bin` alone: a name should say what opening it will show."""
 
 EXIT_OK = 0
 EXIT_FAILURES = 1
@@ -68,8 +72,10 @@ def source_paths(root: Path) -> list[Path]:
     )
 
 
-def output_path(source: Path, root: Path, destination: Path | None) -> Path:
-    """Where `source`'s MusicXML goes.
+def output_path(
+    source: Path, root: Path, destination: Path | None, suffix: str = _OUTPUT_SUFFIX
+) -> Path:
+    """Where `source`'s output goes.
 
     With no `-o`, it lands beside the input. With one, the input's position
     *relative to the root* is preserved, so converting a directory tree does not
@@ -77,13 +83,13 @@ def output_path(source: Path, root: Path, destination: Path | None) -> Path:
     it is catalogued.
     """
     if destination is None:
-        return source.with_suffix(_OUTPUT_SUFFIX)
+        return source.with_suffix(suffix)
     if root.is_file():
         # `-o` names the file itself, unless it is an existing directory.
         if destination.is_dir():
-            return destination / source.with_suffix(_OUTPUT_SUFFIX).name
+            return destination / source.with_suffix(suffix).name
         return destination
-    return destination / source.relative_to(root).with_suffix(_OUTPUT_SUFFIX)
+    return destination / source.relative_to(root).with_suffix(suffix)
 
 
 def _reason(error: Exception) -> str:
@@ -140,6 +146,48 @@ def _convert(args: argparse.Namespace, out: object) -> int:
 
     if len(sources) > 1 or failures:
         print(f"{converted}/{len(sources)} converted", file=out)  # type: ignore[call-overload]
+    for source, reason in failures:
+        print(f"  skipped {source}: {reason}", file=sys.stderr)
+    return EXIT_FAILURES if failures else EXIT_OK
+
+
+def _extract(args: argparse.Namespace, out: object) -> int:
+    """Write each score's decompressed pools as one framed file."""
+    root: Path = args.input
+    sources = source_paths(root)
+    if not sources:
+        print(f"{PROGRAM}: no .mus or .musx files under {root}", file=sys.stderr)
+        return EXIT_USAGE
+
+    written = 0
+    failures: list[tuple[Path, str]] = []
+    for source in sources:
+        if source.suffix.lower() == ".musx":
+            failures.append((source, "a .musx has no compressed pools to extract"))
+            continue
+        target = output_path(source, root, args.output, _POOLS_SUFFIX)
+        reason = _clobber_reason(target, args.force)
+        if reason:
+            failures.append((source, reason))
+            continue
+        try:
+            pools = identify_pools(read_mus_pools(source))
+            data = write_pool_file(pools, era=era_of(pools))
+        except (FinaleFileError, ValueError) as error:
+            failures.append((source, _reason(error)))
+            continue
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+        except OSError as error:
+            failures.append((source, _reason(error)))
+            continue
+        written += 1
+        if args.verbose:
+            print(f"{source} -> {target}", file=out)  # type: ignore[call-overload]
+
+    if len(sources) > 1 or failures:
+        print(f"{written}/{len(sources)} extracted", file=out)  # type: ignore[call-overload]
     for source, reason in failures:
         print(f"  skipped {source}: {reason}", file=sys.stderr)
     return EXIT_FAILURES if failures else EXIT_OK
@@ -250,6 +298,20 @@ def _parser() -> argparse.ArgumentParser:
     )
     inspect.add_argument("--force", action="store_true", help="overwrite an existing report")
 
+    extract = sub.add_parser("extract", help="write a .mus file's decompressed pools as one binary")
+    extract.add_argument("input", type=Path, help="a .mus file, or a directory of them")
+    extract.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help="output file, or directory for a batch; defaults to beside the input",
+    )
+    extract.add_argument(
+        "--force", action="store_true", help="overwrite an output file that already exists"
+    )
+    extract.add_argument("-v", "--verbose", action="store_true", help="name each file written")
+
     return parser
 
 
@@ -262,6 +324,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EXIT_USAGE
     if args.command == "convert":
         return _convert(args, out)
+    if args.command == "extract":
+        return _extract(args, out)
     return _inspect(args, out)
 
 

@@ -278,3 +278,38 @@ def test_convert_write_failure_is_skipped(
     output = capsys.readouterr()
     assert "0/1 converted" in output.out
     assert "skipped" in output.err
+
+
+def test_extract_writes_one_file_per_score(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """One file, not one per pool: the pools stay delimited by the chain's own
+    headers rather than by being separate files."""
+    from finale_file_parser.enigma.mus_payload import POOL_OTHERS, MusPool
+
+    monkeypatch.setattr(cli, "read_mus_pools", lambda p: (MusPool(data=b"abc", kind=POOL_OTHERS),))
+    source = touch(tmp_path / "a.mus")
+    assert cli.main(["extract", str(source)]) == cli.EXIT_OK
+    written = (tmp_path / "a.pools.bin").read_bytes()
+    assert written[:4] == b"FMUS"
+
+
+def test_extract_refuses_musx_by_name(tmp_path: Path) -> None:
+    """A .musx is a ZIP of encrypted XML with no pools of this kind. Saying so
+    is more use than a decode error from three layers down."""
+    source = touch(tmp_path / "a.musx")
+    assert cli.main(["extract", str(source)]) == cli.EXIT_FAILURES
+    assert not (tmp_path / "a.pools.bin").exists()
+
+
+def test_extract_refuses_to_overwrite_without_force(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from finale_file_parser.enigma.mus_payload import POOL_OTHERS, MusPool
+
+    monkeypatch.setattr(cli, "read_mus_pools", lambda p: (MusPool(data=b"abc", kind=POOL_OTHERS),))
+    source = touch(tmp_path / "a.mus")
+    existing = tmp_path / "a.pools.bin"
+    existing.write_bytes(b"MINE")
+    assert cli.main(["extract", str(source)]) == cli.EXIT_FAILURES
+    assert existing.read_bytes() == b"MINE"
+    assert cli.main(["extract", str(source), "--force"]) == cli.EXIT_OK
+    assert existing.read_bytes() != b"MINE"
