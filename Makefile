@@ -7,7 +7,7 @@
 PY ?= uv run
 CODE ?= src tests scripts
 
-.PHONY: help install hooks test test-sweeps lint fmt typecheck check check-full clean
+.PHONY: help install hooks test test-sweeps lint fmt typecheck check check-full spec hexpat clean
 
 help:
 	@echo "Targets:"
@@ -22,6 +22,7 @@ help:
 	@echo "  typecheck  mypy --strict"
 	@echo "  check      lint + format-check + typecheck + test  (the pre-push gate)"
 	@echo "  spec         regenerate docs/formats/finale-formats.{html,pdf}"
+	@echo "  hexpat       regenerate docs/formats/finale-mus.hexpat"
 	@echo "  clean      remove caches and build artifacts"
 
 install: hooks
@@ -103,6 +104,11 @@ check-full:
 # PDF step needs Chrome and is skipped with a message when it is absent.
 spec:
 	PYTHONPATH=scripts $(PY) python -m format_spec
+
+# The ImHex pattern is generated from the parser, like the specification above:
+# offsets come from formats/layouts.py, never from this file.
+hexpat:
+	PYTHONPATH=scripts $(PY) python -m hexpat
 
 clean:
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist *.egg-info
