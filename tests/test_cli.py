@@ -86,6 +86,41 @@ def test_converts_a_single_file(tmp_path: Path, stub: None) -> None:
     assert (tmp_path / "a.musicxml").read_bytes() == b"<score/>"
 
 
+def test_convert_writes_pdf_when_asked(tmp_path: Path, stub: None, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """`--format` picks the writer *and* the suffix. Those two travelling apart
+    is how you get MusicXML in a file called `.pdf`."""
+    monkeypatch.setattr(cli, "to_pdf", lambda score: b"%PDF-stub")
+    source = touch(tmp_path / "a.mus")
+    assert cli.main(["convert", str(source), "--format", "pdf"]) == cli.EXIT_OK
+    assert (tmp_path / "a.pdf").read_bytes() == b"%PDF-stub"
+    assert not (tmp_path / "a.musicxml").exists(), "wrote MusicXML as well as PDF"
+
+
+def test_convert_still_writes_musicxml_by_default(tmp_path: Path, stub: None) -> None:
+    """Adding a format must not change what the command already did."""
+    source = touch(tmp_path / "a.mus")
+    assert cli.main(["convert", str(source)]) == cli.EXIT_OK
+    assert (tmp_path / "a.musicxml").exists()
+    assert not (tmp_path / "a.pdf").exists()
+
+
+def test_a_pdf_batch_keeps_the_tree_and_the_suffix(tmp_path: Path, stub: None, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """A directory of scores keeps its layout, as MusicXML batches already do --
+    an archive's folders are usually part of how it is catalogued."""
+    monkeypatch.setattr(cli, "to_pdf", lambda score: b"%PDF-stub")
+    root = tmp_path / "in"
+    touch(root / "book" / "a.mus")
+    out = tmp_path / "out"
+    assert cli.main(["convert", str(root), "-o", str(out), "--format", "pdf"]) == cli.EXIT_OK
+    assert (out / "book" / "a.pdf").exists()
+
+
+def test_an_unknown_format_is_refused(tmp_path: Path, stub: None) -> None:
+    source = touch(tmp_path / "a.mus")
+    with pytest.raises(SystemExit):
+        cli.main(["convert", str(source), "--format", "postscript"])
+
+
 def test_convert_uses_the_stable_score_reader(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

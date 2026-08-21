@@ -16,7 +16,7 @@ analyse, or archive scores that currently only exist as Finale files.
 
 - **Language / runtime:** Python (>=3.12), managed with **uv**.
 - **Key libraries:** `defusedxml` — safe parsing of untrusted XML; `verovio` — engraving in HTML
-  inspection reports.
+  inspection reports; `svglib`/`reportlab` — SVG to PDF, in the optional `pdf` extra only.
 - Open questions live in `docs/DECISIONS.md` — don't silently resolve them in code.
 
 ## Conventions

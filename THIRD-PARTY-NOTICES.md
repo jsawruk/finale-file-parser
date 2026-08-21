@@ -1,13 +1,30 @@
 # Third-party notices
 
 `finale-file-parser` is MIT licensed (see `LICENSE`). It vendors no third-party
-code: its install dependencies are `defusedxml` and `verovio`, both used as
-ordinary imported packages. Two modules were written *from* third-party work,
+code: its install dependencies are `defusedxml` and `verovio`, and the
+optional `pdf` extra adds `svglib` and `reportlab` — all used as ordinary
+imported packages. Two modules were written *from* third-party work,
 and this file carries the notices that work asks to be carried.
 
 `docs/REFERENCES.md` records every source consulted, including ones that
 imposed no obligation. This file is narrower: it is the set of notices that
 travel with a redistribution.
+
+## `svglib` — SVG to PDF, LGPL-3.0 (optional)
+
+`finale-parser convert --format pdf` converts Verovio's engraved SVG into a PDF
+using [svglib](https://github.com/deeplook/svglib), which is **LGPL-3.0**, with
+[reportlab](https://www.reportlab.com/) (BSD) underneath it.
+
+Both arrive only with the optional `pdf` extra. A plain
+`pip install finale-file-parser` installs neither, so anyone who does not ask
+for PDF output carries no obligation for them at all.
+
+Nothing of either is copied into this repository, and the arrangement is the
+same one described for Verovio below: separate packages, imported at runtime by
+`export/pdf.py`. The same paragraph about bundling applies — shipping this
+library, or telling users to install it, carries no new obligation; folding the
+LGPL parts into a single distributed artifact does.
 
 ## `verovio` — score engraving, LGPL-3.0
 
