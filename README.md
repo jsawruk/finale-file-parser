@@ -16,6 +16,17 @@ pip install finale-file-parser         # or as a library, into your own environm
 Python 3.12 or newer. Runtime dependencies are `defusedxml`, which makes parsing untrusted XML safe,
 and Verovio, which engraves the inspection report's notation view.
 
+Writing PDF needs one extra, because most people want MusicXML and should not pay for a PDF stack
+they never call. Ask for it by name — the quotes matter in zsh and bash:
+
+```bash
+uv tool install "finale-file-parser[pdf]"
+pip install "finale-file-parser[pdf]"
+```
+
+It adds `svglib` and `reportlab`. Without it, `--format pdf` exits with a message naming the extra
+rather than a traceback.
+
 To run a change that has landed on `main` but is not yet released:
 
 ```bash
