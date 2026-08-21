@@ -31,6 +31,7 @@ from pathlib import Path
 
 from finale_file_parser.errors import FinaleFileError
 from finale_file_parser.export.musicxml import to_musicxml
+from finale_file_parser.export.pdf import to_pdf
 from finale_file_parser.ir import Score
 from finale_file_parser.reader import read_score
 from finale_file_parser.report import inspect_document
@@ -44,6 +45,12 @@ PROGRAM = "finale-parser"
 _MUS = ".mus"
 _MUSX = ".musx"
 _OUTPUT_SUFFIX = ".musicxml"
+
+FORMATS = {"musicxml": ".musicxml", "pdf": ".pdf"}
+"""What `--format` accepts, and the suffix each writes.
+
+Keyed here rather than branched at the call site so the argument's choices, the
+output suffix and the writer cannot drift out of step."""
 
 EXIT_OK = 0
 EXIT_FAILURES = 1
@@ -68,8 +75,10 @@ def source_paths(root: Path) -> list[Path]:
     )
 
 
-def output_path(source: Path, root: Path, destination: Path | None) -> Path:
-    """Where `source`'s MusicXML goes.
+def output_path(
+    source: Path, root: Path, destination: Path | None, suffix: str = _OUTPUT_SUFFIX
+) -> Path:
+    """Where `source`'s converted output goes.
 
     With no `-o`, it lands beside the input. With one, the input's position
     *relative to the root* is preserved, so converting a directory tree does not
@@ -77,13 +86,13 @@ def output_path(source: Path, root: Path, destination: Path | None) -> Path:
     it is catalogued.
     """
     if destination is None:
-        return source.with_suffix(_OUTPUT_SUFFIX)
+        return source.with_suffix(suffix)
     if root.is_file():
         # `-o` names the file itself, unless it is an existing directory.
         if destination.is_dir():
-            return destination / source.with_suffix(_OUTPUT_SUFFIX).name
+            return destination / source.with_suffix(suffix).name
         return destination
-    return destination / source.relative_to(root).with_suffix(_OUTPUT_SUFFIX)
+    return destination / source.relative_to(root).with_suffix(suffix)
 
 
 def _reason(error: Exception) -> str:
@@ -117,14 +126,14 @@ def _convert(args: argparse.Namespace, out: object) -> int:
     converted = 0
     failures: list[tuple[Path, str]] = []
     for source in sources:
-        target = output_path(source, root, args.output)
+        target = output_path(source, root, args.output, FORMATS[args.format])
         reason = _clobber_reason(target, args.force)
         if reason:
             failures.append((source, reason))
             continue
         try:
             score = read_score(source)
-            data = to_musicxml(score)
+            data = to_pdf(score) if args.format == "pdf" else to_musicxml(score)
         except FinaleFileError as error:
             failures.append((source, _reason(error)))
             continue
@@ -237,6 +246,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     convert.add_argument(
         "--force", action="store_true", help="overwrite an output file that already exists"
+    )
+    convert.add_argument(
+        "--format",
+        choices=sorted(FORMATS),
+        default="musicxml",
+        help="what to write; pdf needs the 'pdf' extra (default: musicxml)",
     )
     convert.add_argument("-v", "--verbose", action="store_true", help="name each file converted")
 

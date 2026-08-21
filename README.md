@@ -48,6 +48,19 @@ A batch does not stop at the first bad file: what fails is reported and skipped,
 converted, and the exit status is non-zero if anything was skipped. Existing output is never
 overwritten unless you pass `--force`.
 
+### Printing a score
+
+```bash
+pip install finale-file-parser[pdf]             # once; adds svglib and reportlab
+finale-parser convert score.mus --format pdf    # writes score.pdf beside it
+finale-parser convert ./scores -o ./printed --format pdf
+```
+
+`--format pdf` engraves the score and writes it as a multi-page PDF on US Letter, using the same
+notation the inspection report shows. PDF support is an optional extra so that installing the
+library does not pull in a PDF stack you may never use; without it, `--format pdf` exits with a
+message naming the extra rather than a traceback.
+
 ```bash
 finale-parser inspect score.mus     # what the file is, and what was read from it
 ```

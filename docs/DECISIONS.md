@@ -10,6 +10,37 @@ and resolved ones **DECIDED**.
 
 ---
 
+## 2026-08-20 — DECIDED: PDF export goes through svglib, behind an optional extra
+
+`finale-parser convert --format pdf` writes an engraved score as PDF. The route is
+`Score` -> MusicXML -> Verovio SVG -> svglib/reportlab -> PDF, and the last step is an optional
+install extra: `pip install finale-file-parser[pdf]`. Without it the command exits with a message
+naming the extra.
+
+Reason: **Verovio cannot write PDF.** Its toolkit renders SVG, MIDI, PAE and a timemap and nothing
+else, so a converter is unavoidable. Writing one here was considered and rejected on evidence: one
+page of a corpus score carries 70 `<use>` elements resolving into `<defs>`, `<text>` with a
+`font-family`, a `<style>` block and eight `<ellipse>`s, so a faithful converter means implementing
+`use` resolution, CSS and font embedding.
+
+The three candidates were measured rather than compared on their documentation, and the measurement
+reversed the expected order. CairoSVG needs a native `libcairo`; WeasyPrint is *not* pure Python as
+its reputation suggests — it dropped cairo but still needs Pango, HarfBuzz and fontconfig through
+cffi. Both fail to import on a stock arm64 macOS with no system packages. svglib + reportlab, the
+candidate expected to be weakest on `<use>` and CSS, renders the notation faithfully with no
+warnings and no system libraries.
+
+**Licence.** svglib is **LGPL-3.0** and reportlab is BSD. This adds no new *class* of obligation:
+the project already depends on Verovio under LGPL-3.0 and documents the boundary the same way in
+`THIRD-PARTY-NOTICES.md`. Neither is vendored; both are ordinary imported packages. Making it an
+extra keeps the obligation off anyone who never asks for a PDF.
+
+Consequence: `export/pdf.py` sets its own engraving options rather than reusing the report's. The
+report crops each page to its content (`adjustPageHeight`), which turns a one-system score into an
+8.8 x 3.0 inch strip; print sets a real page size, which also makes every page share one viewBox so
+a multi-page score prints at a single scale. Verovio's default footer is suppressed, as the report
+already suppresses it.
+
 ## 2026-07-22 — DECIDED: cipher parameters taken as facts from MIT-licensed source
 
 The `score.dat` cipher — seed `0x28006D45`, the BSD `rand()` LCG, the
