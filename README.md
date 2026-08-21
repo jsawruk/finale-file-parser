@@ -73,7 +73,7 @@ not carried is recorded in `UNTRANSLATED` in `src/finale_file_parser/enigma/mus_
 ### Looking at the raw pools
 
 ```bash
-finale-parser extract score.mus     # writes score.pools.bin beside it
+finale-parser extract score.mus     # writes score.mus.bin beside it
 ```
 
 A `.mus` keeps its four pools compressed — the 2001–2005 era with PKWARE implode, which no hex

@@ -47,7 +47,7 @@ _PREAMBLE = f"""#pragma description Finale .mus decompressed pools
 // .mus keeps its pools compressed, and the 2001-2005 era uses PKWARE implode,
 // which ImHex cannot decompress. Run:
 //
-//     finale-parser extract score.mus     -> score.pools.bin
+//     finale-parser extract score.mus     -> score.mus.bin
 //
 // and open that. The chain below is the .mus container's own framing -- kind,
 // length, checksum -- with each payload decompressed in place.

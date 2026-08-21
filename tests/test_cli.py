@@ -288,7 +288,7 @@ def test_extract_writes_one_file_per_score(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.setattr(cli, "read_mus_pools", lambda p: (MusPool(data=b"abc", kind=POOL_OTHERS),))
     source = touch(tmp_path / "a.mus")
     assert cli.main(["extract", str(source)]) == cli.EXIT_OK
-    written = (tmp_path / "a.pools.bin").read_bytes()
+    written = (tmp_path / "a.mus.bin").read_bytes()
     assert written[:4] == b"FMUS"
 
 
@@ -312,7 +312,7 @@ def test_extract_states_the_era_the_container_stated(
             cli, "read_mus_pools", lambda p, kind=kind: (MusPool(data=b"abc", kind=kind),)
         )
         assert cli.main(["extract", str(source), "--force"]) == cli.EXIT_OK
-        written = (tmp_path / "a.pools.bin").read_bytes()
+        written = (tmp_path / "a.mus.bin").read_bytes()
         assert written[6] == era, f"a container stating {kind} was written as era {written[6]}"
 
 
@@ -321,7 +321,7 @@ def test_extract_refuses_musx_by_name(tmp_path: Path) -> None:
     is more use than a decode error from three layers down."""
     source = touch(tmp_path / "a.musx")
     assert cli.main(["extract", str(source)]) == cli.EXIT_FAILURES
-    assert not (tmp_path / "a.pools.bin").exists()
+    assert not (tmp_path / "a.mus.bin").exists()
 
 
 def test_extract_refuses_to_overwrite_without_force(
@@ -331,7 +331,7 @@ def test_extract_refuses_to_overwrite_without_force(
 
     monkeypatch.setattr(cli, "read_mus_pools", lambda p: (MusPool(data=b"abc", kind=POOL_OTHERS),))
     source = touch(tmp_path / "a.mus")
-    existing = tmp_path / "a.pools.bin"
+    existing = tmp_path / "a.mus.bin"
     existing.write_bytes(b"MINE")
     assert cli.main(["extract", str(source)]) == cli.EXIT_FAILURES
     assert existing.read_bytes() == b"MINE"

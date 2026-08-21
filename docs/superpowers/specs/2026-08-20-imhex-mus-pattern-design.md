@@ -49,7 +49,7 @@ committed copy is stale. Today the catalog is 12 layouts and 45 fields across fi
 Writes **one** file holding every decompressed pool of a `.mus`.
 
 ```bash
-finale-parser extract "2_Aura Lee.mus"        # writes 2_Aura Lee.pools.bin beside it
+finale-parser extract "2_Aura Lee.mus"        # writes 2_Aura Lee.mus.bin beside it
 finale-parser extract ./scores -o ./pools     # a whole tree, layout preserved
 ```
 
@@ -118,7 +118,7 @@ whole file is refused rather than written with a guessed label.
 
 ## 2. `docs/formats/finale-mus.hexpat`
 
-One pattern, generated from the catalog, that reads a `.pools.bin` end to end.
+One pattern, generated from the catalog, that reads a `.mus.bin` end to end.
 
 **It needs no configuration.** Order, era and pool kinds all come from the header, so there are no
 `in` variables to set and no way to set them wrong. This is the main reason the header exists.

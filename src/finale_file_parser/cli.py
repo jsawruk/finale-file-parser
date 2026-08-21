@@ -46,8 +46,15 @@ PROGRAM = "finale-parser"
 _MUS = ".mus"
 _MUSX = ".musx"
 _OUTPUT_SUFFIX = ".musicxml"
-_POOLS_SUFFIX = ".pools.bin"
-"""Not `.bin` alone: a name should say what opening it will show."""
+_POOLS_SUFFIX = ".bin"
+"""Appended to the source's **own** extension, so `score.mus` becomes
+`score.mus.bin`.
+
+Appended rather than substituted so the Windows cohort keeps its case:
+`SCORE.MUS` becomes `SCORE.MUS.bin`, where a fixed `.mus.bin` would have
+lowercased it. 101 of the 238 legacy corpus documents are spelled `.MUS`.
+
+The name says where the bytes came from, and `.bin` keeps it plainly binary."""
 
 EXIT_OK = 0
 EXIT_FAILURES = 1
@@ -165,7 +172,7 @@ def _extract(args: argparse.Namespace, out: object) -> int:
         if source.suffix.lower() == ".musx":
             failures.append((source, "a .musx has no compressed pools to extract"))
             continue
-        target = output_path(source, root, args.output, _POOLS_SUFFIX)
+        target = output_path(source, root, args.output, source.suffix + _POOLS_SUFFIX)
         reason = _clobber_reason(target, args.force)
         if reason:
             failures.append((source, reason))
