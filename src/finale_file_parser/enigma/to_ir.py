@@ -100,12 +100,14 @@ class _Cell:
     of once the beams themselves are worked out."""
 
 
-def build_score(document: EnigmaDocument) -> Score:
+def build_score(document: EnigmaDocument, *, skip_unplaced: bool = False) -> Score:
     """Convert a parsed EnigmaXML document into the IR.
 
     One part per staff, measures in order, one IR voice per Finale layer.
+    `skip_unplaced` leaves out entries the music never reaches rather than
+    refusing the document; see `locate_entries`.
     """
-    location = locate_entries(document)
+    location = locate_entries(document, skip_unplaced=skip_unplaced)
     chain = entry_chain(document)
     sounded = sounded_durations(chain, tuplets_by_entry(document))
     records = {int(r.attrs["entnum"]): r for r in document.entries.of_tag("entry")}

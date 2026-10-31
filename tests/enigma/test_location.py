@@ -338,6 +338,57 @@ def test_orphan_entry_raises() -> None:
         locate_entries(parse_enigma(doc))
 
 
+# Entries 1 -> 2 are measure 1's frame. 3 -> 4 are a passage deleted from it:
+# Finale relinked 1 to 2 around them, so nothing placed names 3 or 4, though
+# 3 still names 1 as its prev.
+_DELETED_PASSAGE = """
+    <others>
+      <frameSpec cmper="10" inci="0">
+        <startEntry>1</startEntry><endEntry>2</endEntry>
+      </frameSpec>
+      <measSpec cmper="1"><keySig><key>0</key></keySig></measSpec>
+    </others>
+    <details><gfhold cmper1="1" cmper2="1"><frame1>10</frame1></gfhold></details>
+    """
+
+
+def _linked_entries(*specs: str) -> str:
+    # each spec: "entnum:prev:next"
+    out = []
+    for s in specs:
+        en, pv, nx = s.split(":")
+        out.append(f'<entry entnum="{en}" prev="{pv}" next="{nx}"><dura>1024</dura></entry>')
+    return "<entries>" + "".join(out) + "</entries>"
+
+
+def test_skip_unplaced_leaves_out_a_deleted_passage() -> None:
+    doc = parse_enigma(_doc(_linked_entries("1:0:2", "2:1:0", "3:1:4", "4:3:0") + _DELETED_PASSAGE))
+    with pytest.raises(MalformedScoreError, match="2 orphan"):
+        locate_entries(doc)
+    loc = locate_entries(doc, skip_unplaced=True)
+    assert sorted(loc) == [1, 2]
+
+
+def test_skip_unplaced_still_raises_for_an_orphan_a_placed_entry_links_to() -> None:
+    # 2's next names 3, so 3 is a broken chain, not a deleted passage.
+    doc = parse_enigma(_doc(_linked_entries("1:0:2", "2:1:3", "3:2:0") + _DELETED_PASSAGE))
+    with pytest.raises(MalformedScoreError, match="a placed entry links to them: \\[3\\]"):
+        locate_entries(doc, skip_unplaced=True)
+
+
+def test_skip_unplaced_refuses_a_document_with_nothing_placed() -> None:
+    doc = parse_enigma(
+        _doc(
+            _entries("1:0")
+            + """
+            <others><measSpec cmper="1"><keySig><key>0</key></keySig></measSpec></others>
+            """
+        )
+    )
+    with pytest.raises(MalformedScoreError, match="no frame places any"):
+        locate_entries(doc, skip_unplaced=True)
+
+
 def test_frame_pointing_at_missing_framespec_raises() -> None:
     doc = _doc(
         _entries("1:0")
