@@ -148,7 +148,7 @@ def _convert(args: argparse.Namespace, out: object) -> int:
             failures.append((source, reason))
             continue
         try:
-            score = read_score(source)
+            score = read_score(source, skip_unplaced=args.skip_unplaced)
             data = to_pdf(score) if args.format == "pdf" else to_musicxml(score)
         except FinaleFileError as error:
             failures.append((source, _reason(error)))
@@ -315,6 +315,12 @@ def _parser() -> argparse.ArgumentParser:
         choices=sorted(FORMATS),
         default="musicxml",
         help="what to write; pdf needs the 'pdf' extra (default: musicxml)",
+    )
+    convert.add_argument(
+        "--skip-unplaced",
+        action="store_true",
+        help="leave out entries no frame places and no placed entry links to (typically "
+        "deleted passages) instead of skipping the file",
     )
     convert.add_argument("-v", "--verbose", action="store_true", help="name each file converted")
 

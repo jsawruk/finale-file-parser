@@ -59,6 +59,15 @@ A batch does not stop at the first bad file: what fails is reported and skipped,
 converted, and the exit status is non-zero if anything was skipped. Existing output is never
 overwritten unless you pass `--force`.
 
+A file refused for "orphan entries" holds notes no frame places. In a 2001-2005 `.mus` those are
+dropped as deleted passages; elsewhere the reader refuses rather than guess. If the orphans are
+islands — nothing placed links to them, which is what a deleted passage leaves — `--skip-unplaced`
+converts the rest:
+
+```bash
+finale-parser convert score.mus --skip-unplaced
+```
+
 ### Printing a score
 
 ```bash

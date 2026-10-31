@@ -33,7 +33,7 @@ class _Version:
 def stub(monkeypatch: pytest.MonkeyPatch) -> None:
     """Make every document detect, build, and export to the same trivial XML."""
     monkeypatch.setattr(cli, "detect_version", lambda path: _Version())
-    monkeypatch.setattr(cli, "read_score", lambda path: _SCORE)
+    monkeypatch.setattr(cli, "read_score", lambda path, **_: _SCORE)
     monkeypatch.setattr(cli, "to_musicxml", lambda score: b"<score/>")
 
 
@@ -125,10 +125,28 @@ def test_convert_uses_the_stable_score_reader(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     source = touch(tmp_path / "a.mus")
-    monkeypatch.setattr(cli, "read_score", lambda path: _SCORE)
+    monkeypatch.setattr(cli, "read_score", lambda path, **_: _SCORE)
     monkeypatch.setattr(cli, "to_musicxml", lambda score: b"<score/>")
 
     assert cli.main(["convert", str(source)]) == cli.EXIT_OK
+
+
+@pytest.mark.parametrize(("flag", "expected"), [([], False), (["--skip-unplaced"], True)])
+def test_convert_passes_skip_unplaced_to_the_reader(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, flag: list[str], expected: bool
+) -> None:
+    source = touch(tmp_path / "a.mus")
+    seen: list[bool] = []
+
+    def load(path: Path, *, skip_unplaced: bool = False) -> Score:
+        seen.append(skip_unplaced)
+        return _SCORE
+
+    monkeypatch.setattr(cli, "read_score", load)
+    monkeypatch.setattr(cli, "to_musicxml", lambda score: b"<score/>")
+
+    assert cli.main(["convert", str(source), *flag]) == cli.EXIT_OK
+    assert seen == [expected]
 
 
 def test_refuses_to_overwrite_without_force(tmp_path: Path, stub: None) -> None:
@@ -159,7 +177,7 @@ def test_a_batch_continues_past_a_document_that_will_not_build(
     touch(root / "bad.mus")
     touch(root / "good.mus")
 
-    def load(path: Path) -> Score:
+    def load(path: Path, *, skip_unplaced: bool = False) -> Score:
         if path.name == "bad.mus":
             raise FinaleFileError("no music the frames reach")
         return _SCORE

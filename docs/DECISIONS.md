@@ -10,6 +10,33 @@ and resolved ones **DECIDED**.
 
 ---
 
+## 2026-10-30 — OPEN: an opt-in to skip unplaced entries outside the 2001-2005 era
+
+`locate_entries(doc, skip_unplaced=True)`, `read_score(..., skip_unplaced=True)` and
+`finale-parser convert --skip-unplaced` leave out orphans that are **islands**: no frame places
+them and no placed entry's `prev` or `next` names them. An orphan a placed entry *does* link to
+still raises (a broken chain), and so does a document where nothing is placed. The default is
+unchanged, so the orphan check still guards `.musx` and the 2011 layout as the 2026-07 entry on
+pruning intended.
+
+Reason: a Finale 2007 `.mus` outside the corpus is refused for 83 orphans in 12 runs (1,262 entries).
+They have the 2001-2005 era's dead-space shape, but not its duplicate signature, so the corpus rule
+would not have caught them:
+
+* no placed entry links to any of them; the live chain is relinked around each run (e.g. an entry's
+  `next` skips a 16-entry run to the entry after it);
+* every `frameSpec` is used by a `gfhold`, so no frame is being missed; two runs end by linking
+  *forward* into the first entry of a frame, which is what deleting the start of a measure leaves;
+* 11 of 12 runs are **not** exact duplicates of placed music, unlike the 88% the 2001-2005 pruning
+  rests on.
+
+Converted with the opt-in, the score builds with all five of its staves.
+
+**Open:** whether islands are safe to drop **by default** in the 2011 layout. That needs the
+corpus: the count of island orphans across 2011-layout documents, pinned the way the 2001-2005
+discard count is, so that a placement bug which strands a whole frame (which also produces islands)
+shows up as a rising number. Until then it is opt-in only.
+
 ## 2026-08-20 — DECIDED: PDF export goes through svglib, behind an optional extra
 
 `finale-parser convert --format pdf` writes an engraved score as PDF. The route is

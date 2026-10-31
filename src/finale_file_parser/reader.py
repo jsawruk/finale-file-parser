@@ -26,10 +26,12 @@ def read_document(path: str | os.PathLike[str]) -> EnigmaDocument:
     return read_mus_document(path)
 
 
-def read_score(path: str | os.PathLike[str]) -> Score:
+def read_score(path: str | os.PathLike[str], *, skip_unplaced: bool = False) -> Score:
     """Read a Finale file into the format-neutral score model.
 
     This is the ordinary application-facing entry point. Use
     :func:`read_document` when record-level access is needed.
+    `skip_unplaced` leaves out entries the music never reaches -- typically
+    deleted passages -- rather than refusing the file; see `locate_entries`.
     """
-    return build_score(read_document(path))
+    return build_score(read_document(path), skip_unplaced=skip_unplaced)

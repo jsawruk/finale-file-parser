@@ -172,15 +172,26 @@ class _Placements:
         here.append(place)
 
 
-def locate_entries(doc: EnigmaDocument) -> dict[int, tuple[EntryLocation, ...]]:
+def locate_entries(
+    doc: EnigmaDocument, *, skip_unplaced: bool = False
+) -> dict[int, tuple[EntryLocation, ...]]:
     """Resolve every entry to the place(s) it sounds, and the effective raw key.
 
     Pure over the parsed document -- no I/O. Builds the whole index in one
     pass since the effective-key inheritance needs a full measure-order pass
     anyway, and callers iterate entries far more than once.
 
+    `skip_unplaced` leaves out orphans the rest of the music never reaches
+    instead of raising for them: entries no frame places and no placed entry's
+    `prev` or `next` names. That is the shape a deleted passage leaves in a
+    pool Finale never compacted (see `_live_entries` in `mus_document` for the
+    2001-2005 files, which drop it unasked). Off by default, because an
+    orphan is also what a placement bug looks like. An orphan a placed entry
+    links to still raises: that is a broken chain, not dead space.
+
     Raises:
-        MalformedScoreError: an entry is not reachable from any frame, a
+        MalformedScoreError: an entry is not reachable from any frame (with
+            `skip_unplaced`: one a placed entry links to, or every entry), a
             frame points at a missing `frameSpec`, a `keySig.key` or
             `startEntry`/`endEntry` is not an integer, an entry is placed
             twice at one (staff, measure, layer), a `next`-chain exceeds
@@ -221,11 +232,39 @@ def locate_entries(doc: EnigmaDocument) -> dict[int, tuple[EntryLocation, ...]]:
             )
 
     orphans = set(entries_by_num) - set(placements.by_entry)
+    if orphans and skip_unplaced:
+        if not placements.by_entry:
+            # Skipping would leave a Score with no music, which says nothing
+            # was wrong; refuse instead.
+            raise MalformedScoreError(
+                f"no frame places any of the {len(orphans)} entries; nothing to skip to"
+            )
+        linked = _linked_from_placed(orphans, placements.by_entry, entries_by_num)
+        if linked:
+            raise MalformedScoreError(
+                f"{len(linked)} orphan entry(ies) not placed by any frame, though a placed "
+                f"entry links to them: {sorted(linked)}"
+            )
+        orphans = set()
     if orphans:
         raise MalformedScoreError(
             f"{len(orphans)} orphan entry(ies) not placed by any frame: {sorted(orphans)}"
         )
     return {entnum: tuple(places) for entnum, places in placements.by_entry.items()}
+
+
+def _linked_from_placed(
+    orphans: set[int], placed: dict[int, list[EntryLocation]], entries_by_num: dict[int, Record]
+) -> set[int]:
+    """The orphans some placed entry's `prev` or `next` names."""
+    linked: set[int] = set()
+    for entnum in placed:
+        record = entries_by_num[entnum]
+        for attr in ("prev", "next"):
+            target = _int(record.attrs.get(attr, "0"), f"entry {entnum} {attr}")
+            if target in orphans:
+                linked.add(target)
+    return linked
 
 
 def effective_keys(doc: EnigmaDocument) -> dict[int, int]:
